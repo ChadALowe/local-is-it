@@ -266,6 +266,11 @@ const officeTex = mkTex(256, 128, (g, w, h) => {                      // one sto
     g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(wx + 3, 37, 16, 14);
   }
 });
+const brickTex = mkTex(64, 64, (g, w, h) => {                       // plain red brick for garden walls and sign walls
+  g.fillStyle = '#a4513a'; g.fillRect(0, 0, w, h); g.strokeStyle = 'rgba(0,0,0,.22)'; g.lineWidth = 1;
+  for (let y = 0; y < h; y += 8) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = ((y / 8) % 2) * 8; x < w; x += 16) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 8); g.stroke(); } }
+  speckle(g, w, h, 0.05, 0, 255, 0);
+});
 const officeEndTex = mkTex(128, 128, (g, w, h) => {                  // end wall (4 m x one storey): brick, two buff piers, one tall narrow window
   g.fillStyle = '#a4513a'; g.fillRect(0, 0, w, h);
   g.strokeStyle = 'rgba(0,0,0,.2)'; g.lineWidth = 1;
@@ -325,7 +330,7 @@ const DS = THREE.DoubleSide;
 const facades = [['#a8523c', 1], ['#b98d62', 1], ['#d9cfb8', 0], ['#9fb0bd', 0], ['#dcc98a', 0], ['#b9b8b2', 0], ['#8c3f35', 1]].map(a => stdMat({ map: facadeTex(a[0], a[1]), side: DS }));
 const cladMat = stdMat({ map: cladTex, side: DS }), plainMat = stdMat({ map: plainTex, side: DS });
 const roofMat = stdMat({ map: roofTex, side: DS });
-const officeMat = stdMat({ map: officeTex, side: DS }), slateMat = stdMat({ map: slateTex, side: DS, roughness: 0.85 }), porchMat = stdMat({ map: porchTex, side: DS }), archMat = stdMat({ map: archTex, side: DS }), officeEndMat = stdMat({ map: officeEndTex, side: DS });
+const officeMat = stdMat({ map: officeTex, side: DS }), slateMat = stdMat({ map: slateTex, side: DS, roughness: 0.85 }), porchMat = stdMat({ map: porchTex, side: DS }), archMat = stdMat({ map: archTex, side: DS }), officeEndMat = stdMat({ map: officeEndTex, side: DS }), brickMat = stdMat({ map: brickTex }); brickTex.repeat.set(5, 1.6);
 const shopMat = stdMat({ map: shopTex, side: DS }), shopRoofMat = stdMat({ map: slateTex, color: 0xc9b3a2, roughness: 0.9, side: DS });
 const shopGlassMat = stdMat({ color: 0x2d4358, roughness: 0.1, metalness: 0.6, side: DS }), shopCanopyMat = stdMat({ color: 0x2b5a3a, roughness: 0.6, side: DS });
 const pavingMat = stdMat({ map: pavingTex, roughness: 0.95, side: DS }), globeMat = stdMat({ color: 0xf1e6b8, emissive: 0x7a6c36, roughness: 0.5 }), bollardMat = stdMat({ color: 0x2c3237, roughness: 0.45, metalness: 0.3 }), bollardBandMat = stdMat({ color: 0xe8e4cf, roughness: 0.6 });
@@ -586,7 +591,7 @@ function insetRoof(b, wallH, o) {
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n, a = [p[i][0], y0, p[i][1]], c = [p[j][0], y0, p[j][1]], e = [q[j][0], y1, q[j][1]], f = [q[i][0], y1, q[i][1]];
     rm.quad(a, c, e, f, uv(a), uv(c), uv(e), uv(f), UP);
-    if (!o && (!inPark(p[i][0], p[i][1]) || (b.cx > -485 && b.cx < -440 && b.cz > -290 && b.cz < -240)) && -nrm[i][1] > 0.5 && nrm[i][2] > 9 && (hashN(p[i][0], p[i][1]) % 3 !== 0 || inPark(p[i][0], p[i][1]))) {       // solar panels on the larger south-facing slopes
+    if (!o && (!inPark(p[i][0], p[i][1]) || (b.cx > -485 && b.cx < -440 && b.cz > -290 && b.cz < -240) || (b.cx > -432 && b.cx < -405 && b.cz > -290 && b.cz < -248)) && -nrm[i][1] > 0.5 && nrm[i][2] > 9 && (hashN(p[i][0], p[i][1]) % 3 !== 0 || inPark(p[i][0], p[i][1]))) {       // solar panels on the larger south-facing slopes
       const sm = mg('solar', solarMat), lerp = (u, v) => { const t0 = [a[0] + (c[0] - a[0]) * u, a[1] + (c[1] - a[1]) * u, a[2] + (c[2] - a[2]) * u], t1 = [f[0] + (e[0] - f[0]) * u, f[1] + (e[1] - f[1]) * u, f[2] + (e[2] - f[2]) * u]; return [t0[0] + (t1[0] - t0[0]) * v, t0[1] + (t1[1] - t0[1]) * v + 0.07, t0[2] + (t1[2] - t0[2]) * v]; };
       sm.quad(lerp(0.12, 0.22), lerp(0.88, 0.22), lerp(0.88, 0.78), lerp(0.12, 0.78), [0, 0], [1, 0], [1, 1], [0, 1], UP);
     }
@@ -636,10 +641,13 @@ for (const b of builds) {
       const ox = sg * (c[1] - a[1]) / L, oz = -sg * (c[0] - a[0]) / L, mx = (a[0] + c[0]) / 2, mz = (a[1] + c[1]) / 2, d = roadDist(mx + ox * 7, mz + oz * 7, -1, true);
       if (!best || d < best.d) best = { a, c, L, ox, oz, mx, mz, d };
     }
+    if (b.cx > -480 && b.cx < -462 && b.cz > -312 && b.cz < -284) {   // cross-shaped office west of the junction: entrance faces its driveway
+      for (let i = 0; i < n; i++) { const a = b.p[i], c = b.p[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 9) continue; const ox = sg * (c[1] - a[1]) / L, oz = -sg * (c[0] - a[0]) / L; if (ox > 0.8) best = { a, c, L, ox, oz, mx: (a[0] + c[0]) / 2, mz: (a[1] + c[1]) / 2, d: 0, arch: true }; }
+    }
     if (best && best.d < 14) {
       const { a, c, L, ox, oz, mx, mz } = best, tx = (c[0] - a[0]) / L, tz = (c[1] - a[1]) / L, W = 1.7, D = 0.7, H = wallH, G = 1.9;
       const isL = b.cx > -485 && b.cx < -440 && b.cz > -290 && b.cz < -240;
-      if (!isL && hashN(b.cx, b.cz) % 2 === 0) {                        // flush entrance with a buff arch
+      if (best.arch || (!isL && hashN(b.cx, b.cz) % 2 === 0)) {                        // flush entrance with a buff arch
         const Pq = (u, y) => [mx + tx * u + ox * 0.07, y, mz + tz * u + oz * 0.07];
         mg('arch', archMat).quad(Pq(-W, 0), Pq(W, 0), Pq(W, H), Pq(-W, H), [0, 0], [1, 0], [1, 1], [0, 1], [ox, 0, oz]);
       } else {
@@ -776,20 +784,21 @@ for (const r of roads) {
   const hl = hg;                                                         // bushy boundary hedge between the park and the field on its west side
   walk([[-486, -372], [-486, -170]], 2.8, (x, z, tx, tz) => { if (!inBuilding(x, z) && roadDist(x, z) > 1.5) hm.add(hl, mat4(x + sr(-0.25, 0.25), 0.6, z, Math.atan2(-tz, tx), 1.6 + sr(-0.3, 0.3), 0.65 + sr(-0.1, 0.2), 0.85)); });
 }
-// brick-and-board entrance sign beside the approach road (board left blank: the real one carries a company logo)
+// brick sign wall on the grass island south-west of the junction (board: blue band over white, no wording: the real one is a company logo)
 {
-  const bm = mg('wall0', facades[0]), px = -424.5, pz0 = -290.5, pz1 = -283.5, len = pz1 - pz0, mz = (pz0 + pz1) / 2;
-  for (const z of [pz0, pz1]) bm.add(new THREE.BoxGeometry(0.9, 1.9, 0.9), mat4(px, 0.95, z));
-  bm.add(new THREE.BoxGeometry(0.55, 1.15, len - 0.9), mat4(px, 0.575, mz));
-  mg('signr', stdMat({ color: 0x8c4624, roughness: 0.6, metalness: 0.3 })).add(new THREE.BoxGeometry(0.07, 0.75, len * 0.55), mat4(px - 0.31, 0.85, mz));
+  const bm = mg('brickWall', brickMat), cx = -445, cz = -294.2, len = 6.5, cap = mg('kerb', stdMat({ color: 0x9c9a93, roughness: 0.9 }), false, true);
+  for (const x of [cx - len / 2, cx + len / 2]) { bm.add(new THREE.BoxGeometry(0.8, 1.5, 0.8), mat4(x, 0.75, cz)); cap.add(new THREE.BoxGeometry(0.95, 0.12, 0.95), mat4(x, 1.56, cz)); }
+  bm.add(new THREE.BoxGeometry(len - 0.8, 1.2, 0.45), mat4(cx, 0.6, cz));
+  mg('signw', stdMat({ color: 0xf2f2ee, roughness: 0.6 })).add(new THREE.BoxGeometry(len * 0.45, 0.85, 0.06), mat4(cx + 0.6, 0.72, cz - 0.26));
+  mg('signb', stdMat({ color: 0x1d3f8a, roughness: 0.6 })).add(new THREE.BoxGeometry(len * 0.45, 0.42, 0.07), mat4(cx + 0.6, 0.93, cz - 0.27));
 }
 // silver birches on the verges around the entrance (white trunk, light drooping foliage)
 {
-  const trunkG = new THREE.CylinderGeometry(0.1, 0.16, 6.5, 6), leafG = new THREE.IcosahedronGeometry(1, 1), tm = mg('birchTrunk', stdMat({ color: 0xe6e3dc, roughness: 0.9 })), lm2 = mg('birchLeaf', stdMat({ color: 0x78a24a, roughness: 1, flatShading: true }));
-  const pts = [[-421, -276], [-418, -296], [-412, -283], [-425, -305], [-446, -308], [-428, -268], [-405, -292], [-445, -262]]; let nb = 0;
+  const trunkG = new THREE.CylinderGeometry(0.12, 0.2, 9, 6), leafG = new THREE.IcosahedronGeometry(1, 1), tm = mg('birchTrunk', stdMat({ color: 0xe6e3dc, roughness: 0.9 })), lm2 = mg('birchLeaf', stdMat({ color: 0x78a24a, roughness: 1, flatShading: true }));
+  const pts = [[-423, -292], [-417, -294], [-420, -287], [-418, -313], [-427, -314], [-452, -290]]; let nb = 0;
   for (const [bx, bz] of pts) {
-    if (inBuilding(bx, bz) || roadDist(bx, bz, -1, true) < 4.5 || nearWall(bx, bz, 1.5)) continue; nb++;
-    tm.add(trunkG, mat4(bx, 3.25, bz)); const sc = sr(0.9, 1.2);
+    if (inBuilding(bx, bz) || roadDist(bx, bz, -1, true) < 3.2 || nearWall(bx, bz, 1.5)) continue; nb++;
+    tm.add(trunkG, mat4(bx, 4.5, bz)); const sc = sr(1.3, 1.6);
     for (const [ox, oy, oz, r] of [[0, 6.4, 0, 1.9], [0.9, 5.2, 0.4, 1.5], [-0.8, 4.4, -0.5, 1.4], [0.2, 3.6, 0.9, 1.1]]) lm2.add(leafG, mat4(bx + ox, oy * sc, bz + oz, 0, r, r * 1.35, r));
   }
 }
@@ -797,7 +806,7 @@ for (const r of roads) {
 {
   const dome = new THREE.IcosahedronGeometry(1, 1), gm = mg('hedge', hedgeMat, true, true), fl = [mg('bedY', stdMat({ color: 0xc89a2c, roughness: 1, flatShading: true }), true, true), mg('bedO', stdMat({ color: 0xc5632a, roughness: 1, flatShading: true }), true, true), mg('bedP', stdMat({ color: 0x7c52a6, roughness: 1, flatShading: true }), true, true)];
   const pv5 = mg('paving', pavingMat, false, true), kb2 = mg('kerb', stdMat({ color: 0x9c9a93, roughness: 0.9 }), false, true);
-  for (const [bx, bz, br] of [[-421, -310, 3.6], [-446, -306, 3.2]]) {
+  for (const [bx, bz, br] of [[-420, -311, 3.8]]) {
     if (inBuilding(bx, bz) || roadDist(bx, bz, -1, true) < br + 1.2) continue;
     for (let i = 0; i < 16; i++) {
       const t0 = i / 16 * Math.PI * 2, t1 = (i + 1) / 16 * Math.PI * 2, p = (t, r) => [bx + Math.cos(t) * r, bz + Math.sin(t) * r];
@@ -807,11 +816,29 @@ for (const r of roads) {
     gm.add(dome, mat4(bx - 0.6, 0.5, bz + 0.2, 0, 1.6, 1.0, 1.5)); gm.add(dome, mat4(bx + 0.9, 0.45, bz - 0.8, 0.4, 1.2, 0.85, 1.1));
     for (let k = 0; k < 7; k++) { const t = sr(0, 6.28), r = sr(0.4, br - 0.8), m = fl[k % 3], sc = sr(0.6, 1.0); m.add(dome, mat4(bx + Math.cos(t) * r, 0.35 * sc, bz + Math.sin(t) * r, 0, sc, sc * 0.8, sc)); }
   }
-  const pxx = -417.5, pzz = -287, bm2 = mg('wall0', facades[0]), cl = mg('wallPav', facades[5]);
-  if (!inBuilding(pxx, pzz) && roadDist(pxx, pzz, -1, true) > 5) {
-    bm2.add(new THREE.BoxGeometry(5.0, 1.0, 4.4), mat4(pxx, 0.5, pzz)); cl.add(new THREE.BoxGeometry(5.0, 1.7, 4.4), mat4(pxx, 1.85, pzz));
-    mg('slate', slateMat).add(new THREE.ConeGeometry(4.0, 1.5, 4, 1), mat4(pxx, 3.45, pzz, Math.PI / 4, 1, 1, 0.9));
+  const pxx = -444, pzz = -308.5, bm2 = mg('brickWall', brickMat), cl = mg('pavClad', stdMat({ map: mkTex(32, 64, (g, w, h) => { g.fillStyle = '#7d8a96'; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(0,0,0,.25)'; for (let y = 0; y < h; y += 6) g.fillRect(0, y, w, 1); }), side: DS }));
+  if (!inBuilding(pxx, pzz)) {
+    bm2.add(new THREE.BoxGeometry(5.0, 1.0, 4.4), mat4(pxx, 0.5, pzz)); cl.add(new THREE.BoxGeometry(5.0, 1.6, 4.4), mat4(pxx, 1.8, pzz));
+    mg('slate', slateMat).add(new THREE.ConeGeometry(4.0, 1.4, 4, 1), mat4(pxx, 3.3, pzz, Math.PI / 4, 1, 1, 0.9));
+    const st = mg('stoneSlab', stdMat({ color: 0xd8c8a6, roughness: 0.95 }), false, true); st.add(new THREE.BoxGeometry(9, 0.1, 8), mat4(pxx + 1.0, 0.05, pzz + 0.5));
+    bm2.add(new THREE.BoxGeometry(0.45, 1.35, 5.2), mat4(pxx + 3.3, 0.675, pzz + 0.6));                                   // brick wall facing the road, carrying the rust tree panel
+    mg('signr', stdMat({ color: 0x3f1406, roughness: 0.7 })).add(new THREE.BoxGeometry(0.06, 0.8, 3.6), mat4(pxx + 3.56, 0.95, pzz + 0.6));
+    mg('grit', stdMat({ color: 0xe0b232, roughness: 0.7 })).add(new THREE.BoxGeometry(0.7, 0.7, 0.9), mat4(pxx + 3.9, 0.35, pzz + 3.6));
   }
+}
+// driveway from the junction to the cross-shaped office, grass either side
+{
+  const pm4 = mg('asphalt', asphaltMat, false, true), x0 = -463.5, x1 = -447, z0 = -301.5, z1 = -295, y = 0.045;
+  pm4.quad([x0, y, z1], [x1, y, z1], [x1, y, z0], [x0, y, z0], [x0 / 4, z1 / 4], [x1 / 4, z1 / 4], [x1 / 4, z0 / 4], [x0 / 4, z0 / 4], UP);
+  const gm3 = mg('hedge', hedgeMat, true, true), dome = new THREE.IcosahedronGeometry(1, 1);
+  for (const [hx, hz] of [[-461, -304.5], [-457, -305], [-461, -291.5]]) gm3.add(dome, mat4(hx, 0.7, hz, 0, 2.2, 1.1, 1.5));
+}
+// cream height-restriction frame across Sidestrand, just north of the junction, with a black bollard each side
+{
+  const fm = mg('frame', stdMat({ color: 0xe3cf8f, roughness: 0.7 })), r = roads[312], x = -434, z = -305.5, hw = (r ? r.w : 6) / 2 + 0.5;
+  for (const sd of [-1, 1]) { fm.add(new THREE.BoxGeometry(0.2, 3.3, 0.2), mat4(x + sd * hw, 1.65, z)); mg('pole', poleMat).add(new THREE.CylinderGeometry(0.09, 0.09, 1, 8), mat4(x + sd * (hw - 0.8), 0.5, z + 0.6)); }
+  fm.add(new THREE.BoxGeometry(hw * 2 + 0.2, 0.2, 0.2), mat4(x, 3.25, z));
+  fm.add(new THREE.BoxGeometry(0.14, 0.14, 2.6), mat4(x - hw, 2.3, z + 0.9, 0, 1, 1, 1));
 }
 // kerbed grass island with double yellow lines on the inside of the entrance bend, and a flagpole in front of the L building
 {
@@ -836,6 +863,15 @@ for (const r of roads) {
     }
   }
 
+  {                                                                      // north-east corner too (between Sidestrand north and the road east)
+    const pm3 = mg('asphalt', asphaltMat, false, true), pv4 = mg('paving', pavingMat, false, true), N = 10, Cz2 = -299.2 - r41.w / 2, ccx = Cx + R, ccz = Cz2 - R, pt = (th, rr) => [ccx + Math.cos(th) * rr, ccz + Math.sin(th) * rr];
+    for (let i = 0; i < N; i++) {
+      const t0 = Math.PI / 2 + (i / N) * Math.PI / 2, t1 = Math.PI / 2 + ((i + 1) / N) * Math.PI / 2, y = 0.05, v = (p, yy) => [p[0], yy, p[1]];
+      pm3.tri([Cx, y, Cz2], v(pt(t1, R), y), v(pt(t0, R), y), [0, 0], [1, 0], [1, 1], UP);
+      const ring = (ra, rb, yy, mat, sc) => mat.quad(v(pt(t1, ra), yy), v(pt(t0, ra), yy), v(pt(t0, rb), yy), v(pt(t1, rb), yy), [0, 0], [sc, 0], [sc, sc], [0, sc], UP);
+      ring(R - 0.4, R, 0.12, kb, 1); ring(R + 0.25, R + 0.35, 0.065, yel, 1); ring(R + 0.5, R + 0.6, 0.065, yel, 1); ring(R - 2.0, R - 0.4, 0.06, pv4, 2);
+    }
+  }
   if (r41) edge(r41, 1, 34, x => x < Cx + R);                                           // south side of the road in from Overstrand
   if (r311) edge({ p: r311.p, w: r311.w }, -1, 24, (x, z) => z < Cz + R);                    // east side of the road south past the bollards
   const pole = mg('pole', poleMat); pole.add(new THREE.CylinderGeometry(0.05, 0.07, 8, 6), mat4(-446, 4, -291));
