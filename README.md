@@ -2,6 +2,8 @@
 
 A free-roam drifting game set in the real streets of Pendeford, Wolverhampton. Single HTML file, no build step. Runs on desktop (keyboard) and mobile (on-screen controls).
 
+The car is a 2011 Citroen C1 modelled in Blender and embedded in the page as mesh data.
+
 Open `index.html` in a browser (it loads three.js from a CDN, so it needs an internet connection).
 
 ## Controls
