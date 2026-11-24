@@ -160,17 +160,20 @@ const BR = (() => {
 })();
 // footpath underpass: the path drops into a walled cutting and passes beneath the flat Droveway
 const TR = (() => {
-  const C = BR.C, vx = BR.vx, vz = BR.vz, o = { C, vx, vz, D: 3.6, top: 8.5, Lf: 32.6, band: 3.45, Ld: BR.Ld };
-  o.loc = (x, z) => ({ t: (x - C[0]) * vx + (z - C[1]) * vz, q: (x - C[0]) * (-vz) + (z - C[1]) * vx });
+  const P = roads[172].p, cum = [0]; for (let k = 1; k < P.length; k++) cum.push(cum[k - 1] + Math.hypot(P[k][0] - P[k - 1][0], P[k][1] - P[k - 1][1]));
+  const o = { C: BR.C, vx: BR.vx, vz: BR.vz, D: 3.6, top: 8.5, Lf: 32.6, band: 3.45, Ld: BR.Ld };
+  const near = (x, z) => { let b = null; for (let k = 0; k < P.length - 1; k++) { const a = P[k], c = P[k + 1], sx = c[0] - a[0], sz = c[1] - a[1], L = Math.hypot(sx, sz), u = Math.max(0, Math.min(1, ((x - a[0]) * sx + (z - a[1]) * sz) / (L * L))), qx = a[0] + sx * u, qz = a[1] + sz * u, d = Math.hypot(x - qx, z - qz); if (!b || d < b.d) b = { d, s: cum[k] + u * L, q: (x - qx) * (-sz / L) + (z - qz) * (sx / L) }; } return b; };
+  o.s0 = near(o.C[0], o.C[1]).s;                                       // arc length of the crossing along the path
+  o.loc = (x, z) => { const b = near(x, z); return { t: b.s - o.s0, q: b.q }; };
   o.depth = t => { const d = Math.abs(t); if (d <= o.top) return o.D; if (d >= o.Lf) return 0; const u = 1 - (d - o.top) / (o.Lf - o.top); return o.D * u * u * (3 - 2 * u); };
   o.foot = (x, z, m = 0) => { const l = o.loc(x, z); return Math.abs(l.q) < o.band + m && Math.abs(l.t) < o.Lf + m; };
-  o.pt = (t, q) => [C[0] + vx * t - vz * q, C[1] + vz * t + vx * q];
+  o.pt = (t, q) => { const s2 = t + o.s0; let k = 0; while (k < P.length - 2 && cum[k + 1] < s2) k++; const a = P[k], c = P[k + 1], L = cum[k + 1] - cum[k], u = (s2 - cum[k]) / L, tx = (c[0] - a[0]) / L, tz = (c[1] - a[1]) / L; return [a[0] + (c[0] - a[0]) * u - tz * q, a[1] + (c[1] - a[1]) * u + tx * q]; };
   return o;
 })();
 const densify = (p, st) => { const out = [p[0]]; for (let i = 1; i < p.length; i++) { const a = p[i - 1], b = p[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.ceil(L / st)); for (let k = 1; k <= n; k++) out.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]); } return out; };
 const builds = MAP.b.map(b => ({ h: b.h / 10, c: b.c, p: toPts(b.p) }));
 const areas = MAP.g.map(g => ({ t: g.t, p: toPts(g.p) }));
-areas[36].p = [[[54.6, 7.4], [82.6, -20.0], [81.1, -24.7], [61.0, -25.9], [59.7, -14.0], [50.1, -14.6], [49.3, -23.6], [26.2, -24.8], [10.4, -33.7], [-24.0, -45.5], [-52.4, -3.2], [-43.6, 6.9], [-20.9, -5.6], [4.1, 46.2], [44.83, 14.91], [28.95, -3.3], [34.16, -7.83], [50.31, 10.7]]][0];                                     // grass cover with the cutting removed
+areas[36].p = [[54.6, 7.4], [82.6, -20.0], [81.1, -24.7], [61.0, -25.9], [59.7, -14.0], [50.1, -14.6], [49.3, -23.6], [26.2, -24.8], [10.4, -33.7], [-24.0, -45.5], [-52.4, -3.2], [-43.6, 6.9], [-20.9, -5.6], [4.1, 46.2], [44.79, 14.94], [44.16, 14.22], [43.51, 13.47], [42.85, 12.71], [42.11, 11.81], [41.49, 11.03], [40.87, 10.25], [40.25, 9.47], [39.63, 8.68], [39.0, 7.9], [38.38, 7.12], [37.76, 6.33], [37.14, 5.55], [36.52, 4.77], [35.9, 3.98], [35.27, 3.2], [34.65, 2.42], [34.03, 1.63], [33.41, 0.85], [32.79, 0.07], [32.17, -0.72], [31.54, -1.5], [30.92, -2.28], [30.3, -3.07], [29.68, -3.85], [35.04, -8.36], [35.66, -7.58], [36.28, -6.79], [36.9, -6.01], [37.52, -5.23], [38.15, -4.44], [38.77, -3.66], [39.39, -2.88], [40.01, -2.09], [40.63, -1.31], [41.25, -0.53], [41.88, 0.26], [42.5, 1.04], [43.12, 1.82], [43.74, 2.61], [44.36, 3.39], [44.98, 4.17], [45.61, 4.96], [46.23, 5.74], [46.85, 6.52], [47.47, 7.31], [47.99, 7.96], [48.65, 8.72], [49.31, 9.47], [49.96, 10.22], [50.35, 10.67]];                                     // grass cover with the cutting removed
 
 /* ================= renderer / scene ================= */
 const renderer = new THREE.WebGLRenderer({ antialias: !isTouch, powerPreference: 'high-performance' });
@@ -510,7 +513,8 @@ function walk(p, step, fn, start = 0) {
 // ground
 {
   const sh = new THREE.Shape([new THREE.Vector2(-4500, -4500), new THREE.Vector2(4500, -4500), new THREE.Vector2(4500, 4500), new THREE.Vector2(-4500, 4500)]);
-  sh.holes.push(new THREE.Path([[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => { const p = TR.pt(a * TR.Lf, b * TR.band); return new THREE.Vector2(p[0], -p[1]); })));
+  { const hp = []; for (let t = -TR.Lf; t <= TR.Lf + 0.01; t += 1) hp.push(TR.pt(t, -TR.band)); for (let t = TR.Lf; t >= -TR.Lf - 0.01; t -= 1) hp.push(TR.pt(t, TR.band));
+    sh.holes.push(new THREE.Path(hp.map(p => new THREE.Vector2(p[0], -p[1])))); }
   const g = new THREE.ShapeGeometry(sh); g.rotateX(-Math.PI / 2);
   const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 10, uv.getY(i) / 10);
   const m = new THREE.Mesh(g, stdMat({ map: grassTex })); m.position.y = -0.04; m.receiveShadow = true; scene.add(m);
