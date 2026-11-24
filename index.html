@@ -249,21 +249,35 @@ const cladTex = mkTex(128, 128, (g, w, h) => {
 });
 const plainTex = mkTex(64, 64, (g, w, h) => { g.fillStyle = '#a7a39a'; g.fillRect(0, 0, w, h); speckle(g, w, h, 0.05, 120, 190, 0); });
 // Pendeford Business Park: red-brick offices with dark slate roofs (from satellite + street imagery)
-const officeTex = mkTex(256, 128, (g, w, h) => {
-  g.fillStyle = '#a2503a'; g.fillRect(0, 0, w, h);
+const officeTex = mkTex(256, 128, (g, w, h) => {                      // one storey, 8 m wide: red brick, buff bands, small grey-framed windows
+  g.fillStyle = '#a4513a'; g.fillRect(0, 0, w, h);
   g.strokeStyle = 'rgba(0,0,0,.2)'; g.lineWidth = 1;
   for (let y = 0; y < h; y += 8) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = ((y / 8) % 2) * 10; x < w; x += 20) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 8); g.stroke(); } }
-  speckle(g, w, h, 0.03, 0, 255, 0);
-  g.fillStyle = 'rgba(70,24,30,.22)'; for (let x = 0; x < w; x += 24) g.fillRect(x, 12, 12, 8);          // darker diaper-pattern bricks under the eaves
-  g.fillStyle = 'rgba(214,196,160,.85)'; g.fillRect(0, h - 7, w, 7); g.fillRect(0, 2, w, 3);
-  g.strokeStyle = 'rgba(214,196,160,.9)'; g.lineWidth = 2; for (let x = 6; x < w; x += 32) g.strokeRect(x, h - 22, 22, 9);   // patterned cream band               // buff stone floor band + eaves string course
-  for (const wx of [10, 94, 178]) {
-    g.fillStyle = '#56626d'; g.fillRect(wx - 3, 22, 66, 80);
-    const gr = g.createLinearGradient(0, 26, 0, 98); gr.addColorStop(0, '#8fa9bf'); gr.addColorStop(.55, '#46607a'); gr.addColorStop(1, '#27374a');
-    g.fillStyle = gr; g.fillRect(wx, 26, 60, 72);
-    g.fillStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.moveTo(wx, 26); g.lineTo(wx + 28, 26); g.lineTo(wx, 64); g.closePath(); g.fill();
-    g.fillStyle = '#56626d'; g.fillRect(wx + 28, 26, 3, 72); g.fillRect(wx, 56, 60, 3);
+  speckle(g, w, h, 0.04, 0, 255, 0);
+  const cream = '#d9c49a';
+  g.fillStyle = cream; g.fillRect(0, 0, w, 3); g.fillRect(0, h - 10, w, 10);                                   // string courses at floor level
+  g.fillStyle = '#a4513a'; for (let x = 4; x < w; x += 24) g.fillRect(x, h - 8, 16, 6);                          // brick-panel pattern inside the lower band
+  for (let x = 2; x < w; x += 64) {                                                                              // four windows per bay
+    const wx = x + 10;
+    g.fillStyle = cream; g.fillRect(wx - 3, 28, 48, 5); g.fillRect(wx - 3, 86, 48, 5);                           // lintel + sill
+    g.fillStyle = '#2f3438'; g.fillRect(wx, 34, 42, 52);                                                         // dark frame
+    const gr = g.createLinearGradient(0, 36, 0, 84); gr.addColorStop(0, '#5f7078'); gr.addColorStop(1, '#2d3b42');
+    g.fillStyle = gr; g.fillRect(wx + 3, 37, 16, 46); g.fillRect(wx + 23, 37, 16, 46);
+    g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(wx + 3, 37, 16, 14);
   }
+});
+// entrance bay: brick with buff piers, dark door, a slim upper window (3.4 m wide x 5.6 m high)
+const porchTex = mkTex(96, 192, (g, w, h) => {
+  g.fillStyle = '#a4513a'; g.fillRect(0, 0, w, h);
+  g.strokeStyle = 'rgba(0,0,0,.2)'; g.lineWidth = 1;
+  for (let y = 0; y < h; y += 8) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = ((y / 8) % 2) * 10; x < w; x += 20) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 8); g.stroke(); } }
+  speckle(g, w, h, 0.04, 0, 255, 0);
+  const cream = '#d9c49a'; g.fillStyle = cream;
+  g.fillRect(0, 0, 7, h); g.fillRect(w - 7, 0, 7, h); g.fillRect(w / 2 - 3, 28, 6, 80);                     // outer piers + central pier
+  for (const y of [6, 100, 150, 184]) g.fillRect(0, y, w, 4);                                                // bands
+  g.fillStyle = '#2f3438'; g.fillRect(24, 112, 48, 78); g.fillStyle = '#12161a'; g.fillRect(28, 116, 40, 74);     // door
+  g.fillStyle = 'rgba(150,170,180,.25)'; g.fillRect(31, 119, 14, 60); g.fillRect(50, 119, 14, 60);
+  g.fillStyle = '#2f3438'; g.fillRect(34, 36, 28, 56); g.fillStyle = '#44545c'; g.fillRect(37, 39, 22, 50);       // upper window
 });
 // Supermarket (Morrisons, Pendeford): buff cladding with a dark green fascia, low-pitched grey roof, glazed entrance
 const shopTex = mkTex(128, 256, (g, w, h) => {
@@ -281,17 +295,17 @@ const pavingTex = mkTex(64, 64, (g, w, h) => {                       // reddish-
   g.fillStyle = '#6e4338'; g.fillRect(0, 0, w, h);
   for (let y = 0; y < h; y += 8) for (let x = ((y / 8) % 2) * 8; x < w + 8; x += 16) { g.fillStyle = ['#9a5b4b', '#8c5043', '#a46454', '#935547'][(x * 7 + y * 3) % 4]; g.fillRect(x + 1, y + 1, 14, 6); }
 });
-const slateTex = mkTex(128, 128, (g, w, h) => {
-  g.fillStyle = '#585352'; g.fillRect(0, 0, w, h);
-  for (let y = 0; y < h; y += 6) { g.fillStyle = `rgba(0,0,0,${0.14 + (y / 6 % 2) * 0.08})`; g.fillRect(0, y, w, 1.5); }
-  speckle(g, w, h, 0.06, 60, 110, 0);
+const slateTex = mkTex(128, 128, (g, w, h) => {                      // concrete/clay plain tiles, brown-grey
+  g.fillStyle = '#5b4f49'; g.fillRect(0, 0, w, h);
+  for (let y = 0; y < h; y += 7) { g.fillStyle = 'rgba(0,0,0,.28)'; g.fillRect(0, y, w, 1.5); for (let x = ((y / 7) % 2) * 6; x < w; x += 12) { g.fillStyle = 'rgba(0,0,0,.16)'; g.fillRect(x, y, 1, 7); } }
+  speckle(g, w, h, 0.08, 60, 120, 0);
 });
 const stdMat = o => new THREE.MeshStandardMaterial(Object.assign({ roughness: 0.9, metalness: 0, envMapIntensity: 0.5 }, o));
 const DS = THREE.DoubleSide;
 const facades = [['#a8523c', 1], ['#b98d62', 1], ['#d9cfb8', 0], ['#9fb0bd', 0], ['#dcc98a', 0], ['#b9b8b2', 0], ['#8c3f35', 1]].map(a => stdMat({ map: facadeTex(a[0], a[1]), side: DS }));
 const cladMat = stdMat({ map: cladTex, side: DS }), plainMat = stdMat({ map: plainTex, side: DS });
 const roofMat = stdMat({ map: roofTex, side: DS });
-const officeMat = stdMat({ map: officeTex, side: DS }), slateMat = stdMat({ map: slateTex, side: DS, roughness: 0.85 });
+const officeMat = stdMat({ map: officeTex, side: DS }), slateMat = stdMat({ map: slateTex, side: DS, roughness: 0.85 }), porchMat = stdMat({ map: porchTex, side: DS });
 const shopMat = stdMat({ map: shopTex, side: DS }), shopRoofMat = stdMat({ map: slateTex, color: 0xc9b3a2, roughness: 0.9, side: DS });
 const shopGlassMat = stdMat({ color: 0x2d4358, roughness: 0.1, metalness: 0.6, side: DS }), shopCanopyMat = stdMat({ color: 0x2b5a3a, roughness: 0.6, side: DS });
 const pavingMat = stdMat({ map: pavingTex, roughness: 0.95, side: DS }), globeMat = stdMat({ color: 0xf1e6b8, emissive: 0x7a6c36, roughness: 0.5 }), bollardMat = stdMat({ color: 0x6b7075, roughness: 0.5, metalness: 0.3 }), bollardBandMat = stdMat({ color: 0xe8e4cf, roughness: 0.6 });
@@ -552,7 +566,7 @@ function insetRoof(b, wallH, o) {
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n, a = [p[i][0], y0, p[i][1]], c = [p[j][0], y0, p[j][1]], e = [q[j][0], y1, q[j][1]], f = [q[i][0], y1, q[i][1]];
     rm.quad(a, c, e, f, uv(a), uv(c), uv(e), uv(f), UP);
-    if (!o && -nrm[i][1] > 0.5 && nrm[i][2] > 9 && hashN(p[i][0], p[i][1]) % 3 !== 0) {       // solar panels on the larger south-facing slopes
+    if (!o && !inPark(p[i][0], p[i][1]) && -nrm[i][1] > 0.5 && nrm[i][2] > 9 && hashN(p[i][0], p[i][1]) % 3 !== 0) {       // solar panels on the larger south-facing slopes
       const sm = mg('solar', solarMat), lerp = (u, v) => { const t0 = [a[0] + (c[0] - a[0]) * u, a[1] + (c[1] - a[1]) * u, a[2] + (c[2] - a[2]) * u], t1 = [f[0] + (e[0] - f[0]) * u, f[1] + (e[1] - f[1]) * u, f[2] + (e[2] - f[2]) * u]; return [t0[0] + (t1[0] - t0[0]) * v, t0[1] + (t1[1] - t0[1]) * v + 0.07, t0[2] + (t1[2] - t0[2]) * v]; };
       sm.quad(lerp(0.12, 0.22), lerp(0.88, 0.22), lerp(0.88, 0.78), lerp(0.12, 0.78), [0, 0], [1, 0], [1, 1], [0, 1], UP);
     }
@@ -581,6 +595,22 @@ for (const b of builds) {
     const a = b.p[i], c = b.p[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 0.05) continue;
     const nx = (c[1] - a[1]) / L, nz = -(c[0] - a[0]) / L, u0 = s / 8 + uo, u1 = (s + L) / 8 + uo;
     wm.quad([a[0], 0, a[1]], [c[0], 0, c[1]], [c[0], wallH, c[1]], [a[0], wallH, a[1]], [u0, 0], [u1, 0], [u1, floors], [u0, floors], [nx, 0, nz]); s += L;
+  }
+  if (parkB) {                                                          // brick entrance bay with a pointed gable, on the wall that faces the nearest road
+    const sg = b.area >= 0 ? 1 : -1; let best = null;
+    for (let i = 0; i < n; i++) {
+      const a = b.p[i], c = b.p[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 9) continue;
+      const ox = sg * (c[1] - a[1]) / L, oz = -sg * (c[0] - a[0]) / L, mx = (a[0] + c[0]) / 2, mz = (a[1] + c[1]) / 2, d = roadDist(mx + ox * 7, mz + oz * 7, -1, true);
+      if (!best || d < best.d) best = { a, c, L, ox, oz, mx, mz, d };
+    }
+    if (best && best.d < 14) {
+      const { a, c, L, ox, oz, mx, mz } = best, tx = (c[0] - a[0]) / L, tz = (c[1] - a[1]) / L, W = 1.7, D = 0.7, H = wallH, G = 1.9;
+      const P = (u, y, v) => [mx + tx * u + ox * v, y, mz + tz * u + oz * v], pm2 = mg('porch', porchMat), rf = mg('slate', slateMat);
+      pm2.quad(P(-W, 0, D), P(W, 0, D), P(W, H, D), P(-W, H, D), [0, 0], [1, 0], [1, 1], [0, 1], [ox, 0, oz]);
+      for (const sd of [-1, 1]) pm2.quad(P(sd * W, 0, 0), P(sd * W, 0, D), P(sd * W, H, D), P(sd * W, H, 0), [0, 0], [0.2, 0], [0.2, 1], [0, 1], [tx * sd, 0, tz * sd]);
+      pm2.tri(P(-W, H, D), P(W, H, D), P(0, H + G, D), [0.04, 0.9], [0.96, 0.9], [0.5, 1], [ox, 0, oz]);
+      for (const sd of [-1, 1]) rf.quad(P(sd * (W + 0.25), H - 0.05, D + 0.25), P(0, H + G + 0.2, D + 0.25), P(0, H + G + 0.2, -3.2), P(sd * (W + 0.25), H - 0.05, -3.2), [0, 0], [1, 0], [1, 1.5], [0, 1.5], [tx * sd * 0.5, 0.8, tz * sd * 0.5]);
+    }
   }
   if (shopB) {                                                          // glazed entrance + canopy on the longest car-park-facing (west) wall
     const sg = b.area >= 0 ? 1 : -1; let best = null;
