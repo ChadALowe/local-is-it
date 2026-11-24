@@ -264,13 +264,25 @@ const poleMat = stdMat({ color: 0x3c4146, roughness: 0.5, metalness: 0.6 });
 const lampHeadMat = stdMat({ color: 0xdfe3e6, roughness: 0.4 });
 
 /* ================= merging / spatial helpers ================= */
+// Geometry is merged per material AND per spatial chunk, so three.js can frustum-cull each chunk
+// (main camera and shadow camera) instead of drawing the whole map every frame.
+const CHUNK = 192;
+const chunkMeshes = [];
+const carChunks = [];                       // parked-car chunks: { ims, sph } so phones can skip far-away ones
+const CAR_DRAW = 260;                       // phones only draw parked cars within this distance (m)
 class Merger {
-  constructor(mat, cast = true, recv = true) { this.mat = mat; this.p = []; this.n = []; this.u = []; this.cast = cast; this.recv = recv; }
+  constructor(mat, cast = true, recv = true) { this.mat = mat; this.ch = new Map(); this.cast = cast; this.recv = recv; }
+  chunk(x, z) {
+    const k = Math.floor(x / CHUNK) * 4096 + Math.floor(z / CHUNK); let c = this.ch.get(k);
+    if (!c) this.ch.set(k, c = { p: [], n: [], u: [] });
+    return c;
+  }
   add(geo, m) {
     const g = geo.index ? geo.toNonIndexed() : geo.clone(); g.applyMatrix4(m);
+    const c = this.chunk(m.elements[12], m.elements[14]);
     const P = g.attributes.position.array, N = g.attributes.normal.array, U = g.attributes.uv ? g.attributes.uv.array : null, cnt = g.attributes.position.count;
-    for (let i = 0; i < P.length; i++) { this.p.push(P[i]); this.n.push(N[i]); }
-    for (let i = 0; i < cnt * 2; i++) this.u.push(U ? U[i] : 0);
+    for (let i = 0; i < P.length; i++) { c.p.push(P[i]); c.n.push(N[i]); }
+    for (let i = 0; i < cnt * 2; i++) c.u.push(U ? U[i] : 0);
     g.dispose();
   }
   // triangle with explicit uvs; normal oriented to agree with hint
@@ -279,16 +291,21 @@ class Merger {
     let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
     if (nx * hint[0] + ny * hint[1] + nz * hint[2] < 0) { [b, c] = [c, b]; [ub, uc] = [uc, ub]; nx = -nx; ny = -ny; nz = -nz; }
     const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
-    for (const [q, w] of [[a, ua], [b, ub], [c, uc]]) { this.p.push(q[0], q[1], q[2]); this.n.push(nx, ny, nz); this.u.push(w[0], w[1]); }
+    const ch = this.chunk((a[0] + b[0] + c[0]) / 3, (a[2] + b[2] + c[2]) / 3);
+    for (const [q, w] of [[a, ua], [b, ub], [c, uc]]) { ch.p.push(q[0], q[1], q[2]); ch.n.push(nx, ny, nz); ch.u.push(w[0], w[1]); }
   }
   quad(a, b, c, d, ua, ub, uc, ud, hint) { this.tri(a, b, c, ua, ub, uc, hint); this.tri(a, c, d, ua, uc, ud, hint); }
   build() {
-    if (!this.p.length) return;
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(this.p), 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(this.n), 3));
-    g.setAttribute('uv', new THREE.BufferAttribute(Float32Array.from(this.u), 2));
-    const m = new THREE.Mesh(g, this.mat); m.castShadow = this.cast; m.receiveShadow = this.recv; scene.add(m); this.p = this.n = this.u = null;
+    for (const c of this.ch.values()) {
+      if (!c.p.length) continue;
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(c.p), 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(c.n), 3));
+      g.setAttribute('uv', new THREE.BufferAttribute(Float32Array.from(c.u), 2));
+      g.computeBoundingSphere();
+      const m = new THREE.Mesh(g, this.mat); m.castShadow = this.cast; m.receiveShadow = this.recv; m.matrixAutoUpdate = false; scene.add(m); chunkMeshes.push(m);
+    }
+    this.ch = null;
   }
 }
 const MG = {};
@@ -632,10 +649,22 @@ function createCar(color) {
     [merge(sel(['black', 'trim']).concat(wsel(['tire']))), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, side: DS }), true],
     [merge(sel(['chrome', 'lens', 'amber', 'red', 'plate_f', 'plate_r', 'hub']).concat(wsel(['hub']))), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.4, side: DS }), false]
   ];
-  const meshes = groups.map(([g, m, cast]) => { const im = new THREE.InstancedMesh(g, m, count); im.count = parked.length; im.castShadow = cast; im.receiveShadow = true; im.frustumCulled = false; scene.add(im); return im; });
-  const colr = new THREE.Color();
-  parked.forEach((p, i) => { const m = mat4(p.x, 0.05, p.z, p.yaw); meshes.forEach(im => im.setMatrixAt(i, m)); meshes[0].setColorAt(i, colr.setHex(p.color)); });
-  meshes.forEach(im => { im.instanceMatrix.needsUpdate = true; }); if (meshes[0].instanceColor) meshes[0].instanceColor.needsUpdate = true;
+  // one instanced mesh per (chunk, material group). Geometry buffers are shared; only the bounding sphere differs,
+  // so each chunk of parked cars is frustum-culled (main + shadow pass) instead of every car being drawn every frame.
+  const byChunk = new Map();
+  parked.forEach(p => { const k = Math.floor(p.x / CHUNK) * 4096 + Math.floor(p.z / CHUNK); let l = byChunk.get(k); if (!l) byChunk.set(k, l = []); l.push(p); });
+  const colr = new THREE.Color(), carR = 3;
+  for (const list of byChunk.values()) {
+    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const p of list) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
+    const sph = new THREE.Sphere(new THREE.Vector3((x0 + x1) / 2, 1, (z0 + z1) / 2), Math.hypot(x1 - x0, z1 - z0) / 2 + carR);
+    const ims = groups.map(([g, m, cast]) => {
+      const cg = new THREE.BufferGeometry(); for (const k in g.attributes) cg.setAttribute(k, g.attributes[k]); cg.setIndex(g.index); cg.boundingSphere = sph;
+      const im = new THREE.InstancedMesh(cg, m, list.length); im.castShadow = cast; im.receiveShadow = true; im.frustumCulled = true; /* r128 InstancedMesh defaults to false */ scene.add(im); chunkMeshes.push(im); return im;
+    });
+    carChunks.push({ ims, sph });
+    list.forEach((p, i) => { const m = mat4(p.x, 0.05, p.z, p.yaw); ims.forEach(im => im.setMatrixAt(i, m)); ims[0].setColorAt(i, colr.setHex(p.color)); });
+    ims.forEach(im => { im.instanceMatrix.needsUpdate = true; }); if (ims[0].instanceColor) ims[0].instanceColor.needsUpdate = true;
+  }
 }
 const paintChoices = [0xa3161a, 0x1f4f9a, 0xe9e9e6, 0x2c2e31, 0x9aa0a6, 0x2f7d32, 0xe36f1c, 0x6c2a8a];
 let paintIdx = 0;
@@ -859,7 +888,7 @@ function drawMinimap() {
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
 
 /* ================= loop ================= */
-let last = performance.now(), hudT = 0, skidAccInit = 0;
+let last = performance.now(), hudT = 0, skidAccInit = 0, frameN = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
@@ -868,6 +897,10 @@ function frame(now) {
   sky.position.copy(camera.position); clouds.position.set(camera.position.x, 0, camera.position.z);
   hudT -= dt;
   if (hudT <= 0) { hudT = 0.05; $('spd').textContent = Math.round(spdNow * 3.6); $('g').textContent = gearNow; $('rpmf').style.width = (rpmNow * 100) + '%'; drawMinimap(); }
+  if (isTouch && (frameN++ & 7) === 0) {                                 // distance-cull parked cars on phones (they are ~4k triangles each)
+    const cx = camera.position.x, cz = camera.position.z;
+    for (const c of carChunks) { const v = Math.hypot(cx - c.sph.center.x, cz - c.sph.center.z) - c.sph.radius < CAR_DRAW; for (const im of c.ims) im.visible = v; }
+  }
   renderer.render(scene, camera);
 }
 requestAnimationFrame(frame);
