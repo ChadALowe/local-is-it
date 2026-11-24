@@ -747,10 +747,10 @@ for (const b of builds) {
       const W = (u, v) => [ax + tx * u + ox * v, az + tz * u + oz * v];       // u along the front (m), v out from it (m)
       STORE.front = { ax, az, tx, tz, ox, oz, L, yaw };
       // MORRISONS lettering standing on the lower roof slope (plain lettering, no emblem)
-      { const [sx, sz] = W(L * 0.62, -3.0), sgM = mg('storeSign', stdMat({ map: mkTex(512, 96, (g2, w2, h2) => { g2.clearRect(0, 0, w2, h2); g2.fillStyle = '#fbfbf7'; g2.font = 'bold 82px Arial, Helvetica, sans-serif'; g2.textAlign = 'center'; g2.textBaseline = 'middle'; g2.fillText('Morrisons', w2 / 2, h2 / 2 + 4); }), transparent: true, alphaTest: 0.4, side: DS, emissive: 0x303030 }), false, false);
-        sgM.add(new THREE.PlaneGeometry(15, 2.9), mat4(sx, wallH + 2.3, sz, Math.atan2(ox, oz))); mg('pole', poleMat).add(new THREE.BoxGeometry(14, 0.12, 0.12), mat4(sx - ox * 0.05, wallH + 1.0, sz - oz * 0.05, Math.atan2(ox, oz))); }
+      { const [sx, sz] = W(L * 0.62, -0.9), sgM = mg('storeSign', stdMat({ map: mkTex(512, 96, (g2, w2, h2) => { g2.clearRect(0, 0, w2, h2); g2.strokeStyle = '#5a4300'; g2.lineWidth = 6; g2.font = 'bold 82px Arial, Helvetica, sans-serif'; g2.textAlign = 'center'; g2.textBaseline = 'middle'; g2.strokeText('Morrisons', w2 / 2, h2 / 2 + 4); g2.fillStyle = '#f5c400'; g2.font = 'bold 82px Arial, Helvetica, sans-serif'; g2.textAlign = 'center'; g2.textBaseline = 'middle'; g2.fillText('Morrisons', w2 / 2, h2 / 2 + 4); }), transparent: true, alphaTest: 0.4, side: DS, emissive: 0x6a5200 }), false, false);
+        sgM.add(new THREE.PlaneGeometry(15, 2.9), mat4(sx, wallH + 2.15, sz, Math.atan2(ox, oz))); mg('pole', poleMat).add(new THREE.BoxGeometry(14, 0.12, 0.12), mat4(sx - ox * 0.05, wallH + 0.75, sz - oz * 0.05, Math.atan2(ox, oz))); }
       // a smaller lettering board over the parade end of the store
-      { const [sx, sz] = W(L * 0.12, -2.2); mg('storeSign').add(new THREE.PlaneGeometry(5, 0.95), mat4(sx, wallH + 1.1, sz, Math.atan2(ox, oz))); }
+      { const [sx, sz] = W(L * 0.12, -0.6); mg('storeSign').add(new THREE.PlaneGeometry(5, 0.95), mat4(sx, wallH + 0.95, sz, Math.atan2(ox, oz))); }
       // entrance lobby: glazed box with a green frame and a flat canopy
       { const [ex, ez] = W(L * 0.4, 1.4); mg('shopGlass', shopGlassMat).add(new THREE.BoxGeometry(6, 3.0, 2.8), mat4(ex, 1.5, ez, yaw)); mg('shopCanopy', shopCanopyMat).add(new THREE.BoxGeometry(6.6, 0.25, 3.4), mat4(ex, 3.1, ez, yaw)); }
       // black bollards with yellow bands along the front walkway
