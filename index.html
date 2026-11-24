@@ -266,6 +266,26 @@ const officeTex = mkTex(256, 128, (g, w, h) => {                      // one sto
     g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(wx + 3, 37, 16, 14);
   }
 });
+const officeEndTex = mkTex(128, 128, (g, w, h) => {                  // end wall (4 m x one storey): brick, two buff piers, one tall narrow window
+  g.fillStyle = '#a4513a'; g.fillRect(0, 0, w, h);
+  g.strokeStyle = 'rgba(0,0,0,.2)'; g.lineWidth = 1;
+  for (let y = 0; y < h; y += 8) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = ((y / 8) % 2) * 10; x < w; x += 20) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 8); g.stroke(); } }
+  speckle(g, w, h, 0.04, 0, 255, 0);
+  g.fillStyle = '#d9c49a'; g.fillRect(8, 0, 12, h); g.fillRect(w - 20, 0, 12, h); g.fillRect(0, h - 8, w, 8); g.fillRect(0, 0, w, 3);
+  g.fillStyle = '#2f3438'; g.fillRect(52, 22, 24, 86); const gr = g.createLinearGradient(0, 26, 0, 104); gr.addColorStop(0, '#5f7078'); gr.addColorStop(1, '#222d33'); g.fillStyle = gr; g.fillRect(56, 26, 16, 78);
+});
+const archTex = mkTex(96, 192, (g, w, h) => {                        // flush entrance with a buff arch over the door
+  g.fillStyle = '#a4513a'; g.fillRect(0, 0, w, h);
+  g.strokeStyle = 'rgba(0,0,0,.2)'; g.lineWidth = 1;
+  for (let y = 0; y < h; y += 8) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = ((y / 8) % 2) * 10; x < w; x += 20) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 8); g.stroke(); } }
+  speckle(g, w, h, 0.04, 0, 255, 0);
+  g.fillStyle = '#d9c49a'; for (const y of [6, 100, 184]) g.fillRect(0, y, w, 4);
+  g.beginPath(); g.arc(w / 2, 128, 34, Math.PI, 0); g.lineTo(w / 2 + 28, 128); g.arc(w / 2, 128, 28, 0, Math.PI, true); g.closePath(); g.fill();
+  g.fillStyle = '#2f3438'; g.fillRect(22, 126, 52, 64); g.fillStyle = '#12161a'; g.fillRect(26, 130, 44, 60);
+  g.fillStyle = 'rgba(150,170,180,.25)'; g.fillRect(29, 133, 16, 50); g.fillRect(51, 133, 16, 50);
+  g.fillStyle = '#2f3438'; for (const x of [12, 66]) g.fillRect(x, 30, 18, 58);
+  g.fillStyle = '#44545c'; for (const x of [14, 68]) g.fillRect(x, 33, 14, 52);
+});
 // entrance bay: brick with buff piers, dark door, a slim upper window (3.4 m wide x 5.6 m high)
 const porchTex = mkTex(96, 192, (g, w, h) => {
   g.fillStyle = '#a4513a'; g.fillRect(0, 0, w, h);
@@ -305,7 +325,7 @@ const DS = THREE.DoubleSide;
 const facades = [['#a8523c', 1], ['#b98d62', 1], ['#d9cfb8', 0], ['#9fb0bd', 0], ['#dcc98a', 0], ['#b9b8b2', 0], ['#8c3f35', 1]].map(a => stdMat({ map: facadeTex(a[0], a[1]), side: DS }));
 const cladMat = stdMat({ map: cladTex, side: DS }), plainMat = stdMat({ map: plainTex, side: DS });
 const roofMat = stdMat({ map: roofTex, side: DS });
-const officeMat = stdMat({ map: officeTex, side: DS }), slateMat = stdMat({ map: slateTex, side: DS, roughness: 0.85 }), porchMat = stdMat({ map: porchTex, side: DS });
+const officeMat = stdMat({ map: officeTex, side: DS }), slateMat = stdMat({ map: slateTex, side: DS, roughness: 0.85 }), porchMat = stdMat({ map: porchTex, side: DS }), archMat = stdMat({ map: archTex, side: DS }), officeEndMat = stdMat({ map: officeEndTex, side: DS });
 const shopMat = stdMat({ map: shopTex, side: DS }), shopRoofMat = stdMat({ map: slateTex, color: 0xc9b3a2, roughness: 0.9, side: DS });
 const shopGlassMat = stdMat({ color: 0x2d4358, roughness: 0.1, metalness: 0.6, side: DS }), shopCanopyMat = stdMat({ color: 0x2b5a3a, roughness: 0.6, side: DS });
 const pavingMat = stdMat({ map: pavingTex, roughness: 0.95, side: DS }), globeMat = stdMat({ color: 0xf1e6b8, emissive: 0x7a6c36, roughness: 0.5 }), bollardMat = stdMat({ color: 0x2c3237, roughness: 0.45, metalness: 0.3 }), bollardBandMat = stdMat({ color: 0xe8e4cf, roughness: 0.6 });
@@ -588,13 +608,15 @@ for (const b of builds) {
     fi = pool[hsh % pool.length]; matKey = 'wall' + fi; mat = facades[fi];
   }
   const wm = mg(matKey, mat);
+  const we = parkB ? mg('wallOfficeEnd', officeEndMat) : null;
   const pitched = b.c === 0 && b.h >= 4 && b.h <= 10 && Math.abs(b.area) > 22 && Math.abs(b.area) < 450;
   const wallH = shopB ? 4.8 : parkB ? 5.6 : pitched ? Math.max(2.8, b.h * 0.72) : b.h, floors = shopB ? 1 : Math.max(1, Math.round(wallH / 3.3)), uo = (hsh % 7) / 7;
   let s = 0;
   for (let i = 0; i < n; i++) {
     const a = b.p[i], c = b.p[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 0.05) continue;
     const nx = (c[1] - a[1]) / L, nz = -(c[0] - a[0]) / L, u0 = s / 8 + uo, u1 = (s + L) / 8 + uo;
-    wm.quad([a[0], 0, a[1]], [c[0], 0, c[1]], [c[0], wallH, c[1]], [a[0], wallH, a[1]], [u0, 0], [u1, 0], [u1, floors], [u0, floors], [nx, 0, nz]); s += L;
+    const endW = parkB && L < 13, wq = endW ? we : wm, k2 = endW ? 2 : 1;
+    wq.quad([a[0], 0, a[1]], [c[0], 0, c[1]], [c[0], wallH, c[1]], [a[0], wallH, a[1]], [u0 * k2, 0], [u1 * k2, 0], [u1 * k2, floors], [u0 * k2, floors], [nx, 0, nz]); s += L;
   }
   if (parkB) {                                                          // brick entrance bay with a pointed gable, on the wall that faces the nearest road
     const sg = b.area >= 0 ? 1 : -1; let best = null;
@@ -616,11 +638,17 @@ for (const b of builds) {
     }
     if (best && best.d < 14) {
       const { a, c, L, ox, oz, mx, mz } = best, tx = (c[0] - a[0]) / L, tz = (c[1] - a[1]) / L, W = 1.7, D = 0.7, H = wallH, G = 1.9;
+      const isL = b.cx > -485 && b.cx < -440 && b.cz > -290 && b.cz < -240;
+      if (!isL && hashN(b.cx, b.cz) % 2 === 0) {                        // flush entrance with a buff arch
+        const Pq = (u, y) => [mx + tx * u + ox * 0.07, y, mz + tz * u + oz * 0.07];
+        mg('arch', archMat).quad(Pq(-W, 0), Pq(W, 0), Pq(W, H), Pq(-W, H), [0, 0], [1, 0], [1, 1], [0, 1], [ox, 0, oz]);
+      } else {
       const P = (u, y, v) => [mx + tx * u + ox * v, y, mz + tz * u + oz * v], pm2 = mg('porch', porchMat), rf = mg('slate', slateMat);
       pm2.quad(P(-W, 0, D), P(W, 0, D), P(W, H, D), P(-W, H, D), [0, 0], [1, 0], [1, 1], [0, 1], [ox, 0, oz]);
       for (const sd of [-1, 1]) pm2.quad(P(sd * W, 0, 0), P(sd * W, 0, D), P(sd * W, H, D), P(sd * W, H, 0), [0, 0], [0.2, 0], [0.2, 1], [0, 1], [tx * sd, 0, tz * sd]);
       pm2.tri(P(-W, H, D), P(W, H, D), P(0, H + G, D), [0.04, 0.9], [0.96, 0.9], [0.5, 1], [ox, 0, oz]);
       for (const sd of [-1, 1]) rf.quad(P(sd * (W + 0.25), H - 0.05, D + 0.25), P(0, H + G + 0.2, D + 0.25), P(0, H + G + 0.2, -3.2), P(sd * (W + 0.25), H - 0.05, -3.2), [0, 0], [1, 0], [1, 1.5], [0, 1.5], [tx * sd * 0.5, 0.8, tz * sd * 0.5]);
+      }
     }
   }
   if (shopB) {                                                          // glazed entrance + canopy on the longest car-park-facing (west) wall
@@ -753,8 +781,7 @@ for (const r of roads) {
   const bm = mg('wall0', facades[0]), px = -424.5, pz0 = -290.5, pz1 = -283.5, len = pz1 - pz0, mz = (pz0 + pz1) / 2;
   for (const z of [pz0, pz1]) bm.add(new THREE.BoxGeometry(0.9, 1.9, 0.9), mat4(px, 0.95, z));
   bm.add(new THREE.BoxGeometry(0.55, 1.15, len - 0.9), mat4(px, 0.575, mz));
-  mg('signw', stdMat({ color: 0xf0f0ec, roughness: 0.6 })).add(new THREE.BoxGeometry(0.06, 0.62, len * 0.5), mat4(px - 0.31, 0.78, mz));
-  mg('signb', stdMat({ color: 0x1d3f8a, roughness: 0.6 })).add(new THREE.BoxGeometry(0.07, 0.3, len * 0.5), mat4(px - 0.31, 1.0, mz));
+  mg('signr', stdMat({ color: 0x8c4624, roughness: 0.6, metalness: 0.3 })).add(new THREE.BoxGeometry(0.07, 0.75, len * 0.55), mat4(px - 0.31, 0.85, mz));
 }
 // silver birches on the verges around the entrance (white trunk, light drooping foliage)
 {
@@ -766,19 +793,51 @@ for (const r of roads) {
     for (const [ox, oy, oz, r] of [[0, 6.4, 0, 1.9], [0.9, 5.2, 0.4, 1.5], [-0.8, 4.4, -0.5, 1.4], [0.2, 3.6, 0.9, 1.1]]) lm2.add(leafG, mat4(bx + ox, oy * sc, bz + oz, 0, r, r * 1.35, r));
   }
 }
+// planting bed (kerbed, block-paved apron, mixed shrubs) and a small hipped pavilion behind the sign wall
+{
+  const dome = new THREE.IcosahedronGeometry(1, 1), gm = mg('hedge', hedgeMat, true, true), fl = [mg('bedY', stdMat({ color: 0xc89a2c, roughness: 1, flatShading: true }), true, true), mg('bedO', stdMat({ color: 0xc5632a, roughness: 1, flatShading: true }), true, true), mg('bedP', stdMat({ color: 0x7c52a6, roughness: 1, flatShading: true }), true, true)];
+  const pv5 = mg('paving', pavingMat, false, true), kb2 = mg('kerb', stdMat({ color: 0x9c9a93, roughness: 0.9 }), false, true);
+  for (const [bx, bz, br] of [[-421, -310, 3.6], [-446, -306, 3.2]]) {
+    if (inBuilding(bx, bz) || roadDist(bx, bz, -1, true) < br + 1.2) continue;
+    for (let i = 0; i < 16; i++) {
+      const t0 = i / 16 * Math.PI * 2, t1 = (i + 1) / 16 * Math.PI * 2, p = (t, r) => [bx + Math.cos(t) * r, bz + Math.sin(t) * r];
+      const q = (r0, r1, y, m, sc) => m.quad([...p(t0, r0)].reduce((a2, v2, k) => (k ? [a2[0], y, v2] : [v2]), []), [...p(t1, r0)].reduce((a2, v2, k) => (k ? [a2[0], y, v2] : [v2]), []), [...p(t1, r1)].reduce((a2, v2, k) => (k ? [a2[0], y, v2] : [v2]), []), [...p(t0, r1)].reduce((a2, v2, k) => (k ? [a2[0], y, v2] : [v2]), []), [0, 0], [sc, 0], [sc, 1], [0, 1], UP);
+      q(br, br + 1.6, 0.055, pv5, 2); q(br - 0.35, br, 0.12, kb2, 1);
+    }
+    gm.add(dome, mat4(bx - 0.6, 0.5, bz + 0.2, 0, 1.6, 1.0, 1.5)); gm.add(dome, mat4(bx + 0.9, 0.45, bz - 0.8, 0.4, 1.2, 0.85, 1.1));
+    for (let k = 0; k < 7; k++) { const t = sr(0, 6.28), r = sr(0.4, br - 0.8), m = fl[k % 3], sc = sr(0.6, 1.0); m.add(dome, mat4(bx + Math.cos(t) * r, 0.35 * sc, bz + Math.sin(t) * r, 0, sc, sc * 0.8, sc)); }
+  }
+  const pxx = -417.5, pzz = -287, bm2 = mg('wall0', facades[0]), cl = mg('wallPav', facades[5]);
+  if (!inBuilding(pxx, pzz) && roadDist(pxx, pzz, -1, true) > 5) {
+    bm2.add(new THREE.BoxGeometry(5.0, 1.0, 4.4), mat4(pxx, 0.5, pzz)); cl.add(new THREE.BoxGeometry(5.0, 1.7, 4.4), mat4(pxx, 1.85, pzz));
+    mg('slate', slateMat).add(new THREE.ConeGeometry(4.0, 1.5, 4, 1), mat4(pxx, 3.45, pzz, Math.PI / 4, 1, 1, 0.9));
+  }
+}
 // kerbed grass island with double yellow lines on the inside of the entrance bend, and a flagpole in front of the L building
 {
   const yel = mg('yellow', stdMat({ color: 0xd9b230, roughness: 0.8 }), false, true), kb = mg('kerb', stdMat({ color: 0x9c9a93, roughness: 0.9 }), false, true);
-  const edge = (r, sd, maxD) => walk(r.p, 1.6, (x, z, tx, tz) => {
-    if (Math.hypot(x + 434, z + 299) > maxD) return; const nx = -tz * sd, nz = tx * sd, e = r.w / 2, L = 1.7;
+  const edge = (r, sd, maxD, skip) => walk(r.p, 1.6, (x, z, tx, tz) => {
+    if (Math.hypot(x + 434, z + 299) > maxD || (skip && skip(x, z))) return; const nx = -tz * sd, nz = tx * sd, e = r.w / 2, L = 1.7;
     const Q = (m, w2, y, mat) => { const x0 = x + nx * m, z0 = z + nz * m, wx = nx * w2 / 2, wz = nz * w2 / 2; mat.quad([x0 - wx, y, z0 - wz], [x0 + wx, y, z0 + wz], [x0 + wx + tx * L, y, z0 + wz + tz * L], [x0 - wx + tx * L, y, z0 - wz + tz * L], [0, 0], [1, 0], [1, 1], [0, 1], UP); };
     { const m = e + 1.2, x0 = x + nx * m, z0 = z + nz * m, wx = nx * 0.8, wz = nz * 0.8, y = 0.06;
       mg('paving', pavingMat, false, true).quad([x0 - wx, y, z0 - wz], [x0 + wx, y, z0 + wz], [x0 + wx + tx * L, y, z0 + wz + tz * L], [x0 - wx + tx * L, y, z0 - wz + tz * L], [0, 0], [4, 0], [4, 4], [0, 4], UP); }
     Q(e + 0.2, 0.4, 0.12, kb); Q(e - 0.3, 0.1, 0.065, yel); Q(e - 0.55, 0.1, 0.065, yel);
   }, 0);
-  const r41 = roads[41], r311 = roads[311];
-  if (r41) edge(r41, 1, 34);                                           // south side of the road in from Overstrand
-  if (r311) edge({ p: r311.p, w: r311.w }, -1, 24);                    // east side of the road south past the bollards
+  const r41 = roads[41], r311 = roads[311], R = 7, Cx = -434.3 + r311.w / 2, Cz = -298.8 + r41.w / 2;
+  {                                                                      // round off the island's corner: tarmac fan + kerb + yellow lines + paved footway on the arc
+    const pm3 = mg('asphalt', asphaltMat, false, true), pv4 = mg('paving', pavingMat, false, true), N = 10, ccx = Cx + R, ccz = Cz + R, pt = (th, rr) => [ccx + Math.cos(th) * rr, ccz + Math.sin(th) * rr];
+    for (let i = 0; i < N; i++) {
+      const t0 = Math.PI + (i / N) * Math.PI / 2, t1 = Math.PI + ((i + 1) / N) * Math.PI / 2, y = 0.05, v = (p, yy) => [p[0], yy, p[1]];
+      pm3.tri([Cx, y, Cz], v(pt(t0, R), y), v(pt(t1, R), y), [Cx / 4, Cz / 4], [pt(t0, R)[0] / 4, pt(t0, R)[1] / 4], [pt(t1, R)[0] / 4, pt(t1, R)[1] / 4], UP);
+      const ring = (ra, rb, yy, mat, uvs) => mat.quad(v(pt(t0, ra), yy), v(pt(t1, ra), yy), v(pt(t1, rb), yy), v(pt(t0, rb), yy), uvs[0], uvs[1], uvs[2], uvs[3], UP);
+      ring(R - 0.4, R, 0.12, kb, [[0, 0], [1, 0], [1, 1], [0, 1]]);
+      ring(R + 0.25, R + 0.35, 0.065, yel, [[0, 0], [1, 0], [1, 1], [0, 1]]); ring(R + 0.5, R + 0.6, 0.065, yel, [[0, 0], [1, 0], [1, 1], [0, 1]]);
+      ring(R - 2.0, R - 0.4, 0.06, pv4, [[0, 0], [2, 0], [2, 2], [0, 2]]);
+    }
+  }
+
+  if (r41) edge(r41, 1, 34, x => x < Cx + R);                                           // south side of the road in from Overstrand
+  if (r311) edge({ p: r311.p, w: r311.w }, -1, 24, (x, z) => z < Cz + R);                    // east side of the road south past the bollards
   const pole = mg('pole', poleMat); pole.add(new THREE.CylinderGeometry(0.05, 0.07, 8, 6), mat4(-446, 4, -291));
 }
 // globe lamps (three-globe heads) along the business-park aisles
