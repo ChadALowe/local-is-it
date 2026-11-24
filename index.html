@@ -77,6 +77,7 @@
 </div>
 <div class="hud" id="combo"><div class="tag" id="ctag">Drift</div><span class="pts" id="cpts">0</span><span class="mult" id="cmult"></span></div>
 <canvas class="hud" id="mm" width="150" height="150"></canvas>
+<div class="hud" id="coords" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 150px);left:10px;font:600 12px/1.3 monospace;color:#fff;background:rgba(0,0,0,.45);padding:3px 7px;border-radius:6px;pointer-events:none;z-index:5">x 0 z 0</div>
 <div class="hud" id="mmcap">PENDEFORD<br>WOLVERHAMPTON<small>Map data &copy; OpenStreetMap contributors</small></div>
 <div class="hud" id="br">
   <div id="speed"><span id="spd">0</span><small>KM/H</small></div>
@@ -719,15 +720,15 @@ for (const r of roads) {
 }
 // retractable bollards across the business-park entrance road (they sink into the road when the player approaches)
 {
-  const rd = roads[41], bg = new THREE.CylinderGeometry(0.14, 0.14, 1.0, 10), band = new THREE.CylinderGeometry(0.148, 0.148, 0.09, 10);
-  if (rd) walk(rd.p.slice().reverse(), 999, (x, z, tx, tz) => {
+  const rd = roads[311], bg = new THREE.CylinderGeometry(0.14, 0.14, 1.0, 10), band = new THREE.CylinderGeometry(0.148, 0.148, 0.09, 10);
+  if (rd) walk(rd.p, 999, (x, z, tx, tz) => {
     const gt = { x, z, t: 0, bollards: [] }, nx = tz, nz = -tx;
     for (let k = -2; k <= 2; k++) {
       const b = new THREE.Group(), body = new THREE.Mesh(bg, bollardMat), ring = new THREE.Mesh(band, bollardBandMat);
-      ring.position.y = 0.3; body.castShadow = true; b.add(body, ring); b.position.set(x + nx * k * 0.85, 0.5, z + nz * k * 0.85); scene.add(b); gt.bollards.push(b);
+      ring.position.y = 0.3; body.castShadow = true; b.add(body, ring); b.position.set(x + nx * k * 0.95, 0.5, z + nz * k * 0.95); scene.add(b); gt.bollards.push(b);
     }
     gates.push(gt);
-  }, 30);
+  }, 9);
 }
 // trees around the business park: woodland belt along Wobaston Road, the west boundary and the south edge (as seen from above)
 for (const [x0, x1, z0, z1, n, s0, s1] of [[-480, -345, -396, -382, 34, 1.3, 2.0], [-492, -480, -385, -215, 24, 1.1, 1.8], [-475, -385, -168, -134, 30, 1.3, 2.1]]) {
@@ -1096,9 +1097,9 @@ function frame(now) {
   sun.position.set(player.x + SUN.x * 220, SUN.y * 220, player.z + SUN.z * 220); sun.target.position.set(player.x, 0, player.z); sun.target.updateMatrixWorld();
   sky.position.copy(camera.position); clouds.position.set(camera.position.x, 0, camera.position.z);
   hudT -= dt;
-  if (hudT <= 0) { hudT = 0.05; $('spd').textContent = Math.round(spdNow * 3.6); $('g').textContent = gearNow; $('rpmf').style.width = (rpmNow * 100) + '%'; drawMinimap(); }
+  if (hudT <= 0) { hudT = 0.05; $('spd').textContent = Math.round(spdNow * 3.6); $('g').textContent = gearNow; $('rpmf').style.width = (rpmNow * 100) + '%'; drawMinimap(); $('coords').textContent = 'x ' + player.x.toFixed(0) + '  z ' + player.z.toFixed(0) + '  h ' + (((-player.h * 180 / Math.PI) % 360 + 360) % 360).toFixed(0) + '\u00b0'; }
   for (const gt of gates) {                                              // retractable bollards sink into the road as you approach, and rise again behind you
-    const want = Math.hypot(player.x - gt.x, player.z - gt.z) < 14 ? 1 : 0; gt.t += (want - gt.t) * Math.min(1, dt * 5);
+    const want = Math.hypot(player.x - gt.x, player.z - gt.z) < 7 ? 1 : 0; gt.t += (want - gt.t) * Math.min(1, dt * 5);
     for (const bo of gt.bollards) { bo.position.y = 0.5 - gt.t * 1.05; bo.visible = gt.t < 0.98; }
   }
   if ((frameN++ & 7) === 0) {                                            // parked-car LOD / distance culling
