@@ -308,8 +308,8 @@ const roofMat = stdMat({ map: roofTex, side: DS });
 const officeMat = stdMat({ map: officeTex, side: DS }), slateMat = stdMat({ map: slateTex, side: DS, roughness: 0.85 }), porchMat = stdMat({ map: porchTex, side: DS });
 const shopMat = stdMat({ map: shopTex, side: DS }), shopRoofMat = stdMat({ map: slateTex, color: 0xc9b3a2, roughness: 0.9, side: DS });
 const shopGlassMat = stdMat({ color: 0x2d4358, roughness: 0.1, metalness: 0.6, side: DS }), shopCanopyMat = stdMat({ color: 0x2b5a3a, roughness: 0.6, side: DS });
-const pavingMat = stdMat({ map: pavingTex, roughness: 0.95, side: DS }), globeMat = stdMat({ color: 0xf1e6b8, emissive: 0x7a6c36, roughness: 0.5 }), bollardMat = stdMat({ color: 0x6b7075, roughness: 0.5, metalness: 0.3 }), bollardBandMat = stdMat({ color: 0xe8e4cf, roughness: 0.6 });
-const solarMat = stdMat({ color: 0x16223a, roughness: 0.55, metalness: 0.15, side: DS }), hedgeMat = stdMat({ color: 0x33592c, roughness: 1, flatShading: true });
+const pavingMat = stdMat({ map: pavingTex, roughness: 0.95, side: DS }), globeMat = stdMat({ color: 0xf1e6b8, emissive: 0x7a6c36, roughness: 0.5 }), bollardMat = stdMat({ color: 0x2c3237, roughness: 0.45, metalness: 0.3 }), bollardBandMat = stdMat({ color: 0xe8e4cf, roughness: 0.6 });
+const solarMat = stdMat({ color: 0x141c30, roughness: 0.85, metalness: 0, side: DS }), hedgeMat = stdMat({ color: 0x33592c, roughness: 1, flatShading: true });
 const redAsphaltMat = stdMat({ color: 0x93564f, roughness: 0.9, side: DS });
 const shingleMats = [stdMat({ map: shingleTex, side: DS }), stdMat({ map: shingleTex, color: 0x9aa0a8, side: DS }), stdMat({ map: shingleTex, color: 0x6a7480, side: DS })];
 const asphaltMat = stdMat({ map: asphaltTex, roughness: 0.82, side: DS });
@@ -566,7 +566,7 @@ function insetRoof(b, wallH, o) {
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n, a = [p[i][0], y0, p[i][1]], c = [p[j][0], y0, p[j][1]], e = [q[j][0], y1, q[j][1]], f = [q[i][0], y1, q[i][1]];
     rm.quad(a, c, e, f, uv(a), uv(c), uv(e), uv(f), UP);
-    if (!o && !inPark(p[i][0], p[i][1]) && -nrm[i][1] > 0.5 && nrm[i][2] > 9 && hashN(p[i][0], p[i][1]) % 3 !== 0) {       // solar panels on the larger south-facing slopes
+    if (!o && (!inPark(p[i][0], p[i][1]) || (b.cx > -485 && b.cx < -440 && b.cz > -290 && b.cz < -240)) && -nrm[i][1] > 0.5 && nrm[i][2] > 9 && (hashN(p[i][0], p[i][1]) % 3 !== 0 || inPark(p[i][0], p[i][1]))) {       // solar panels on the larger south-facing slopes
       const sm = mg('solar', solarMat), lerp = (u, v) => { const t0 = [a[0] + (c[0] - a[0]) * u, a[1] + (c[1] - a[1]) * u, a[2] + (c[2] - a[2]) * u], t1 = [f[0] + (e[0] - f[0]) * u, f[1] + (e[1] - f[1]) * u, f[2] + (e[2] - f[2]) * u]; return [t0[0] + (t1[0] - t0[0]) * v, t0[1] + (t1[1] - t0[1]) * v + 0.07, t0[2] + (t1[2] - t0[2]) * v]; };
       sm.quad(lerp(0.12, 0.22), lerp(0.88, 0.22), lerp(0.88, 0.78), lerp(0.12, 0.78), [0, 0], [1, 0], [1, 1], [0, 1], UP);
     }
@@ -713,6 +713,7 @@ for (const r of roads) {
       for (const sd of [-1, 1]) {
         const nx = tz * sd, nz = -tx * sd, d0 = r.w / 2 + 0.1, cx = x + nx * (d0 + depth / 2), cz = z + nz * (d0 + depth / 2), fx = x + nx * (d0 + depth), fz = z + nz * (d0 + depth);
         const shopBay = inShop(cx, cz);
+        if (!shopBay && roads.indexOf(r) !== 314 && Math.hypot(cx + 436, cz + 290) < 40) continue;     // the entrance approach is open verge and hedges, no bays (as in the real park)
         if (!shopBay && (cx > -335 || !inPark(cx, cz)) || inBuilding(cx, cz) || inBuilding(fx, fz) || inBuilding(x + nx * d0, z + nz * d0) || nearWall(cx, cz, 1.0)) continue;
         if (roadDist(cx, cz, r.id) < 1.6 || roadDist(fx, fz, r.id) < 0.4) continue;
         if (!shopBay) hedges.push([x + nx * (d0 + depth + 0.45), z + nz * (d0 + depth + 0.45), Math.atan2(-tz, tx), cx, cz]);
@@ -747,6 +748,39 @@ for (const r of roads) {
   const hl = hg;                                                         // bushy boundary hedge between the park and the field on its west side
   walk([[-486, -372], [-486, -170]], 2.8, (x, z, tx, tz) => { if (!inBuilding(x, z) && roadDist(x, z) > 1.5) hm.add(hl, mat4(x + sr(-0.25, 0.25), 0.6, z, Math.atan2(-tz, tx), 1.6 + sr(-0.3, 0.3), 0.65 + sr(-0.1, 0.2), 0.85)); });
 }
+// brick-and-board entrance sign beside the approach road (board left blank: the real one carries a company logo)
+{
+  const bm = mg('wall0', facades[0]), px = -424.5, pz0 = -290.5, pz1 = -283.5, len = pz1 - pz0, mz = (pz0 + pz1) / 2;
+  for (const z of [pz0, pz1]) bm.add(new THREE.BoxGeometry(0.9, 1.9, 0.9), mat4(px, 0.95, z));
+  bm.add(new THREE.BoxGeometry(0.55, 1.15, len - 0.9), mat4(px, 0.575, mz));
+  mg('signw', stdMat({ color: 0xf0f0ec, roughness: 0.6 })).add(new THREE.BoxGeometry(0.06, 0.62, len * 0.5), mat4(px - 0.31, 0.78, mz));
+  mg('signb', stdMat({ color: 0x1d3f8a, roughness: 0.6 })).add(new THREE.BoxGeometry(0.07, 0.3, len * 0.5), mat4(px - 0.31, 1.0, mz));
+}
+// silver birches on the verges around the entrance (white trunk, light drooping foliage)
+{
+  const trunkG = new THREE.CylinderGeometry(0.1, 0.16, 6.5, 6), leafG = new THREE.IcosahedronGeometry(1, 1), tm = mg('birchTrunk', stdMat({ color: 0xe6e3dc, roughness: 0.9 })), lm2 = mg('birchLeaf', stdMat({ color: 0x78a24a, roughness: 1, flatShading: true }));
+  const pts = [[-421, -276], [-418, -296], [-412, -283], [-425, -305], [-446, -308], [-428, -268], [-405, -292], [-445, -262]]; let nb = 0;
+  for (const [bx, bz] of pts) {
+    if (inBuilding(bx, bz) || roadDist(bx, bz, -1, true) < 4.5 || nearWall(bx, bz, 1.5)) continue; nb++;
+    tm.add(trunkG, mat4(bx, 3.25, bz)); const sc = sr(0.9, 1.2);
+    for (const [ox, oy, oz, r] of [[0, 6.4, 0, 1.9], [0.9, 5.2, 0.4, 1.5], [-0.8, 4.4, -0.5, 1.4], [0.2, 3.6, 0.9, 1.1]]) lm2.add(leafG, mat4(bx + ox, oy * sc, bz + oz, 0, r, r * 1.35, r));
+  }
+}
+// kerbed grass island with double yellow lines on the inside of the entrance bend, and a flagpole in front of the L building
+{
+  const yel = mg('yellow', stdMat({ color: 0xd9b230, roughness: 0.8 }), false, true), kb = mg('kerb', stdMat({ color: 0x9c9a93, roughness: 0.9 }), false, true);
+  const edge = (r, sd, maxD) => walk(r.p, 1.6, (x, z, tx, tz) => {
+    if (Math.hypot(x + 434, z + 299) > maxD) return; const nx = -tz * sd, nz = tx * sd, e = r.w / 2, L = 1.7;
+    const Q = (m, w2, y, mat) => { const x0 = x + nx * m, z0 = z + nz * m, wx = nx * w2 / 2, wz = nz * w2 / 2; mat.quad([x0 - wx, y, z0 - wz], [x0 + wx, y, z0 + wz], [x0 + wx + tx * L, y, z0 + wz + tz * L], [x0 - wx + tx * L, y, z0 - wz + tz * L], [0, 0], [1, 0], [1, 1], [0, 1], UP); };
+    { const m = e + 1.2, x0 = x + nx * m, z0 = z + nz * m, wx = nx * 0.8, wz = nz * 0.8, y = 0.06;
+      mg('paving', pavingMat, false, true).quad([x0 - wx, y, z0 - wz], [x0 + wx, y, z0 + wz], [x0 + wx + tx * L, y, z0 + wz + tz * L], [x0 - wx + tx * L, y, z0 - wz + tz * L], [0, 0], [4, 0], [4, 4], [0, 4], UP); }
+    Q(e + 0.2, 0.4, 0.12, kb); Q(e - 0.3, 0.1, 0.065, yel); Q(e - 0.55, 0.1, 0.065, yel);
+  }, 0);
+  const r41 = roads[41], r311 = roads[311];
+  if (r41) edge(r41, 1, 34);                                           // south side of the road in from Overstrand
+  if (r311) edge({ p: r311.p, w: r311.w }, -1, 24);                    // east side of the road south past the bollards
+  const pole = mg('pole', poleMat); pole.add(new THREE.CylinderGeometry(0.05, 0.07, 8, 6), mat4(-446, 4, -291));
+}
 // globe lamps (three-globe heads) along the business-park aisles
 {
   const poleG = new THREE.CylinderGeometry(0.06, 0.08, 4.6, 6), globeG = new THREE.SphereGeometry(0.3, 8, 6), pm2 = mg('pole', poleMat), gm2 = mg('globe', globeMat, false, false);
@@ -761,12 +795,14 @@ for (const r of roads) {
 }
 // retractable bollards across the business-park entrance road (they sink into the road when the player approaches)
 {
-  const rd = roads[311], bg = new THREE.CylinderGeometry(0.14, 0.14, 1.0, 10), band = new THREE.CylinderGeometry(0.148, 0.148, 0.09, 10);
+  const rd = roads[311], bg = new THREE.CylinderGeometry(0.085, 0.085, 1.0, 10), band = new THREE.CylinderGeometry(0.092, 0.092, 0.07, 10);
   if (rd) walk(rd.p, 999, (x, z, tx, tz) => {
     const gt = { x, z, t: 0, bollards: [] }, nx = tz, nz = -tx;
+    { const hw = rd.w / 2 + 0.3, y = 0.052, pv3 = mg('paving', pavingMat, false, true), L0 = -1.2, L1 = 1.2;
+      pv3.quad([x + nx * -hw + tx * L0, y, z + nz * -hw + tz * L0], [x + nx * hw + tx * L0, y, z + nz * hw + tz * L0], [x + nx * hw + tx * L1, y, z + nz * hw + tz * L1], [x + nx * -hw + tx * L1, y, z + nz * -hw + tz * L1], [0, 0], [hw * 2.5, 0], [hw * 2.5, 5], [0, 5], UP); }
     for (let k = -2; k <= 2; k++) {
       const b = new THREE.Group(), body = new THREE.Mesh(bg, bollardMat), ring = new THREE.Mesh(band, bollardBandMat);
-      ring.position.y = 0.3; body.castShadow = true; b.add(body, ring); b.position.set(x + nx * k * 0.95, 0.5, z + nz * k * 0.95); scene.add(b); gt.bollards.push(b);
+      ring.position.y = 0.34; body.castShadow = true; b.add(body, ring); b.position.set(x + nx * k * 0.95, 0.5, z + nz * k * 0.95); scene.add(b); gt.bollards.push(b);
     }
     gates.push(gt);
   }, 9);
