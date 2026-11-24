@@ -253,14 +253,32 @@ const officeTex = mkTex(256, 128, (g, w, h) => {
   g.strokeStyle = 'rgba(0,0,0,.2)'; g.lineWidth = 1;
   for (let y = 0; y < h; y += 8) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = ((y / 8) % 2) * 10; x < w; x += 20) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 8); g.stroke(); } }
   speckle(g, w, h, 0.03, 0, 255, 0);
-  g.fillStyle = 'rgba(214,196,160,.85)'; g.fillRect(0, h - 7, w, 7);                       // buff stone floor band
+  g.fillStyle = 'rgba(70,24,30,.22)'; for (let x = 0; x < w; x += 24) g.fillRect(x, 12, 12, 8);          // darker diaper-pattern bricks under the eaves
+  g.fillStyle = 'rgba(214,196,160,.85)'; g.fillRect(0, h - 7, w, 7); g.fillRect(0, 2, w, 3);
+  g.strokeStyle = 'rgba(214,196,160,.9)'; g.lineWidth = 2; for (let x = 6; x < w; x += 32) g.strokeRect(x, h - 22, 22, 9);   // patterned cream band               // buff stone floor band + eaves string course
   for (const wx of [10, 94, 178]) {
-    g.fillStyle = '#cfcbc0'; g.fillRect(wx - 3, 22, 66, 80);
+    g.fillStyle = '#56626d'; g.fillRect(wx - 3, 22, 66, 80);
     const gr = g.createLinearGradient(0, 26, 0, 98); gr.addColorStop(0, '#8fa9bf'); gr.addColorStop(.55, '#46607a'); gr.addColorStop(1, '#27374a');
     g.fillStyle = gr; g.fillRect(wx, 26, 60, 72);
     g.fillStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.moveTo(wx, 26); g.lineTo(wx + 28, 26); g.lineTo(wx, 64); g.closePath(); g.fill();
-    g.fillStyle = '#cfcbc0'; g.fillRect(wx + 28, 26, 3, 72); g.fillRect(wx, 56, 60, 3);
+    g.fillStyle = '#56626d'; g.fillRect(wx + 28, 26, 3, 72); g.fillRect(wx, 56, 60, 3);
   }
+});
+// Supermarket (Morrisons, Pendeford): buff cladding with a dark green fascia, low-pitched grey roof, glazed entrance
+const shopTex = mkTex(128, 256, (g, w, h) => {
+  g.fillStyle = '#26503a'; g.fillRect(0, 0, w, h);                     // dark green fascia (no wording: the real sign is a brand wordmark)
+  g.fillStyle = '#e6c53a'; g.fillRect(0, 62, w, 3);
+  const gr = g.createLinearGradient(0, 70, 0, 232); gr.addColorStop(0, '#6f8794'); gr.addColorStop(.5, '#2f4352'); gr.addColorStop(1, '#1d2a35');
+  g.fillStyle = gr; g.fillRect(0, 70, w, 150);                         // glazed shopfront
+  for (let x = 30; x < w; x += 32) { g.fillStyle = '#1e2a33'; g.fillRect(x, 70, 2, 150); }   // glazing bars
+  g.fillStyle = '#7d3b2e'; g.fillRect(0, 62, 14, 194); g.fillRect(w - 14, 62, 14, 194);     // red-brick piers each side of the bay
+  g.fillStyle = 'rgba(0,0,0,.18)'; for (let y = 66; y < h; y += 8) g.fillRect(0, y, 14, 1);
+  g.fillStyle = '#5c5850'; g.fillRect(0, 222, w, 34);                  // plinth
+  speckle(g, w, h, 0.02, 90, 200, 0);
+});
+const pavingTex = mkTex(64, 64, (g, w, h) => {                       // reddish-brown block paving (parking bays at the business park)
+  g.fillStyle = '#6e4338'; g.fillRect(0, 0, w, h);
+  for (let y = 0; y < h; y += 8) for (let x = ((y / 8) % 2) * 8; x < w + 8; x += 16) { g.fillStyle = ['#9a5b4b', '#8c5043', '#a46454', '#935547'][(x * 7 + y * 3) % 4]; g.fillRect(x + 1, y + 1, 14, 6); }
 });
 const slateTex = mkTex(128, 128, (g, w, h) => {
   g.fillStyle = '#585352'; g.fillRect(0, 0, w, h);
@@ -273,6 +291,10 @@ const facades = [['#a8523c', 1], ['#b98d62', 1], ['#d9cfb8', 0], ['#9fb0bd', 0],
 const cladMat = stdMat({ map: cladTex, side: DS }), plainMat = stdMat({ map: plainTex, side: DS });
 const roofMat = stdMat({ map: roofTex, side: DS });
 const officeMat = stdMat({ map: officeTex, side: DS }), slateMat = stdMat({ map: slateTex, side: DS, roughness: 0.85 });
+const shopMat = stdMat({ map: shopTex, side: DS }), shopRoofMat = stdMat({ map: slateTex, color: 0xc9b3a2, roughness: 0.9, side: DS });
+const shopGlassMat = stdMat({ color: 0x2d4358, roughness: 0.1, metalness: 0.6, side: DS }), shopCanopyMat = stdMat({ color: 0x2b5a3a, roughness: 0.6, side: DS });
+const pavingMat = stdMat({ map: pavingTex, roughness: 0.95, side: DS }), globeMat = stdMat({ color: 0xf1e6b8, emissive: 0x7a6c36, roughness: 0.5 }), bollardMat = stdMat({ color: 0x6b7075, roughness: 0.5, metalness: 0.3 }), bollardBandMat = stdMat({ color: 0xe8e4cf, roughness: 0.6 });
+const solarMat = stdMat({ color: 0x16223a, roughness: 0.55, metalness: 0.15, side: DS }), hedgeMat = stdMat({ color: 0x33592c, roughness: 1, flatShading: true });
 const redAsphaltMat = stdMat({ color: 0x93564f, roughness: 0.9, side: DS });
 const shingleMats = [stdMat({ map: shingleTex, side: DS }), stdMat({ map: shingleTex, color: 0x9aa0a8, side: DS }), stdMat({ map: shingleTex, color: 0x6a7480, side: DS })];
 const asphaltMat = stdMat({ map: asphaltTex, roughness: 0.82, side: DS });
@@ -290,9 +312,10 @@ const lampHeadMat = stdMat({ color: 0xdfe3e6, roughness: 0.4 });
 // (main camera and shadow camera) instead of drawing the whole map every frame.
 const CHUNK = 192;
 const chunkMeshes = [];
+const gates = [];                           // retractable bollards: { x, z, t, bollards }
 const carChunks = [];                       // parked-car chunks: { ims, sph } so phones can skip far-away ones
 const CAR_CH = 32;                          // parked cars are chunked finer than the map so the detailed/box switch is per small group
-const CAR_NEAR = isTouch ? 30 : 90;        // parked cars use the detailed model inside this distance (m), a box car beyond it
+const CAR_NEAR = isTouch ? 24 : 90;        // parked cars use the detailed model inside this distance (m), a box car beyond it
 const CAR_DRAW = isTouch ? 260 : 900;       // and are not drawn at all beyond this one
 class Merger {
   constructor(mat, cast = true, recv = true) { this.mat = mat; this.ch = new Map(); this.cast = cast; this.recv = recv; }
@@ -497,8 +520,9 @@ function pitchedRoof(b, wallH, fi, hsh) {
 }
 // Pendeford Business Park zone (game metres, matched to the real site from a satellite screenshot)
 const inPark = (x, z) => x > -500 && x < -240 && z > -410 && z < -135;
+const inShop = (x, z) => x > -128 && x < -22 && z > 378 && z < 482;         // supermarket and its car park (west of the store)
 // Hipped roof for any footprint: inset the outline by d and cap it. d follows the narrowest part of the building.
-function insetRoof(b, wallH) {
+function insetRoof(b, wallH, o) {
   const p = [];
   for (const q of b.p) { const l = p[p.length - 1]; if (!l || Math.hypot(q[0] - l[0], q[1] - l[1]) > 0.05) p.push(q); }
   if (p.length > 2 && Math.hypot(p[0][0] - p[p.length - 1][0], p[0][1] - p[p.length - 1][1]) < 0.05) p.pop();
@@ -517,16 +541,20 @@ function insetRoof(b, wallH) {
     }
   }
   if (thick > 1e8) return false;
-  const d = clamp(thick * 0.46, 0.8, 5.0), rise = d * 0.78, q = [];
+  const d = o ? Math.min(o.d, thick * 0.46) : clamp(thick * 0.46, 0.8, 5.0), rise = o ? o.rise : d * 1.0, q = [];
   for (let i = 0; i < n; i++) {
     const n1 = nrm[(i + n - 1) % n], n2 = nrm[i], k = Math.max(0.35, 1 + n1[0] * n2[0] + n1[1] * n2[1]);
     q.push([p[i][0] + (n1[0] + n2[0]) / k * d, p[i][1] + (n1[1] + n2[1]) / k * d]);
   }
   const Aq = polyArea(q); if (Aq * A <= 0 || Math.abs(Aq) > Math.abs(A) * 0.97) return false;
-  const rm = mg('slate', slateMat), y0 = wallH + 0.04, y1 = wallH + 0.04 + rise, uv = r => [r[0] / 3, r[2] / 3];
+  const rm = o ? mg('shopRoof', shopRoofMat) : mg('slate', slateMat), y0 = wallH + 0.04, y1 = wallH + 0.04 + rise, uv = r => [r[0] / 3, r[2] / 3];
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n, a = [p[i][0], y0, p[i][1]], c = [p[j][0], y0, p[j][1]], e = [q[j][0], y1, q[j][1]], f = [q[i][0], y1, q[i][1]];
     rm.quad(a, c, e, f, uv(a), uv(c), uv(e), uv(f), UP);
+    if (!o && -nrm[i][1] > 0.5 && nrm[i][2] > 9 && hashN(p[i][0], p[i][1]) % 3 !== 0) {       // solar panels on the larger south-facing slopes
+      const sm = mg('solar', solarMat), lerp = (u, v) => { const t0 = [a[0] + (c[0] - a[0]) * u, a[1] + (c[1] - a[1]) * u, a[2] + (c[2] - a[2]) * u], t1 = [f[0] + (e[0] - f[0]) * u, f[1] + (e[1] - f[1]) * u, f[2] + (e[2] - f[2]) * u]; return [t0[0] + (t1[0] - t0[0]) * v, t0[1] + (t1[1] - t0[1]) * v + 0.07, t0[2] + (t1[2] - t0[2]) * v]; };
+      sm.quad(lerp(0.12, 0.22), lerp(0.88, 0.22), lerp(0.88, 0.78), lerp(0.12, 0.78), [0, 0], [1, 0], [1, 1], [0, 1], UP);
+    }
   }
   for (const [i, j, k] of triangulate(q)) { const a = [q[i][0], y1, q[i][1]], c = [q[j][0], y1, q[j][1]], e = [q[k][0], y1, q[k][1]]; rm.tri(a, c, e, uv(a), uv(c), uv(e), UP); }
   return true;
@@ -535,7 +563,9 @@ for (const b of builds) {
   const hsh = hashN(b.cx, b.cz), n = b.p.length;
   let fi = -1, matKey, mat;
   const parkB = inPark(b.cx, b.cz) && Math.abs(b.area) > 250;            // business-park office
-  if (parkB) { matKey = 'wallOffice'; mat = officeMat; }
+  const shopB = b.cx > -45 && b.cx < 20 && b.cz > 395 && b.cz < 455 && Math.abs(b.area) > 2500;           // the supermarket
+  if (shopB) { matKey = 'wallShop'; mat = shopMat; }
+  else if (parkB) { matKey = 'wallOffice'; mat = officeMat; }
   else if (b.h < 3.3) { matKey = 'wallplain'; mat = plainMat; }
   else if (b.c === 1) { matKey = 'wallclad'; mat = cladMat; }
   else {
@@ -544,14 +574,30 @@ for (const b of builds) {
   }
   const wm = mg(matKey, mat);
   const pitched = b.c === 0 && b.h >= 4 && b.h <= 10 && Math.abs(b.area) > 22 && Math.abs(b.area) < 450;
-  const wallH = parkB ? 5.6 : pitched ? Math.max(2.8, b.h * 0.72) : b.h, floors = Math.max(1, Math.round(wallH / 3.3)), uo = (hsh % 7) / 7;
+  const wallH = shopB ? 4.8 : parkB ? 5.6 : pitched ? Math.max(2.8, b.h * 0.72) : b.h, floors = shopB ? 1 : Math.max(1, Math.round(wallH / 3.3)), uo = (hsh % 7) / 7;
   let s = 0;
   for (let i = 0; i < n; i++) {
     const a = b.p[i], c = b.p[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 0.05) continue;
     const nx = (c[1] - a[1]) / L, nz = -(c[0] - a[0]) / L, u0 = s / 8 + uo, u1 = (s + L) / 8 + uo;
     wm.quad([a[0], 0, a[1]], [c[0], 0, c[1]], [c[0], wallH, c[1]], [a[0], wallH, a[1]], [u0, 0], [u1, 0], [u1, floors], [u0, floors], [nx, 0, nz]); s += L;
   }
-  if (!((parkB && insetRoof(b, wallH)) || (pitched && pitchedRoof(b, wallH, fi < 0 ? 0 : fi, hsh)))) {
+  if (shopB) {                                                          // glazed entrance + canopy on the longest car-park-facing (west) wall
+    const sg = b.area >= 0 ? 1 : -1; let best = null;
+    for (let i = 0; i < n; i++) { const a = b.p[i], c = b.p[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]), ox = sg * (c[1] - a[1]) / L, oz = -sg * (c[0] - a[0]) / L; if (ox < -0.85 && (!best || L > best.L)) best = { a, c, L, ox, oz }; }
+    if (best) {
+      const { a, c, L, ox, oz } = best, gm = mg('shopGlass', shopGlassMat), P = (u, y) => [a[0] + (c[0] - a[0]) * u + ox * 0.07, y, a[1] + (c[1] - a[1]) * u + oz * 0.07];
+      gm.quad(P(0.22, 0.2), P(0.62, 0.2), P(0.62, 3.4), P(0.22, 3.4), [0, 0], [1, 0], [1, 1], [0, 1], [ox, 0, oz]);
+      const mx = a[0] + (c[0] - a[0]) * 0.42 + ox * 1.6, mz = a[1] + (c[1] - a[1]) * 0.42 + oz * 1.6;
+      mg('shopCanopy', shopCanopyMat).add(new THREE.BoxGeometry(3.4, 0.3, L * 0.42), mat4(mx, 3.7, mz, Math.atan2(-(c[1] - a[1]), c[0] - a[0]) + Math.PI / 2));
+      const yaw = Math.atan2(-(c[1] - a[1]), c[0] - a[0]) + Math.PI / 2, tx = (c[0] - a[0]) / L, tz = (c[1] - a[1]) / L;
+      for (const off of [-9, 9]) {                                       // green trolley shelters in front of the entrance
+        const sx = mx + ox * 6.5 + tx * off, sz = mz + oz * 6.5 + tz * off;
+        mg('shopCanopy', shopCanopyMat).add(new THREE.BoxGeometry(2.4, 0.15, 6), mat4(sx, 2.1, sz, yaw));
+        for (const e of [-2.8, 2.8]) mg('shopCanopy', shopCanopyMat).add(new THREE.BoxGeometry(0.12, 2.1, 0.12), mat4(sx + Math.sin(yaw) * e, 1.05, sz + Math.cos(yaw) * e, yaw));
+      }
+    }
+  }
+  if (!((shopB && insetRoof(b, wallH, { d: 7, rise: 3.2 })) || (parkB && insetRoof(b, wallH)) || (pitched && pitchedRoof(b, wallH, fi < 0 ? 0 : fi, hsh)))) {
     const rm = mg('roofflat', roofMat), tr = triangulate(b.p);
     for (const [i, j, k] of tr) { const A = b.p[i], B = b.p[j], C = b.p[k]; rm.tri([A[0], wallH + 0.05, A[1]], [B[0], wallH + 0.05, B[1]], [C[0], wallH + 0.05, C[1]], [A[0] / 4, A[1] / 4], [B[0] / 4, B[1] / 4], [C[0] / 4, C[1] / 4], UP); }
   }
@@ -617,22 +663,71 @@ for (const r of roads) {
 }
 // Pendeford Business Park car parks: perpendicular bays either side of the service aisles (tarmac pad, white bay lines, cars)
 {
-  const pm = mg('asphalt', asphaltMat, false, true), lm = mg('dash', dashMat, false, true), bayW = 2.6, depth = 4.8;
+  const pm = mg('asphalt', asphaltMat, false, true), pv = mg('paving', pavingMat, false, true), lm = mg('dash', dashMat, false, true), bayW = 2.6, depth = 4.8;
+  const hedges = [], bayPts = [];
   for (const r of roads) {
-    if (r.c || r.k !== 8 || !r.p.some(q => inPark(q[0], q[1]))) continue;
+    if (r.c || r.k !== 8 || !r.p.some(q => inPark(q[0], q[1]) || inShop(q[0], q[1]))) continue;
     walk(r.p, bayW, (x, z, tx, tz) => {
       for (const sd of [-1, 1]) {
         const nx = tz * sd, nz = -tx * sd, d0 = r.w / 2 + 0.1, cx = x + nx * (d0 + depth / 2), cz = z + nz * (d0 + depth / 2), fx = x + nx * (d0 + depth), fz = z + nz * (d0 + depth);
-        if (cx > -335 || !inPark(cx, cz) || inBuilding(cx, cz) || inBuilding(fx, fz) || inBuilding(x + nx * d0, z + nz * d0) || nearWall(cx, cz, 1.0)) continue;
+        const shopBay = inShop(cx, cz);
+        if (!shopBay && (cx > -335 || !inPark(cx, cz)) || inBuilding(cx, cz) || inBuilding(fx, fz) || inBuilding(x + nx * d0, z + nz * d0) || nearWall(cx, cz, 1.0)) continue;
         if (roadDist(cx, cz, r.id) < 1.6 || roadDist(fx, fz, r.id) < 0.4) continue;
+        if (!shopBay) hedges.push([x + nx * (d0 + depth + 0.45), z + nz * (d0 + depth + 0.45), Math.atan2(-tz, tx), cx, cz]);
         const hx = tx * bayW / 2, hz = tz * bayW / 2, ax = x + nx * d0, az = z + nz * d0, bx = x + nx * (d0 + depth), bz = z + nz * (d0 + depth), y = 0.046;
-        pm.quad([ax - hx, y, az - hz], [ax + hx, y, az + hz], [bx + hx, y, bz + hz], [bx - hx, y, bz - hz], [0, 0], [1, 0], [1, 1], [0, 1], UP);
+        bayPts.push([cx, cz]);
+        if (shopBay) pm.quad([ax - hx, y, az - hz], [ax + hx, y, az + hz], [bx + hx, y, bz + hz], [bx - hx, y, bz - hz], [0, 0], [1, 0], [1, 1], [0, 1], UP);
+        else pv.quad([ax - hx, y, az - hz], [ax + hx, y, az + hz], [bx + hx, y, bz + hz], [bx - hx, y, bz - hz], [0, 0], [bayW, 0], [bayW, depth], [0, depth], UP);
         const lx = tx * 0.035, lz = tz * 0.035, ex = x + hx, ez = z + hz;                                   // bay line on the far side of the bay
         lm.quad([ex + nx * d0 - lx, 0.056, ez + nz * d0 - lz], [ex + nx * d0 + lx, 0.056, ez + nz * d0 + lz], [ex + nx * (d0 + depth - 0.4) + lx, 0.056, ez + nz * (d0 + depth - 0.4) + lz], [ex + nx * (d0 + depth - 0.4) - lx, 0.056, ez + nz * (d0 + depth - 0.4) - lz], [0, 0], [1, 0], [1, 1], [0, 1], UP);
-        if (srand() < (isTouch ? 0.4 : 0.6)) addParked(cx, cz, Math.atan2(-nx, -nz) + (srand() < 0.5 ? 0 : Math.PI));
+        if (srand() < (shopBay ? (isTouch ? 0.32 : 0.6) : (isTouch ? 0.3 : 0.45))) addParked(cx, cz, Math.atan2(-nx, -nz) + (srand() < 0.5 ? 0 : Math.PI));
       }
     }, sr(0, bayW));
   }
+  {                                                                      // supermarket car park: tarmac under the whole bay area, plus a few trees round the edge
+    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+    for (const r of roads) if (!r.c && r.k === 8) for (const q of r.p) if (inShop(q[0], q[1])) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); z0 = Math.min(z0, q[1]); z1 = Math.max(z1, q[1]); }
+    if (x0 < 1e8) {
+      x0 -= 5.5; x1 += 3; z0 -= 5.5; z1 += 5.5; const y = 0.034;
+      pm.quad([x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1], [0, 0], [(x1 - x0) / 6, 0], [(x1 - x0) / 6, (z1 - z0) / 6], [0, (z1 - z0) / 6], UP);
+      for (let k = 0, got = 0; k < 80 && got < (isTouch ? 8 : 14); k++) {
+        const t = srand(), onZ = srand() < 0.5, tx = onZ ? x0 + t * (x1 - x0) : x0 - sr(0.5, 2.5), tz = onZ ? (srand() < 0.5 ? z0 - sr(0.5, 2.5) : z1 + sr(0.5, 2.5)) : z0 + t * (z1 - z0);
+        if (blocked(tx, tz, 1.4, 2.0) || inBuilding(tx, tz)) continue; addTree(tx, tz, sr(1.1, 1.7)); got++;
+      }
+    }
+  }
+  const hg = new THREE.IcosahedronGeometry(1, 1), hm = mg('hedge', hedgeMat, true, true);                  // domed bushes                // hedges close off the ends of bay rows that face open ground
+  for (const [hx, hz, yaw, bcx, bcz] of hedges) {
+    if (inBuilding(hx, hz) || roadDist(hx, hz) < 1.2 || nearWall(hx, hz, 0.5)) continue;
+    if (bayPts.some(q => Math.hypot(q[0] - hx, q[1] - hz) < 2.6 && Math.hypot(q[0] - bcx, q[1] - bcz) > 0.5)) continue;
+    hm.add(hg, mat4(hx, 0.5, hz, yaw + sr(-0.2, 0.2), 1.25 + sr(-0.2, 0.2), 0.55 + sr(-0.05, 0.15), 0.7));
+  }
+  const hl = hg;                                                         // bushy boundary hedge between the park and the field on its west side
+  walk([[-486, -372], [-486, -170]], 2.8, (x, z, tx, tz) => { if (!inBuilding(x, z) && roadDist(x, z) > 1.5) hm.add(hl, mat4(x + sr(-0.25, 0.25), 0.6, z, Math.atan2(-tz, tx), 1.6 + sr(-0.3, 0.3), 0.65 + sr(-0.1, 0.2), 0.85)); });
+}
+// globe lamps (three-globe heads) along the business-park aisles
+{
+  const poleG = new THREE.CylinderGeometry(0.06, 0.08, 4.6, 6), globeG = new THREE.SphereGeometry(0.3, 8, 6), pm2 = mg('pole', poleMat), gm2 = mg('globe', globeMat, false, false);
+  for (const r of roads) {
+    if (r.c || r.k !== 8 || !r.p.some(q => inPark(q[0], q[1]) && q[0] < -335)) continue;
+    walk(r.p, 24, (x, z, tx, tz) => {
+      if (srand() < 0.45 || x > -335 || !inPark(x, z)) return; const sd = srand() < 0.5 ? -1 : 1, px = x + tz * sd * (r.w / 2 + 1.0), pz = z - tx * sd * (r.w / 2 + 1.0);
+      if (inBuilding(px, pz) || roadDist(px, pz, r.id) < 0.5 || nearWall(px, pz, 0.4)) return;
+      pm2.add(poleG, mat4(px, 2.3, pz)); for (const [ox, oz] of [[0.4, 0], [-0.4, 0], [0, 0.4]]) gm2.add(globeG, mat4(px + ox, 4.75, pz + oz));
+    }, sr(0, 24));
+  }
+}
+// retractable bollards across the business-park entrance road (they sink into the road when the player approaches)
+{
+  const rd = roads[41], bg = new THREE.CylinderGeometry(0.14, 0.14, 1.0, 10), band = new THREE.CylinderGeometry(0.148, 0.148, 0.09, 10);
+  if (rd) walk(rd.p.slice().reverse(), 999, (x, z, tx, tz) => {
+    const gt = { x, z, t: 0, bollards: [] }, nx = tz, nz = -tx;
+    for (let k = -2; k <= 2; k++) {
+      const b = new THREE.Group(), body = new THREE.Mesh(bg, bollardMat), ring = new THREE.Mesh(band, bollardBandMat);
+      ring.position.y = 0.3; body.castShadow = true; b.add(body, ring); b.position.set(x + nx * k * 0.85, 0.5, z + nz * k * 0.85); scene.add(b); gt.bollards.push(b);
+    }
+    gates.push(gt);
+  }, 30);
 }
 // trees around the business park: woodland belt along Wobaston Road, the west boundary and the south edge (as seen from above)
 for (const [x0, x1, z0, z1, n, s0, s1] of [[-480, -345, -396, -382, 34, 1.3, 2.0], [-492, -480, -385, -215, 24, 1.1, 1.8], [-475, -385, -168, -134, 30, 1.3, 2.1]]) {
@@ -1002,6 +1097,10 @@ function frame(now) {
   sky.position.copy(camera.position); clouds.position.set(camera.position.x, 0, camera.position.z);
   hudT -= dt;
   if (hudT <= 0) { hudT = 0.05; $('spd').textContent = Math.round(spdNow * 3.6); $('g').textContent = gearNow; $('rpmf').style.width = (rpmNow * 100) + '%'; drawMinimap(); }
+  for (const gt of gates) {                                              // retractable bollards sink into the road as you approach, and rise again behind you
+    const want = Math.hypot(player.x - gt.x, player.z - gt.z) < 14 ? 1 : 0; gt.t += (want - gt.t) * Math.min(1, dt * 5);
+    for (const bo of gt.bollards) { bo.position.y = 0.5 - gt.t * 1.05; bo.visible = gt.t < 0.98; }
+  }
   if ((frameN++ & 7) === 0) {                                            // parked-car LOD / distance culling
     const cx = camera.position.x, cz = camera.position.z;
     for (const c of carChunks) {
