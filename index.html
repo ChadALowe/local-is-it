@@ -142,6 +142,23 @@ const HEDGE_RD = new Set([145, 17, 22, 153]), inHedgeRun = (x, z) => x > -520 &&
 const RBT = { x: 289, z: -400 };                                     // Droveway / Wobaston Road roundabout centre
 const ENTRY_RD = 440;                                                // block-paved entrance road into the business park
 for (const id of [440, 42]) if (roads[id]) roads[id].w = 6.5;
+// The Droveway carried over the footpath on a bridge (the path drops through an underpass beneath it)
+const BR = (() => {
+  const ch = [...roads[21].p, ...roads[170].p.slice(1), ...roads[171].p.slice(1)], cum = [0];
+  for (let i = 1; i < ch.length; i++) cum.push(cum[i - 1] + Math.hypot(ch[i][0] - ch[i - 1][0], ch[i][1] - ch[i - 1][1]));
+  const pa = [58.9, 25.8], pb = [45.3, 10.2], ra = roads[170].p[0], rb = roads[170].p[1];
+  const d1x = pb[0] - pa[0], d1z = pb[1] - pa[1], d2x = rb[0] - ra[0], d2z = rb[1] - ra[1], den = d1x * d2z - d1z * d2x, t = ((ra[0] - pa[0]) * d2z - (ra[1] - pa[1]) * d2x) / den;
+  const C = [pa[0] + d1x * t, pa[1] + d1z * t], pl = Math.hypot(d1x, d1z);
+  const o = { ch, cum, C, vx: d1x / pl, vz: d1z / pl, H: 4.3, top: 8, ramp: 46, e: roads[170].w / 2, Ld: roads[170].w / 2 + 2, band: 3.2, ids: new Set([21, 170, 171]) };
+  o.proj = (x, z) => { let best = null; for (let i = 0; i < ch.length - 1; i++) { const a = ch[i], b = ch[i + 1], sx = b[0] - a[0], sz = b[1] - a[1], l2 = sx * sx + sz * sz, u = Math.max(0, Math.min(1, ((x - a[0]) * sx + (z - a[1]) * sz) / l2)), qx = a[0] + sx * u, qz = a[1] + sz * u, d = Math.hypot(x - qx, z - qz); if (!best || d < best.lat) { const L = Math.sqrt(l2); best = { lat: d, s: cum[i] + u * L, tx: sx / L, tz: sz / L, side: Math.sign((x - qx) * (-sz) + (z - qz) * sx) || 1 }; } } return best; };
+  o.sC = o.proj(C[0], C[1]).s;
+  o.hs = s2 => { const d = Math.abs(s2 - o.sC); if (d <= o.top) return o.H; if (d >= o.top + o.ramp) return 0; const u = 1 - (d - o.top) / o.ramp; return o.H * u * u * (3 - 2 * u); };
+  o.at = (x, z) => { const p = o.proj(x, z); return { h: p.lat < o.Ld + 0.4 ? o.hs(p.s) : 0, lat: p.lat, s: p.s, tx: p.tx, tz: p.tz }; };
+  o.inBand = (x, z) => Math.abs((x - C[0]) * (-o.vz) + (z - C[1]) * o.vx) < o.band;
+  o.zone = (x, z) => { const p = o.proj(x, z); return p.lat < o.Ld + 14 && Math.abs(p.s - o.sC) < o.top + o.ramp + 4; };
+  return o;
+})();
+const densify = (p, st) => { const out = [p[0]]; for (let i = 1; i < p.length; i++) { const a = p[i - 1], b = p[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.ceil(L / st)); for (let k = 1; k <= n; k++) out.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]); } return out; };
 const builds = MAP.b.map(b => ({ h: b.h / 10, c: b.c, p: toPts(b.p) }));
 const areas = MAP.g.map(g => ({ t: g.t, p: toPts(g.p) }));
 
@@ -443,7 +460,7 @@ class Grid {
 }
 const cgrid = new Grid(16), rgrid = new Grid(24), bgrid = new Grid(24);
 const addCircle = (x, z, r) => cgrid.ins({ t: 0, x, z, r }, x - r - 1.3, x + r + 1.3, z - r - 1.3, z + r + 1.3);
-const addSeg = (x0, z0, x1, z1) => cgrid.ins({ t: 2, x0, z0, x1, z1 }, Math.min(x0, x1) - 1.3, Math.max(x0, x1) + 1.3, Math.min(z0, z1) - 1.3, Math.max(z0, z1) + 1.3);
+const addSeg = (x0, z0, x1, z1, lv = 0) => cgrid.ins({ t: 2, x0, z0, x1, z1, lv }, Math.min(x0, x1) - 1.3, Math.max(x0, x1) + 1.3, Math.min(z0, z1) - 1.3, Math.max(z0, z1) + 1.3);
 function distSeg(px, pz, x0, z0, x1, z1) {
   const dx = x1 - x0, dz = z1 - z0, l2 = dx * dx + dz * dz; let t = l2 ? ((px - x0) * dx + (pz - z0) * dz) / l2 : 0; t = clamp(t, 0, 1);
   return Math.hypot(px - (x0 + dx * t), pz - (z0 + dz * t));
@@ -527,12 +544,13 @@ for (const r of roads) {
   if (r.p.length < 2) continue;
   const redRd = !r.c && r.p.some(q => Math.hypot(q[0] + 420, q[1] + 165) < 32);        // red-surfaced estate road
   const cycRun = r.c && r.p.some(q => inHedgeRun(q[0], q[1]));
-  const m = cycRun ? mg('asphalt', asphaltMat, false, true) : r.id === ENTRY_RD ? mg('blockRoad', blockRoadMat, false, true) : redRd ? mg('asphaltRed', redAsphaltMat, false, true) : mg(r.c ? 'path' : 'asphalt', r.c ? pathMat : asphaltMat, false, true), y = r.c ? 0.04 : ROAD_Y[r.k] || 0.05, h = r.w / 2, mt = roadMiters(r.p, r.w);
+  const bri = BR.ids.has(r.id), rp = bri ? densify(r.p, 2) : r.p;
+  const m = cycRun ? mg('asphalt', asphaltMat, false, true) : r.id === ENTRY_RD ? mg('blockRoad', blockRoadMat, false, true) : redRd ? mg('asphaltRed', redAsphaltMat, false, true) : mg(r.c ? 'path' : 'asphalt', r.c ? pathMat : asphaltMat, false, true), y = r.c ? 0.04 : ROAD_Y[r.k] || 0.05, h = r.w / 2, mt = roadMiters(rp, r.w);
   let s = 0;
-  for (let i = 0; i < r.p.length - 1; i++) {
-    const a = r.p[i], b = r.p[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const A = [a[0] + mt[i][0] * h, y, a[1] + mt[i][1] * h], B = [a[0] - mt[i][0] * h, y, a[1] - mt[i][1] * h];
-    const C = [b[0] - mt[i + 1][0] * h, y, b[1] - mt[i + 1][1] * h], D = [b[0] + mt[i + 1][0] * h, y, b[1] + mt[i + 1][1] * h];
+  for (let i = 0; i < rp.length - 1; i++) {
+    const a = rp[i], b = rp[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]), ya = y + (bri ? BR.at(a[0], a[1]).h : 0), yb = y + (bri ? BR.at(b[0], b[1]).h : 0);
+    const A = [a[0] + mt[i][0] * h, ya, a[1] + mt[i][1] * h], B = [a[0] - mt[i][0] * h, ya, a[1] - mt[i][1] * h];
+    const C = [b[0] - mt[i + 1][0] * h, yb, b[1] - mt[i + 1][1] * h], D = [b[0] + mt[i + 1][0] * h, yb, b[1] + mt[i + 1][1] * h];
     const u = r.w / 6;
     m.quad(A, B, C, D, [0, s / 6], [u, s / 6], [u, (s + L) / 6], [0, (s + L) / 6], UP); s += L;
   }
@@ -541,26 +559,28 @@ for (const r of roads) {
     walk(r.p, 9, (x, z, tx, tz) => {
       const nx = tz * 0.08, nz = -tx * 0.08, x2 = x + tx * 3.5, z2 = z + tz * 3.5;
       if (roadDist(x, z, r.id, true) < 2.5 || roadDist(x2, z2, r.id, true) < 2.5) return;
-      dm.quad([x + nx, y + 0.012, z + nz], [x - nx, y + 0.012, z - nz], [x2 - nx, y + 0.012, z2 - nz], [x2 + nx, y + 0.012, z2 + nz], [0, 0], [1, 0], [1, 1], [0, 1], UP);
+      const h1 = y + 0.012 + BR.at(x, z).h, h2 = y + 0.012 + BR.at(x2, z2).h;
+      dm.quad([x + nx, h1, z + nz], [x - nx, h1, z - nz], [x2 - nx, h2, z2 - nz], [x2 + nx, h2, z2 + nz], [0, 0], [1, 0], [1, 1], [0, 1], UP);
     });
   }
 }
 // pavements and kerbs
 {
-  const pm = mg('pave', paveMat, false, true), cm = mg('curb', curbMat, false, true), step = isTouch ? 5 : 3;
+  const pm = mg('pave', paveMat, false, true), cm = mg('curb', curbMat, false, true), step0 = isTouch ? 5 : 3;
   for (const r of roads) {
     if (r.c || r.k < 4 || r.k > 7 || r.w < 5) continue;
     const vg = [149, 326, 444, 443, 328].includes(r.id) ? 3.4 : 0;     // Blaydon Road: wide verge, footway set back
     const y0 = ROAD_Y[r.k] || 0.05, hedged = HEDGE_RD.has(r.id) || Math.hypot(r.p[0][0] - RBT.x, r.p[0][1] - RBT.z) < 30;
     for (const s of [-1, 1]) {
       let prev = null;
-      walk(r.p, step, (x, z, tx, tz) => {
+      walk(r.p, BR.ids.has(r.id) ? 2 : step0, (x, z, tx, tz) => {
         const nx = tz * s, nz = -tx * s, i = [x + nx * (r.w / 2 + vg), z + nz * (r.w / 2 + vg)], o = [x + nx * (r.w / 2 + 2 + vg), z + nz * (r.w / 2 + 2 + vg)], mid = [x + nx * (r.w / 2 + 1 + vg), z + nz * (r.w / 2 + 1 + vg)];
         const bad = (hedged && inHedgeRun(x, z)) || Math.hypot(x - RBT.x, z - RBT.z) < 40 || roadDist(mid[0], mid[1], r.id, true) < 0.3 || inBuilding(mid[0], mid[1]) || Math.abs(mid[0]) > LIM || Math.abs(mid[1]) > LIM;
-        const cur = bad ? null : { i, o, nx, nz };
+        const cur = bad ? null : { i, o, nx, nz, bh: BR.ids.has(r.id) ? BR.hs(BR.proj(x, z).s) : 0 };
         if (prev && cur) {
-          pm.quad([prev.i[0], 0.13, prev.i[1]], [prev.o[0], 0.13, prev.o[1]], [cur.o[0], 0.13, cur.o[1]], [cur.i[0], 0.13, cur.i[1]], [0, 0], [1, 0], [1, 1], [0, 1], UP);
-          cm.quad([prev.i[0], y0, prev.i[1]], [cur.i[0], y0, cur.i[1]], [cur.i[0], 0.13, cur.i[1]], [prev.i[0], 0.13, prev.i[1]], [0, 0], [1, 0], [1, 1], [0, 1], [-cur.nx, 0, -cur.nz]);
+          const a1 = 0.13 + prev.bh, a2 = 0.13 + cur.bh;
+          pm.quad([prev.i[0], a1, prev.i[1]], [prev.o[0], a1, prev.o[1]], [cur.o[0], a2, cur.o[1]], [cur.i[0], a2, cur.i[1]], [0, 0], [1, 0], [1, 1], [0, 1], UP);
+          cm.quad([prev.i[0], y0 + prev.bh, prev.i[1]], [cur.i[0], y0 + cur.bh, cur.i[1]], [cur.i[0], a2, cur.i[1]], [prev.i[0], a1, prev.i[1]], [0, 0], [1, 0], [1, 1], [0, 1], [-cur.nx, 0, -cur.nz]);
         }
         prev = cur;
       });
@@ -784,17 +804,18 @@ for (const r of roads) {
   if (r.c || r.k < 4 || r.k > 7 || r.w < 5.5) continue;
   walk(r.p, 45, (x, z, tx, tz) => {                                    // lamps
     if (srand() < 0.5) return; const s = srand() < 0.5 ? -1 : 1, nx = tz * s, nz = -tx * s, px = x + nx * (r.w / 2 + 1.3), pz = z + nz * (r.w / 2 + 1.3);
+    if (BR.zone(px, pz)) return;
     if (blocked(px, pz, 0.6, -0.5) || roadDist(px, pz, r.id, true) < 0.5) return; addLamp(px, pz, Math.atan2(nz, -nx));
   }, sr(0, 20));
   walk(r.p, 21, (x, z, tx, tz) => {                                    // street trees
-    if ((HEDGE_RD.has(r.id) && inHedgeRun(x, z)) || Math.hypot(x - RBT.x, z - RBT.z) < 40) return;
+    if ((HEDGE_RD.has(r.id) && inHedgeRun(x, z)) || Math.hypot(x - RBT.x, z - RBT.z) < 40 || BR.zone(x, z)) return;
     for (const s of [-1, 1]) {
       if (srand() < 0.62 || treeCount >= maxTrees) continue; const px = x + tz * s * (r.w / 2 + 2.8) + sr(-1, 1), pz = z - tx * s * (r.w / 2 + 2.8) + sr(-1, 1);
       if (blocked(px, pz, 1.8, 3)) continue; addTree(px, pz, sr(0.85, 1.2));
     }
   }, sr(0, 21));
   walk(r.p, 15, (x, z, tx, tz) => {                                    // parked cars on the kerb
-    if (srand() < (isTouch ? 0.85 : 0.74) || (HEDGE_RD.has(r.id) && inHedgeRun(x, z)) || Math.hypot(x - RBT.x, z - RBT.z) < 45) return; const s = srand() < 0.5 ? -1 : 1, px = x + tz * s * (r.w / 2 - 1.15), pz = z - tx * s * (r.w / 2 - 1.15);
+    if (srand() < (isTouch ? 0.85 : 0.74) || (HEDGE_RD.has(r.id) && inHedgeRun(x, z)) || Math.hypot(x - RBT.x, z - RBT.z) < 45 || BR.zone(x, z)) return; const s = srand() < 0.5 ? -1 : 1, px = x + tz * s * (r.w / 2 - 1.15), pz = z - tx * s * (r.w / 2 - 1.15);
     if (inBuilding(px, pz) || roadDist(px, pz, r.id, true) < 3.5 || Math.hypot(px - spawn.x, pz - spawn.z) < 16 || Math.abs(px) > LIM - 8 || Math.abs(pz) > LIM - 8) return;
     addParked(px, pz, Math.atan2(-tx, -tz) + (srand() < 0.5 ? 0 : Math.PI));
   }, sr(5, 15));
@@ -1166,6 +1187,49 @@ for (const r of roads) {
       const rl = mg('greenRail'); for (const sd of [-1, 1]) for (let k = -3; k <= 3; k++) { if (k === 0) continue; const px = cx + tx * k * 2.4 + tz * sd * (e + 0.5), pz = cz + tz * k * 2.4 - tx * sd * (e + 0.5); rl.add(new THREE.BoxGeometry(0.06, 0.06, 2.4), mat4(px, 1.0, pz, Math.atan2(tx, tz))); rl.add(new THREE.BoxGeometry(0.06, 1.0, 0.06), mat4(px, 0.5, pz)); }
   } }
 }
+// ===== The Droveway bridge and footpath underpass =====
+{
+  const conc = mg('bridgeConc', stdMat({ color: 0x96938b, roughness: 0.9, side: DS })), under = mg('bridgeUnder', stdMat({ color: 0x5a5852, roughness: 0.95, side: DS })), emb = mg('embank', stdMat({ map: grassTex, color: 0xd8e6c4, side: DS }), false, true);
+  const rail = mg('greenRail', stdMat({ color: 0x2e5a45, roughness: 0.6, metalness: 0.4 })), { C, vx, vz, Ld, band } = BR, s0 = BR.sC - BR.top - BR.ramp, s1 = BR.sC + BR.top + BR.ramp;
+  const pt = (s2, lat) => { let i = 0; while (i < BR.cum.length - 2 && BR.cum[i + 1] < s2) i++; const a = BR.ch[i], b = BR.ch[i + 1], L = BR.cum[i + 1] - BR.cum[i], u = (s2 - BR.cum[i]) / L, tx = (b[0] - a[0]) / L, tz = (b[1] - a[1]) / L; return [a[0] + (b[0] - a[0]) * u + tz * lat, a[1] + (b[1] - a[1]) * u - tx * lat]; };
+  const embH = (x, z) => { const p = BR.proj(x, z), h = BR.hs(p.s); return p.lat <= Ld ? h + 0.13 : Math.max(0, h + 0.13 - (p.lat - Ld) / 1.7); };
+  // grassy embankment slopes either side of the raised road, open where the path passes through
+  for (let sd = -1; sd <= 1; sd += 2) for (let s2 = s0, ds = 2; s2 < s1; s2 += ds) {
+    ds = Math.abs(s2 - BR.sC) < 16 ? 0.4 : 2; const h0 = BR.hs(s2), h1 = BR.hs(s2 + ds); if (h0 < 0.05 && h1 < 0.05) continue;
+    const A = pt(s2, sd * Ld), B = pt(s2 + ds, sd * Ld), Cc = pt(s2 + ds, sd * (Ld + (h1 + 0.13) * 1.7)), D = pt(s2, sd * (Ld + (h0 + 0.13) * 1.7));
+    if ([A, B, Cc, D].some(q => BR.inBand(q[0], q[1]))) {                 // clip at the underpass: wall the cut instead
+      continue;
+    }
+    emb.quad([A[0], h0 + 0.13, A[1]], [B[0], h1 + 0.13, B[1]], [Cc[0], 0.02, Cc[1]], [D[0], 0.02, D[1]], [A[0] / 8, A[1] / 8], [B[0] / 8, B[1] / 8], [Cc[0] / 8, Cc[1] / 8], [D[0] / 8, D[1] / 8], UP);
+    if (h0 > 0.6) addSeg(D[0], D[1], Cc[0], Cc[1], 1);
+    if (h0 > 0.8) { const R0 = pt(s2, sd * (Ld - 0.15)), R1 = pt(s2 + ds, sd * (Ld - 0.15)), yaw = Math.atan2(-(R1[1] - R0[1]), R1[0] - R0[0]);
+      for (const yy of [1.1, 0.55]) rail.add(new THREE.BoxGeometry(ds + 0.05, 0.06, 0.06), mat4((R0[0] + R1[0]) / 2, (h0 + h1) / 2 + 0.13 + yy, (R0[1] + R1[1]) / 2, yaw));
+      if (ds > 1 || Math.round((s2 - s0) / ds) % 5 === 0) rail.add(new THREE.BoxGeometry(0.08, 1.15, 0.08), mat4(R0[0], h0 + 0.13 + 0.58, R0[1]));
+      for (let k = 1; k < Math.round(ds * 4); k++) { const u = k / Math.round(ds * 4); rail.add(new THREE.BoxGeometry(0.025, 1.0, 0.025), mat4(R0[0] + (R1[0] - R0[0]) * u, h0 + (h1 - h0) * u + 0.13 + 0.6, R0[1] + (R1[1] - R0[1]) * u)); }
+      addSeg(R0[0], R0[1], R1[0], R1[1], 2); }                          // deck railing (upper level only)
+  }
+  // retaining walls lining the underpass, up to the deck soffit, following the bank surface outside it
+  const px2 = -vz, pz2 = vx;
+  for (const sd of [-1, 1]) {
+    const ex = C[0] + px2 * sd * band, ez = C[1] + pz2 * sd * band; let prev = null, segStart = null;
+    for (let t = -34; t <= 34; t += 0.8) {
+      const x = ex + vx * t, z = ez + vz * t, b = BR.proj(x, z), top = b.lat <= Ld ? BR.hs(b.s) - 0.05 : embH(x, z);
+      if (prev && (top > 0.05 || prev.top > 0.05)) conc.quad([prev.x, 0, prev.z], [x, 0, z], [x, Math.max(0.02, top), z], [prev.x, Math.max(0.02, prev.top), prev.z], [prev.t / 3, 0], [t / 3, 0], [t / 3, top / 3], [prev.t / 3, prev.top / 3], [px2 * sd, 0, pz2 * sd]);
+      if (top > 0.6 && !segStart) segStart = [x, z]; if (top <= 0.6 && segStart) { addSeg(segStart[0], segStart[1], x, z, 1); segStart = null; }
+      prev = { x, z, t, top };
+    }
+    if (segStart) addSeg(segStart[0], segStart[1], prev.x, prev.z, 1);
+  }
+  // deck soffit and fascia over the underpass
+  { const lineHit = (sd, lat) => { const p = BR.proj(C[0], C[1]), tx = p.tx, tz = p.tz, nx = tz, nz = -tx, ox = C[0] + nx * lat, oz = C[1] + nz * lat, ex = C[0] + px2 * sd * band, ez = C[1] + pz2 * sd * band, den = tx * pz2 - tz * px2, k = ((ex - ox) * pz2 - (ez - oz) * px2) / den; return [ox + tx * k, oz + tz * k]; };
+    const H = BR.H, a = lineHit(-1, -Ld), b = lineHit(1, -Ld), c2 = lineHit(1, Ld), d = lineHit(-1, Ld);
+    under.quad([a[0], H - 0.9, a[1]], [b[0], H - 0.9, b[1]], [c2[0], H - 0.9, c2[1]], [d[0], H - 0.9, d[1]], [0, 0], [1, 0], [1, 1], [0, 1], [0, -1, 0]);
+    for (const [p, q] of [[a, b], [d, c2]]) conc.quad([p[0], H - 0.9, p[1]], [q[0], H - 0.9, q[1]], [q[0], H + 0.15, q[1]], [p[0], H + 0.15, p[1]], [0, 0], [1, 0], [1, 1], [0, 1], UP);
+    mg('bridgeLamp', stdMat({ color: 0xfff3c4, emissive: 0xffe9a0, emissiveIntensity: 0.8 }), false, false).add(new THREE.BoxGeometry(0.5, 0.06, 0.25), mat4(C[0], H - 0.95, C[1])); }
+  // street lamps standing on the bridge verges
+  for (const [ds, sd] of [[-14, 1], [10, -1], [30, 1]]) { const s2 = BR.sC + ds, [lx, lz] = pt(s2, sd * (Ld - 0.5)), hb = BR.hs(s2) + 0.13, p = BR.proj(lx, lz); mg('pole', poleMat).add(lampPole, mat4(lx, hb, lz)); const f = Math.atan2(-sd * p.tz, sd * p.tx) + Math.PI;
+    mg('pole', poleMat).add(lampArm, mat4(lx, 7.1 + hb - 0.13, lz, f).multiply(new THREE.Matrix4().makeTranslation(1.0, 0, 0))); mg('lamphead', lampHeadMat).add(lampHead, mat4(lx, 6.98 + hb - 0.13, lz, f).multiply(new THREE.Matrix4().makeTranslation(1.9, 0, 0))); }
+}
 // globe lamps (three-globe heads) along the business-park aisles
 {
   const poleG = new THREE.CylinderGeometry(0.06, 0.08, 4.6, 6), globeG = new THREE.SphereGeometry(0.3, 8, 6), pm2 = mg('pole', poleMat), gm2 = mg('globe', globeMat, false, false);
@@ -1331,7 +1395,7 @@ function createCar(color) {
 }
 const paintChoices = [0xa3161a, 0x1f4f9a, 0xe9e9e6, 0x2c2e31, 0x9aa0a6, 0x2f7d32, 0xe36f1c, 0x6c2a8a];
 let paintIdx = 0;
-const player = { x: spawn.x, z: spawn.z, h: spawn.h, vx: 0, vz: 0, steer: 0, spin: 0, car: createCar(paintChoices[0]) };
+const player = { x: spawn.x, z: spawn.z, y: 0, h: spawn.h, vx: 0, vz: 0, steer: 0, spin: 0, car: createCar(paintChoices[0]) };
 scene.add(player.car.grp);
 
 /* ================= tyre marks + smoke ================= */
@@ -1410,7 +1474,7 @@ function start() {
   $('overlay').style.display = 'none'; document.body.classList.add('playing'); initAudio(); tryFullscreen();
   if (actx && actx.state === 'suspended') actx.resume(); state = 'play'; setTimeout(() => { $('hint').style.opacity = 0; }, 14000);
 }
-function resetCar() { Object.assign(player, { x: spawn.x, z: spawn.z, h: spawn.h, vx: 0, vz: 0, steer: 0 }); drift.pts = 0; drift.on = false; drift.t = 0; showCombo(false); }
+function resetCar() { Object.assign(player, { x: spawn.x, z: spawn.z, y: 0, h: spawn.h, vx: 0, vz: 0, steer: 0 }); drift.pts = 0; drift.on = false; drift.t = 0; showCombo(false); }
 
 /* ================= driving ================= */
 function surfaceAt(x, z) {                                             // 0 = road / pavement, 1 = grass
@@ -1460,11 +1524,13 @@ function stepPlayer(dt) {
   const sp = Math.abs(vf);
   p.h += p.steer * 1.85 / (1 + sp / 45) * Math.min(1, sp / 8) * (vf >= 0 ? 1 : -1) * slide * dt;
   p.x += p.vx * dt; p.z += p.vz * dt;
+  { const b = BR.at(p.x, p.z), tgt = b.h > 0 && (b.h < 1.2 || p.y > 1) ? b.h : 0; p.y += (tgt - p.y) * Math.min(1, dt * 14); if (Math.abs(tgt - p.y) < 0.01) p.y = tgt; }
 
   const cf = -Math.sin(p.h), cz2 = -Math.cos(p.h); let hit = 0;
   for (let pass = 0; pass < 2; pass++) for (const off of cir) {
     const px = p.x + cf * off, pz = p.z + cz2 * off, R = 0.86, list = cgrid.at(px, pz); if (!list) continue;
     for (const c of list) {
+      if (c.lv && (c.lv === 2) !== (p.y > 1)) continue;                  // bridge: lower-level walls vs deck railings
       let nx, nz, ov;
       if (c.t === 0) { const dx = px - c.x, dz = pz - c.z, d = Math.hypot(dx, dz); if (d >= R + c.r || d < 1e-4) continue; nx = dx / d; nz = dz / d; ov = R + c.r - d; }
       else {
@@ -1489,7 +1555,7 @@ function stepPlayer(dt) {
   } else if (drift.on) { drift.grace -= dt; if (drift.grace <= 0) bank(); }
   if (comboTimer < 90) { comboTimer -= dt; if (comboTimer <= 0 && !drift.on) showCombo(false); }
 
-  const c = p.car; c.grp.position.set(p.x, 0, p.z); c.grp.rotation.set(0, p.h, 0);
+  const c = p.car; c.grp.position.set(p.x, p.y, p.z); c.grp.rotation.set(0, p.h, 0);
   c.body.rotation.y = clamp(-Math.atan2(vl, Math.max(sp, 6)) * 0.35, -0.3, 0.3);
   c.body.rotation.z = clamp(-p.steer * Math.min(1, sp / 40) * 0.05 + vl * 0.003, -0.1, 0.1);
   c.body.rotation.x = clamp((brk && vf > 5 ? 0.025 : 0) - (thr ? 0.012 : 0), -0.05, 0.05);
@@ -1528,9 +1594,10 @@ function stepCamera(dt) {
   camA += angDiff(p.h + angDiff(velA, p.h) * 0.3, camA) * Math.min(1, dt * 4.2);
   const dist = camMode ? 11 + spd * 0.03 : 7.3 + spd * 0.025, hgt = camMode ? 3.8 : 2.5 + spd * 0.006, fx = -Math.sin(camA), fz = -Math.cos(camA);
   camera.position.x += (p.x - fx * dist - camera.position.x) * Math.min(1, dt * 8); camera.position.z += (p.z - fz * dist - camera.position.z) * Math.min(1, dt * 8);
-  camera.position.y += (hgt - camera.position.y) * Math.min(1, dt * 4);
+  camera.position.y += (hgt + p.y - camera.position.y) * Math.min(1, dt * 4);
+  if (p.y < 1) { const b = BR.at(camera.position.x, camera.position.z); if (b.h > 1.5 && b.lat < BR.Ld + 0.5) camera.position.y = Math.min(camera.position.y, b.h - 1.2); }
   shake = Math.max(0, shake - dt * 2.4); const sh = shake * 0.3 + spd * 0.0003; camera.position.x += rand(-sh, sh); camera.position.y += rand(-sh, sh) * 0.6;
-  camera.lookAt(p.x + fx * 6, 1.25, p.z + fz * 6);
+  camera.lookAt(p.x + fx * 6, 1.25 + p.y, p.z + fz * 6);
   const tf = 58 + clamp(spd / 58, 0, 1) * 12; if (Math.abs(camera.fov - tf) > 0.05) { camera.fov += (tf - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix(); }
 }
 const mmc = $('mm'), mctx = mmc.getContext('2d'), mmBg = document.createElement('canvas'); mmBg.width = mmBg.height = 150;
