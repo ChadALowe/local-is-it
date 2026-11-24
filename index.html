@@ -247,11 +247,33 @@ const cladTex = mkTex(128, 128, (g, w, h) => {
   g.fillStyle = '#3d4850'; g.fillRect(0, 44, w, 18);
 });
 const plainTex = mkTex(64, 64, (g, w, h) => { g.fillStyle = '#a7a39a'; g.fillRect(0, 0, w, h); speckle(g, w, h, 0.05, 120, 190, 0); });
+// Pendeford Business Park: red-brick offices with dark slate roofs (from satellite + street imagery)
+const officeTex = mkTex(256, 128, (g, w, h) => {
+  g.fillStyle = '#a2503a'; g.fillRect(0, 0, w, h);
+  g.strokeStyle = 'rgba(0,0,0,.2)'; g.lineWidth = 1;
+  for (let y = 0; y < h; y += 8) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = ((y / 8) % 2) * 10; x < w; x += 20) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 8); g.stroke(); } }
+  speckle(g, w, h, 0.03, 0, 255, 0);
+  g.fillStyle = 'rgba(214,196,160,.85)'; g.fillRect(0, h - 7, w, 7);                       // buff stone floor band
+  for (const wx of [10, 94, 178]) {
+    g.fillStyle = '#cfcbc0'; g.fillRect(wx - 3, 22, 66, 80);
+    const gr = g.createLinearGradient(0, 26, 0, 98); gr.addColorStop(0, '#8fa9bf'); gr.addColorStop(.55, '#46607a'); gr.addColorStop(1, '#27374a');
+    g.fillStyle = gr; g.fillRect(wx, 26, 60, 72);
+    g.fillStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.moveTo(wx, 26); g.lineTo(wx + 28, 26); g.lineTo(wx, 64); g.closePath(); g.fill();
+    g.fillStyle = '#cfcbc0'; g.fillRect(wx + 28, 26, 3, 72); g.fillRect(wx, 56, 60, 3);
+  }
+});
+const slateTex = mkTex(128, 128, (g, w, h) => {
+  g.fillStyle = '#585352'; g.fillRect(0, 0, w, h);
+  for (let y = 0; y < h; y += 6) { g.fillStyle = `rgba(0,0,0,${0.14 + (y / 6 % 2) * 0.08})`; g.fillRect(0, y, w, 1.5); }
+  speckle(g, w, h, 0.06, 60, 110, 0);
+});
 const stdMat = o => new THREE.MeshStandardMaterial(Object.assign({ roughness: 0.9, metalness: 0, envMapIntensity: 0.5 }, o));
 const DS = THREE.DoubleSide;
 const facades = [['#a8523c', 1], ['#b98d62', 1], ['#d9cfb8', 0], ['#9fb0bd', 0], ['#dcc98a', 0], ['#b9b8b2', 0], ['#8c3f35', 1]].map(a => stdMat({ map: facadeTex(a[0], a[1]), side: DS }));
 const cladMat = stdMat({ map: cladTex, side: DS }), plainMat = stdMat({ map: plainTex, side: DS });
 const roofMat = stdMat({ map: roofTex, side: DS });
+const officeMat = stdMat({ map: officeTex, side: DS }), slateMat = stdMat({ map: slateTex, side: DS, roughness: 0.85 });
+const redAsphaltMat = stdMat({ color: 0x93564f, roughness: 0.9, side: DS });
 const shingleMats = [stdMat({ map: shingleTex, side: DS }), stdMat({ map: shingleTex, color: 0x9aa0a8, side: DS }), stdMat({ map: shingleTex, color: 0x6a7480, side: DS })];
 const asphaltMat = stdMat({ map: asphaltTex, roughness: 0.82, side: DS });
 const pathMat = stdMat({ map: sidewalkTex, side: DS });
@@ -269,7 +291,9 @@ const lampHeadMat = stdMat({ color: 0xdfe3e6, roughness: 0.4 });
 const CHUNK = 192;
 const chunkMeshes = [];
 const carChunks = [];                       // parked-car chunks: { ims, sph } so phones can skip far-away ones
-const CAR_DRAW = 260;                       // phones only draw parked cars within this distance (m)
+const CAR_CH = 32;                          // parked cars are chunked finer than the map so the detailed/box switch is per small group
+const CAR_NEAR = isTouch ? 30 : 90;        // parked cars use the detailed model inside this distance (m), a box car beyond it
+const CAR_DRAW = isTouch ? 260 : 900;       // and are not drawn at all beyond this one
 class Merger {
   constructor(mat, cast = true, recv = true) { this.mat = mat; this.ch = new Map(); this.cast = cast; this.recv = recv; }
   chunk(x, z) {
@@ -407,7 +431,8 @@ function roadMiters(p, w) {
 }
 for (const r of roads) {
   if (r.p.length < 2) continue;
-  const m = mg(r.c ? 'path' : 'asphalt', r.c ? pathMat : asphaltMat, false, true), y = r.c ? 0.04 : ROAD_Y[r.k] || 0.05, h = r.w / 2, mt = roadMiters(r.p, r.w);
+  const redRd = !r.c && r.p.some(q => Math.hypot(q[0] + 420, q[1] + 165) < 32);        // red-surfaced estate road
+  const m = redRd ? mg('asphaltRed', redAsphaltMat, false, true) : mg(r.c ? 'path' : 'asphalt', r.c ? pathMat : asphaltMat, false, true), y = r.c ? 0.04 : ROAD_Y[r.k] || 0.05, h = r.w / 2, mt = roadMiters(r.p, r.w);
   let s = 0;
   for (let i = 0; i < r.p.length - 1; i++) {
     const a = r.p[i], b = r.p[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -470,10 +495,48 @@ function pitchedRoof(b, wallH, fi, hsh) {
   else { wm.tri(pD, pA, r1, [0.2, 0.95], [0.3, 0.95], [0.25, 0.95], [-cs, 0, -sn]); wm.tri(pB, pC, r2, [0.2, 0.95], [0.3, 0.95], [0.25, 0.95], [cs, 0, sn]); }
   return true;
 }
+// Pendeford Business Park zone (game metres, matched to the real site from a satellite screenshot)
+const inPark = (x, z) => x > -500 && x < -240 && z > -410 && z < -135;
+// Hipped roof for any footprint: inset the outline by d and cap it. d follows the narrowest part of the building.
+function insetRoof(b, wallH) {
+  const p = [];
+  for (const q of b.p) { const l = p[p.length - 1]; if (!l || Math.hypot(q[0] - l[0], q[1] - l[1]) > 0.05) p.push(q); }
+  if (p.length > 2 && Math.hypot(p[0][0] - p[p.length - 1][0], p[0][1] - p[p.length - 1][1]) < 0.05) p.pop();
+  const n = p.length; if (n < 3) return false;
+  const A = polyArea(p), sg = A >= 0 ? 1 : -1, nrm = [];
+  for (let i = 0; i < n; i++) { const a = p[i], c = p[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); nrm.push([-sg * (c[1] - a[1]) / L, sg * (c[0] - a[0]) / L, L]); }
+  let thick = 1e9;                                                      // narrowest wall-to-wall distance
+  for (let i = 0; i < n; i++) {
+    if (nrm[i][2] < 3) continue;
+    const a = p[i], c = p[(i + 1) % n], mx = (a[0] + c[0]) / 2, mz = (a[1] + c[1]) / 2;
+    for (let j = 0; j < n; j++) {
+      if (j === i) continue; const e = p[j], f = p[(j + 1) % n];
+      const rx = f[0] - e[0], rz = f[1] - e[1], den = nrm[i][0] * rz - nrm[i][1] * rx; if (Math.abs(den) < 1e-9) continue;
+      const t = ((e[0] - mx) * rz - (e[1] - mz) * rx) / den, u = ((e[0] - mx) * nrm[i][1] - (e[1] - mz) * nrm[i][0]) / den;
+      if (t > 0.3 && u >= 0 && u <= 1 && t < thick) thick = t;
+    }
+  }
+  if (thick > 1e8) return false;
+  const d = clamp(thick * 0.46, 0.8, 5.0), rise = d * 0.78, q = [];
+  for (let i = 0; i < n; i++) {
+    const n1 = nrm[(i + n - 1) % n], n2 = nrm[i], k = Math.max(0.35, 1 + n1[0] * n2[0] + n1[1] * n2[1]);
+    q.push([p[i][0] + (n1[0] + n2[0]) / k * d, p[i][1] + (n1[1] + n2[1]) / k * d]);
+  }
+  const Aq = polyArea(q); if (Aq * A <= 0 || Math.abs(Aq) > Math.abs(A) * 0.97) return false;
+  const rm = mg('slate', slateMat), y0 = wallH + 0.04, y1 = wallH + 0.04 + rise, uv = r => [r[0] / 3, r[2] / 3];
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n, a = [p[i][0], y0, p[i][1]], c = [p[j][0], y0, p[j][1]], e = [q[j][0], y1, q[j][1]], f = [q[i][0], y1, q[i][1]];
+    rm.quad(a, c, e, f, uv(a), uv(c), uv(e), uv(f), UP);
+  }
+  for (const [i, j, k] of triangulate(q)) { const a = [q[i][0], y1, q[i][1]], c = [q[j][0], y1, q[j][1]], e = [q[k][0], y1, q[k][1]]; rm.tri(a, c, e, uv(a), uv(c), uv(e), UP); }
+  return true;
+}
 for (const b of builds) {
   const hsh = hashN(b.cx, b.cz), n = b.p.length;
   let fi = -1, matKey, mat;
-  if (b.h < 3.3) { matKey = 'wallplain'; mat = plainMat; }
+  const parkB = inPark(b.cx, b.cz) && Math.abs(b.area) > 250;            // business-park office
+  if (parkB) { matKey = 'wallOffice'; mat = officeMat; }
+  else if (b.h < 3.3) { matKey = 'wallplain'; mat = plainMat; }
   else if (b.c === 1) { matKey = 'wallclad'; mat = cladMat; }
   else {
     const pool = b.c === 0 ? [0, 1, 2, 6, 0, 2, 4, 5] : b.c === 2 ? [3, 5, 2] : b.c === 3 ? [1, 0, 5] : [5, 2];
@@ -481,14 +544,14 @@ for (const b of builds) {
   }
   const wm = mg(matKey, mat);
   const pitched = b.c === 0 && b.h >= 4 && b.h <= 10 && Math.abs(b.area) > 22 && Math.abs(b.area) < 450;
-  const wallH = pitched ? Math.max(2.8, b.h * 0.72) : b.h, floors = Math.max(1, Math.round(wallH / 3.3)), uo = (hsh % 7) / 7;
+  const wallH = parkB ? 5.6 : pitched ? Math.max(2.8, b.h * 0.72) : b.h, floors = Math.max(1, Math.round(wallH / 3.3)), uo = (hsh % 7) / 7;
   let s = 0;
   for (let i = 0; i < n; i++) {
     const a = b.p[i], c = b.p[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 0.05) continue;
     const nx = (c[1] - a[1]) / L, nz = -(c[0] - a[0]) / L, u0 = s / 8 + uo, u1 = (s + L) / 8 + uo;
     wm.quad([a[0], 0, a[1]], [c[0], 0, c[1]], [c[0], wallH, c[1]], [a[0], wallH, a[1]], [u0, 0], [u1, 0], [u1, floors], [u0, floors], [nx, 0, nz]); s += L;
   }
-  if (!(pitched && pitchedRoof(b, wallH, fi < 0 ? 0 : fi, hsh))) {
+  if (!((parkB && insetRoof(b, wallH)) || (pitched && pitchedRoof(b, wallH, fi < 0 ? 0 : fi, hsh)))) {
     const rm = mg('roofflat', roofMat), tr = triangulate(b.p);
     for (const [i, j, k] of tr) { const A = b.p[i], B = b.p[j], C = b.p[k]; rm.tri([A[0], wallH + 0.05, A[1]], [B[0], wallH + 0.05, B[1]], [C[0], wallH + 0.05, C[1]], [A[0] / 4, A[1] / 4], [B[0] / 4, B[1] / 4], [C[0] / 4, C[1] / 4], UP); }
   }
@@ -512,7 +575,7 @@ function addLamp(x, z, face) {
   mg('lamphead', lampHeadMat).add(lampHead, mat4(x, 6.98, z, face).multiply(new THREE.Matrix4().makeTranslation(1.9, 0, 0)));
   addCircle(x, z, 0.3);
 }
-const maxTrees = isTouch ? 1400 : 3000;
+const maxTrees = isTouch ? 1520 : 3120;   // includes ~120 reserved for the business-park woodland
 for (const a of areas) {                                              // woods and parks
   if (a.t === 2 || a.t === 0) {
     let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const [x, z] of a.p) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
@@ -551,6 +614,31 @@ for (const r of roads) {
     if (inBuilding(px, pz) || roadDist(px, pz, r.id, true) < 3.5 || Math.hypot(px - spawn.x, pz - spawn.z) < 16 || Math.abs(px) > LIM - 8 || Math.abs(pz) > LIM - 8) return;
     addParked(px, pz, Math.atan2(-tx, -tz) + (srand() < 0.5 ? 0 : Math.PI));
   }, sr(5, 15));
+}
+// Pendeford Business Park car parks: perpendicular bays either side of the service aisles (tarmac pad, white bay lines, cars)
+{
+  const pm = mg('asphalt', asphaltMat, false, true), lm = mg('dash', dashMat, false, true), bayW = 2.6, depth = 4.8;
+  for (const r of roads) {
+    if (r.c || r.k !== 8 || !r.p.some(q => inPark(q[0], q[1]))) continue;
+    walk(r.p, bayW, (x, z, tx, tz) => {
+      for (const sd of [-1, 1]) {
+        const nx = tz * sd, nz = -tx * sd, d0 = r.w / 2 + 0.1, cx = x + nx * (d0 + depth / 2), cz = z + nz * (d0 + depth / 2), fx = x + nx * (d0 + depth), fz = z + nz * (d0 + depth);
+        if (cx > -335 || !inPark(cx, cz) || inBuilding(cx, cz) || inBuilding(fx, fz) || inBuilding(x + nx * d0, z + nz * d0) || nearWall(cx, cz, 1.0)) continue;
+        if (roadDist(cx, cz, r.id) < 1.6 || roadDist(fx, fz, r.id) < 0.4) continue;
+        const hx = tx * bayW / 2, hz = tz * bayW / 2, ax = x + nx * d0, az = z + nz * d0, bx = x + nx * (d0 + depth), bz = z + nz * (d0 + depth), y = 0.046;
+        pm.quad([ax - hx, y, az - hz], [ax + hx, y, az + hz], [bx + hx, y, bz + hz], [bx - hx, y, bz - hz], [0, 0], [1, 0], [1, 1], [0, 1], UP);
+        const lx = tx * 0.035, lz = tz * 0.035, ex = x + hx, ez = z + hz;                                   // bay line on the far side of the bay
+        lm.quad([ex + nx * d0 - lx, 0.056, ez + nz * d0 - lz], [ex + nx * d0 + lx, 0.056, ez + nz * d0 + lz], [ex + nx * (d0 + depth - 0.4) + lx, 0.056, ez + nz * (d0 + depth - 0.4) + lz], [ex + nx * (d0 + depth - 0.4) - lx, 0.056, ez + nz * (d0 + depth - 0.4) - lz], [0, 0], [1, 0], [1, 1], [0, 1], UP);
+        if (srand() < (isTouch ? 0.4 : 0.6)) addParked(cx, cz, Math.atan2(-nx, -nz) + (srand() < 0.5 ? 0 : Math.PI));
+      }
+    }, sr(0, bayW));
+  }
+}
+// trees around the business park: woodland belt along Wobaston Road, the west boundary and the south edge (as seen from above)
+for (const [x0, x1, z0, z1, n, s0, s1] of [[-480, -345, -396, -382, 34, 1.3, 2.0], [-492, -480, -385, -215, 24, 1.1, 1.8], [-475, -385, -168, -134, 30, 1.3, 2.1]]) {
+  for (let k = 0, got = 0; k < n * 5 && got < n * (isTouch ? 0.7 : 1) && treeCount < maxTrees; k++) {
+    const x = sr(x0, x1), z = sr(z0, z1); if (blocked(x, z, 1.4, 2.5) || inBuilding(x, z)) continue; addTree(x, z, sr(s0, s1)); got++;
+  }
 }
 for (let d = -LIM; d <= LIM; d += isTouch ? 16 : 9) {                  // tree belt at the edge of the play area
   for (const [x, z] of [[d, -LIM - 4], [d, LIM + 4], [-LIM - 4, d], [LIM + 4, d]]) addTree(x + sr(-2, 2), z + sr(-2, 2), sr(1.6, 2.2), false);
@@ -649,21 +737,38 @@ function createCar(color) {
     [merge(sel(['black', 'trim']).concat(wsel(['tire']))), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, side: DS }), true],
     [merge(sel(['chrome', 'lens', 'amber', 'red', 'plate_f', 'plate_r', 'hub']).concat(wsel(['hub']))), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.4, side: DS }), false]
   ];
-  // one instanced mesh per (chunk, material group). Geometry buffers are shared; only the bounding sphere differs,
-  // so each chunk of parked cars is frustum-culled (main + shadow pass) instead of every car being drawn every frame.
+  // Parked cars come in two levels of detail. Near the player: the 3.4k-triangle model (5 instanced meshes per chunk).
+  // Further away: a ~80-triangle box car (2 meshes sharing the same instance buffers). Chunks are frustum-culled,
+  // and on phones chunks beyond CAR_DRAW are skipped altogether.
+  const boxes = (list, color) => {
+    const P = [], N = [], C = [], c = new THREE.Color(color);
+    for (const [w, h, d, x, y, z] of list) {
+      const g = new THREE.BoxGeometry(w, h, d).toNonIndexed(), p = g.attributes.position.array, n = g.attributes.normal.array;
+      for (let i = 0; i < p.length; i += 3) { P.push(p[i] + x, p[i + 1] + y, p[i + 2] + z); N.push(n[i], n[i + 1], n[i + 2]); if (color != null) C.push(c.r, c.g, c.b); }
+      g.dispose();
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+    if (color != null) g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); return g;
+  };
+  const lowPaint = boxes([[1.76, 0.62, 3.4, 0, 0.59, -0.1], [1.56, 0.64, 2.25, 0, 1.2, 0.22]]);
+  const lowDark = boxes([[1.62, 0.4, 2.3, 0, 1.2, 0.2], [0.24, 0.58, 0.58, -0.76, 0.29, -1.17], [0.24, 0.58, 0.58, 0.76, 0.29, -1.17], [0.24, 0.58, 0.58, -0.76, 0.29, 1.17], [0.24, 0.58, 0.58, 0.76, 0.29, 1.17]], 0x20262c);
   const byChunk = new Map();
-  parked.forEach(p => { const k = Math.floor(p.x / CHUNK) * 4096 + Math.floor(p.z / CHUNK); let l = byChunk.get(k); if (!l) byChunk.set(k, l = []); l.push(p); });
+  parked.forEach(p => { const k = Math.floor(p.x / CAR_CH) * 4096 + Math.floor(p.z / CAR_CH); let l = byChunk.get(k); if (!l) byChunk.set(k, l = []); l.push(p); });
   const colr = new THREE.Color(), carR = 3;
   for (const list of byChunk.values()) {
     let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const p of list) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
     const sph = new THREE.Sphere(new THREE.Vector3((x0 + x1) / 2, 1, (z0 + z1) / 2), Math.hypot(x1 - x0, z1 - z0) / 2 + carR);
-    const ims = groups.map(([g, m, cast]) => {
-      const cg = new THREE.BufferGeometry(); for (const k in g.attributes) cg.setAttribute(k, g.attributes[k]); cg.setIndex(g.index); cg.boundingSphere = sph;
+    const mk = (g, m, cast) => {                                          // shares vertex buffers with the source geometry; only the bounding sphere differs
+      const cg = new THREE.BufferGeometry(); for (const k in g.attributes) cg.setAttribute(k, g.attributes[k]); if (g.index) cg.setIndex(g.index); cg.boundingSphere = sph;
       const im = new THREE.InstancedMesh(cg, m, list.length); im.castShadow = cast; im.receiveShadow = true; im.frustumCulled = true; /* r128 InstancedMesh defaults to false */ scene.add(im); chunkMeshes.push(im); return im;
-    });
-    carChunks.push({ ims, sph });
+    };
+    const ims = groups.map(([g, m, cast]) => mk(g, m, cast));
+    const far = [mk(lowPaint, groups[0][1], true), mk(lowDark, groups[3][1], true)];
     list.forEach((p, i) => { const m = mat4(p.x, 0.05, p.z, p.yaw); ims.forEach(im => im.setMatrixAt(i, m)); ims[0].setColorAt(i, colr.setHex(p.color)); });
     ims.forEach(im => { im.instanceMatrix.needsUpdate = true; }); if (ims[0].instanceColor) ims[0].instanceColor.needsUpdate = true;
+    far[0].instanceMatrix = far[1].instanceMatrix = ims[0].instanceMatrix; far[0].instanceColor = ims[0].instanceColor;   // share the instance buffers
+    far.forEach(im => { im.visible = false; });
+    carChunks.push({ ims, far, sph });
   }
 }
 const paintChoices = [0xa3161a, 0x1f4f9a, 0xe9e9e6, 0x2c2e31, 0x9aa0a6, 0x2f7d32, 0xe36f1c, 0x6c2a8a];
@@ -897,9 +1002,12 @@ function frame(now) {
   sky.position.copy(camera.position); clouds.position.set(camera.position.x, 0, camera.position.z);
   hudT -= dt;
   if (hudT <= 0) { hudT = 0.05; $('spd').textContent = Math.round(spdNow * 3.6); $('g').textContent = gearNow; $('rpmf').style.width = (rpmNow * 100) + '%'; drawMinimap(); }
-  if (isTouch && (frameN++ & 7) === 0) {                                 // distance-cull parked cars on phones (they are ~4k triangles each)
+  if ((frameN++ & 7) === 0) {                                            // parked-car LOD / distance culling
     const cx = camera.position.x, cz = camera.position.z;
-    for (const c of carChunks) { const v = Math.hypot(cx - c.sph.center.x, cz - c.sph.center.z) - c.sph.radius < CAR_DRAW; for (const im of c.ims) im.visible = v; }
+    for (const c of carChunks) {
+      const d = Math.hypot(cx - c.sph.center.x, cz - c.sph.center.z) - c.sph.radius, near = d < CAR_NEAR, far = !near && d < CAR_DRAW;
+      for (const im of c.ims) im.visible = near; for (const im of c.far) im.visible = far;
+    }
   }
   renderer.render(scene, camera);
 }
