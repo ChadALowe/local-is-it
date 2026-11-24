@@ -137,6 +137,11 @@ const MAP = {"o":[52.6261,-2.1459],"r":[{"c":0,"w":80,"k":4,"b":0,"p":[5746,-388
 const LIM = 700;                                   // playable half-size in metres
 const toPts = a => { const o = []; for (let i = 0; i < a.length; i += 2) o.push([a[i] * 0.1, a[i + 1] * 0.1]); return o; };
 const roads = MAP.r.map((r, id) => ({ id, c: r.c, w: r.w / 10, k: r.k, p: toPts(r.p) }));
+// Wobaston Road between the Droveway roundabout and Pendeford Business Park: hedged both sides, wide verges, set-back cycle path, no kerbside pavement
+const HEDGE_RD = new Set([145, 17, 22, 153]), inHedgeRun = (x, z) => x > -520 && x < 300 && z > -430 && z < -380;
+const RBT = { x: 289, z: -400 };                                     // Droveway / Wobaston Road roundabout centre
+const ENTRY_RD = 440;                                                // block-paved entrance road into the business park
+for (const id of [440, 42]) if (roads[id]) roads[id].w = 6.5;
 const builds = MAP.b.map(b => ({ h: b.h / 10, c: b.c, p: toPts(b.p) }));
 const areas = MAP.g.map(g => ({ t: g.t, p: toPts(g.p) }));
 
@@ -339,6 +344,14 @@ const redAsphaltMat = stdMat({ color: 0x93564f, roughness: 0.9, side: DS });
 const shingleMats = [stdMat({ map: shingleTex, side: DS }), stdMat({ map: shingleTex, color: 0x9aa0a8, side: DS }), stdMat({ map: shingleTex, color: 0x6a7480, side: DS })];
 const asphaltMat = stdMat({ map: asphaltTex, roughness: 0.82, side: DS });
 const pathMat = stdMat({ map: sidewalkTex, side: DS });
+const blockRoadTex = mkTex(64, 64, (g, w, h) => {                   // grey herringbone block paving
+  g.fillStyle = '#4a4744'; g.fillRect(0, 0, w, h);
+  const cols = ['#76716b', '#6c6762', '#7e7973', '#686460'];
+  for (let y = -16; y < h + 16; y += 8) for (let x = -16; x < w + 16; x += 16) {
+    const o = (y / 8) % 2 ? 8 : 0; g.fillStyle = cols[((x + y) / 8 & 3)]; g.fillRect(x + o + 1, y + 1, 14, 6); g.fillStyle = cols[((x + y) / 8 + 1 & 3)]; g.fillRect(x + o + 9, y + 1, 6, 14);
+  }
+});
+const blockRoadMat = stdMat({ map: blockRoadTex, roughness: 0.9, side: DS }); blockRoadTex.repeat.set(7, 7);
 const paveMat = stdMat({ map: sidewalkTex, side: DS });
 const curbMat = stdMat({ color: 0x9a9892, side: DS });
 const dashMat = stdMat({ color: 0xe8e4cf, roughness: 0.8, side: DS, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
@@ -495,7 +508,8 @@ function roadMiters(p, w) {
 for (const r of roads) {
   if (r.p.length < 2) continue;
   const redRd = !r.c && r.p.some(q => Math.hypot(q[0] + 420, q[1] + 165) < 32);        // red-surfaced estate road
-  const m = redRd ? mg('asphaltRed', redAsphaltMat, false, true) : mg(r.c ? 'path' : 'asphalt', r.c ? pathMat : asphaltMat, false, true), y = r.c ? 0.04 : ROAD_Y[r.k] || 0.05, h = r.w / 2, mt = roadMiters(r.p, r.w);
+  const cycRun = r.c && r.p.some(q => inHedgeRun(q[0], q[1]));
+  const m = cycRun ? mg('asphalt', asphaltMat, false, true) : r.id === ENTRY_RD ? mg('blockRoad', blockRoadMat, false, true) : redRd ? mg('asphaltRed', redAsphaltMat, false, true) : mg(r.c ? 'path' : 'asphalt', r.c ? pathMat : asphaltMat, false, true), y = r.c ? 0.04 : ROAD_Y[r.k] || 0.05, h = r.w / 2, mt = roadMiters(r.p, r.w);
   let s = 0;
   for (let i = 0; i < r.p.length - 1; i++) {
     const a = r.p[i], b = r.p[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -518,12 +532,12 @@ for (const r of roads) {
   const pm = mg('pave', paveMat, false, true), cm = mg('curb', curbMat, false, true), step = isTouch ? 5 : 3;
   for (const r of roads) {
     if (r.c || r.k < 4 || r.k > 7 || r.w < 5) continue;
-    const y0 = ROAD_Y[r.k] || 0.05;
+    const y0 = ROAD_Y[r.k] || 0.05, hedged = HEDGE_RD.has(r.id) || Math.hypot(r.p[0][0] - RBT.x, r.p[0][1] - RBT.z) < 30;
     for (const s of [-1, 1]) {
       let prev = null;
       walk(r.p, step, (x, z, tx, tz) => {
         const nx = tz * s, nz = -tx * s, i = [x + nx * r.w / 2, z + nz * r.w / 2], o = [x + nx * (r.w / 2 + 2), z + nz * (r.w / 2 + 2)], mid = [x + nx * (r.w / 2 + 1), z + nz * (r.w / 2 + 1)];
-        const bad = roadDist(mid[0], mid[1], r.id, true) < 0.3 || inBuilding(mid[0], mid[1]) || Math.abs(mid[0]) > LIM || Math.abs(mid[1]) > LIM;
+        const bad = (hedged && inHedgeRun(x, z)) || Math.hypot(x - RBT.x, z - RBT.z) < 40 || roadDist(mid[0], mid[1], r.id, true) < 0.3 || inBuilding(mid[0], mid[1]) || Math.abs(mid[0]) > LIM || Math.abs(mid[1]) > LIM;
         const cur = bad ? null : { i, o, nx, nz };
         if (prev && cur) {
           pm.quad([prev.i[0], 0.13, prev.i[1]], [prev.o[0], 0.13, prev.o[1]], [cur.o[0], 0.13, cur.o[1]], [cur.i[0], 0.13, cur.i[1]], [0, 0], [1, 0], [1, 1], [0, 1], UP);
@@ -728,13 +742,14 @@ for (const r of roads) {
     if (blocked(px, pz, 0.6, -0.5) || roadDist(px, pz, r.id, true) < 0.5) return; addLamp(px, pz, Math.atan2(nz, -nx));
   }, sr(0, 20));
   walk(r.p, 21, (x, z, tx, tz) => {                                    // street trees
+    if ((HEDGE_RD.has(r.id) && inHedgeRun(x, z)) || Math.hypot(x - RBT.x, z - RBT.z) < 40) return;
     for (const s of [-1, 1]) {
       if (srand() < 0.62 || treeCount >= maxTrees) continue; const px = x + tz * s * (r.w / 2 + 2.8) + sr(-1, 1), pz = z - tx * s * (r.w / 2 + 2.8) + sr(-1, 1);
       if (blocked(px, pz, 1.8, 3)) continue; addTree(px, pz, sr(0.85, 1.2));
     }
   }, sr(0, 21));
   walk(r.p, 15, (x, z, tx, tz) => {                                    // parked cars on the kerb
-    if (srand() < (isTouch ? 0.85 : 0.74)) return; const s = srand() < 0.5 ? -1 : 1, px = x + tz * s * (r.w / 2 - 1.15), pz = z - tx * s * (r.w / 2 - 1.15);
+    if (srand() < (isTouch ? 0.85 : 0.74) || (HEDGE_RD.has(r.id) && inHedgeRun(x, z)) || Math.hypot(x - RBT.x, z - RBT.z) < 45) return; const s = srand() < 0.5 ? -1 : 1, px = x + tz * s * (r.w / 2 - 1.15), pz = z - tx * s * (r.w / 2 - 1.15);
     if (inBuilding(px, pz) || roadDist(px, pz, r.id, true) < 3.5 || Math.hypot(px - spawn.x, pz - spawn.z) < 16 || Math.abs(px) > LIM - 8 || Math.abs(pz) > LIM - 8) return;
     addParked(px, pz, Math.atan2(-tx, -tz) + (srand() < 0.5 ? 0 : Math.PI));
   }, sr(5, 15));
@@ -749,6 +764,7 @@ for (const r of roads) {
       for (const sd of [-1, 1]) {
         const nx = tz * sd, nz = -tx * sd, d0 = r.w / 2 + 0.1, cx = x + nx * (d0 + depth / 2), cz = z + nz * (d0 + depth / 2), fx = x + nx * (d0 + depth), fz = z + nz * (d0 + depth);
         const shopBay = inShop(cx, cz);
+        if (r.id === ENTRY_RD || (r.id === 42 && z < -325)) continue;          // entrance road is verge and birches, not parking
         if (!shopBay && roads.indexOf(r) !== 314 && Math.hypot(cx + 436, cz + 290) < 40) continue;     // the entrance approach is open verge and hedges, no bays (as in the real park)
         if (!shopBay && (cx > -335 || !inPark(cx, cz)) || inBuilding(cx, cz) || inBuilding(fx, fz) || inBuilding(x + nx * d0, z + nz * d0) || nearWall(cx, cz, 1.0)) continue;
         if (roadDist(cx, cz, r.id) < 1.6 || roadDist(fx, fz, r.id) < 0.4) continue;
@@ -875,6 +891,163 @@ for (const r of roads) {
   if (r41) edge(r41, 1, 34, x => x < Cx + R);                                           // south side of the road in from Overstrand
   if (r311) edge({ p: r311.p, w: r311.w }, -1, 24, (x, z) => z < Cz + R);                    // east side of the road south past the bollards
   const pole = mg('pole', poleMat); pole.add(new THREE.CylinderGeometry(0.05, 0.07, 8, 6), mat4(-446, 4, -291));
+}
+// ===== Wobaston Road route: Droveway roundabout -> traffic lights -> business-park entrance =====
+{
+  const hedgeG = new THREE.IcosahedronGeometry(0.5, 1), hm2 = mg('tallHedge', stdMat({ color: 0x3d6531, roughness: 1, flatShading: true }), true, true);
+  const kerbM = mg('curb', curbMat, false, true), cyc = mg('asphalt', asphaltMat, false, true), edgeL = mg('dash', dashMat, false, true);
+  const clear = (x, z, own) => !inBuilding(x, z) && roadDist(x, z, own, true) > 3.5 && Math.abs(x) < LIM - 2 && Math.abs(z) < LIM - 2;
+  for (const id of HEDGE_RD) {
+    const r = roads[id]; if (!r) continue; const e = r.w / 2;
+    walk(r.p, 2.5, (x, z, tx, tz) => {
+      if (!inHedgeRun(x, z) || Math.hypot(x - RBT.x, z - RBT.z) < 22) return;
+      for (const sd of [-1, 1]) {
+        const nx = tz * sd, nz = -tx * sd;
+        // low kerb at the carriageway edge (verge directly behind it)
+        const north = nz < 0, kx = x + nx * (e + 0.1), kz = z + nz * (e + 0.1);
+        if (roadDist(kx, kz, r.id, true) > 1.2) kerbM.quad([kx - nx * 0.15, 0.12, kz - nz * 0.15], [kx + nx * 0.15, 0.12, kz + nz * 0.15], [kx + nx * 0.15 + tx * 2.5, 0.12, kz + nz * 0.15 + tz * 2.5], [kx - nx * 0.15 + tx * 2.5, 0.12, kz - nz * 0.15 + tz * 2.5], [0, 0], [1, 0], [1, 1], [0, 1], UP);
+        // tall continuous hedge behind the verge (and behind the cycle path on the north side)
+        let ho = e + 5.5, hx = x + nx * ho, hz = z + nz * ho;
+        if (roadDist(hx, hz, r.id) < 2.2) { ho = e + 9.5; hx = x + nx * ho; hz = z + nz * ho; }      // step back behind the cycle path
+        if (!clear(hx, hz, r.id) || roadDist(hx, hz, r.id) < 2.0 || nearWall(hx, hz, 1.2)) continue;
+        const hh = 2.6 + sr(-0.3, 0.5);
+        hm2.add(hedgeG, mat4(hx, hh * 0.5, hz, Math.atan2(-tz, tx) + sr(-0.2, 0.2), 3.6, hh * 1.15, 2.3 + sr(-0.2, 0.4)));
+        addCircle(hx, hz, 1.1);
+        // occasional verge tree (ash / rowan) standing just in front of the hedge
+        if (srand() < 0.07 && treeCount < maxTrees) { const vx = x + nx * (ho - 2.2), vz = z + nz * (ho - 2.2); if (clear(vx, vz, r.id)) addTree(vx, vz, sr(1.1, 1.5)); }
+      }
+    }, 0);
+  }
+  for (const r of roads) if (r.c && r.p.some(q => inHedgeRun(q[0], q[1]))) {      // white edge line on the shared cycle path
+    const e2 = r.w / 2 - 0.15;
+    walk(r.p, 2, (x, z, tx, tz) => { if (!inHedgeRun(x, z)) return; const lx = x + tz * e2, lz = z - tx * e2; edgeL.quad([lx - tz * 0.05, 0.05, lz + tx * 0.05], [lx + tz * 0.05, 0.05, lz - tx * 0.05], [lx + tz * 0.05 + tx * 2, 0.05, lz - tx * 0.05 + tz * 2], [lx - tz * 0.05 + tx * 2, 0.05, lz + tx * 0.05 + tz * 2], [0, 0], [1, 0], [1, 1], [0, 1], UP); }, 0);
+  }
+  for (let a2 = 0; a2 < Math.PI * 2; a2 += 0.09) {                   // hedges ringing the roundabout, broken where the arms leave
+    const hx = RBT.x + Math.cos(a2) * 29, hz = RBT.z + Math.sin(a2) * 29, hh = 2.6 + sr(-0.3, 0.5);
+    if (inBuilding(hx, hz) || roadDist(hx, hz, -1) < 5 || nearWall(hx, hz, 1.2)) continue;
+    hm2.add(hedgeG, mat4(hx, hh * 0.5, hz, -a2 + Math.PI / 2, 3.6, hh * 1.15, 2.4)); addCircle(hx, hz, 1.1);
+  }
+  // roundabout: chevron boards on the central island facing each approach, keep-left bollards on the splitter islands, blue direction signs
+  const chevM = mg('chev', stdMat({ map: mkTex(64, 16, (g, w, h) => { g.fillStyle = '#111'; g.fillRect(0, 0, w, h); g.fillStyle = '#f4f4f0'; for (let x = 4; x < w; x += 16) { g.beginPath(); g.moveTo(x + 8, 2); g.lineTo(x, 8); g.lineTo(x + 8, 14); g.lineTo(x + 12, 14); g.lineTo(x + 4, 8); g.lineTo(x + 12, 2); g.closePath(); g.fill(); } }) }));
+  const post = new THREE.CylinderGeometry(0.05, 0.05, 1, 6), pm5 = mg('pole', poleMat);
+  for (const [ax, az] of [[-1, -0.1], [-0.15, 1], [1, 0.4], [0.1, -1]]) {      // west (Wobaston Rd), north (The Droveway), east, south
+    const L = Math.hypot(ax, az), ux = ax / L, uz = az / L, bx = RBT.x + ux * 6.5, bz = RBT.z + uz * 6.5, yaw = Math.atan2(-uz, ux) + Math.PI / 2;
+    chevM.add(new THREE.BoxGeometry(2.4, 0.6, 0.05), mat4(bx, 1.1, bz, yaw)); for (const o of [-0.9, 0.9]) pm5.add(post, mat4(bx + Math.cos(yaw) * o, 0.5, bz - Math.sin(yaw) * o, 0, 1, 1, 1));
+  }
+  const keepLeft = (x, z) => {                                       // yellow-backed keep-left bollard with a blue disc
+    mg('klYellow', stdMat({ color: 0xe8b21a, roughness: 0.6 })).add(new THREE.BoxGeometry(0.42, 1.05, 0.3), mat4(x, 0.62, z));
+    mg('klBlue', stdMat({ color: 0x1f4fa8, roughness: 0.5 })).add(new THREE.CylinderGeometry(0.15, 0.15, 0.04, 12), mat4(x, 0.85, z, 0, 1, 1, 1).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)).multiply(new THREE.Matrix4().makeTranslation(0, 0.17, 0)));
+    mg('klYellow', stdMat({ color: 0xe8b21a, roughness: 0.6 })).add(new THREE.BoxGeometry(0.42, 1.05, 0.3), mat4(x, 0.62, z));
+  };
+  keepLeft(246, -409.5); keepLeft(281, -376);
+  const blueSign = (x, z, yaw, w2) => { mg('dirSign', stdMat({ color: 0x1f4fa8, roughness: 0.6 })).add(new THREE.BoxGeometry(w2, 1.3, 0.06), mat4(x, 2.3, z, yaw)); for (const o of [-w2 * 0.35, w2 * 0.35]) pm5.add(post, mat4(x + Math.cos(yaw) * o, 0.85, z - Math.sin(yaw) * o, 0, 1.4, 1.7, 1.4)); };
+  blueSign(225, -419, 0, 2.6); blueSign(272, -356, Math.PI / 2 + 0.2, 2.2); blueSign(-300, -401, 0, 2.6);
+  // side-road mouths along Wobaston Road: black/yellow marker posts and a give-way triangle; blue cycle-path discs along the path
+  {
+    const ybM = mg('yb', stdMat({ map: mkTex(8, 32, (g, w, h) => { for (let y = 0; y < h; y += 8) { g.fillStyle = (y / 8) % 2 ? '#141414' : '#f0c020'; g.fillRect(0, y, w, 8); } }) }));
+    const ybG = new THREE.CylinderGeometry(0.09, 0.09, 1.0, 8), gwM = mg('giveway', stdMat({ map: mkTex(32, 32, (g) => { g.fillStyle = '#d0202a'; g.beginPath(); g.moveTo(2, 2); g.lineTo(30, 2); g.lineTo(16, 29); g.closePath(); g.fill(); g.fillStyle = '#fff'; g.beginPath(); g.moveTo(8, 5.5); g.lineTo(24, 5.5); g.lineTo(16, 21); g.closePath(); g.fill(); }), transparent: true, alphaTest: 0.5, side: DS }));
+    const main = [roads[145], roads[153]].filter(Boolean);
+    for (const r of roads) {
+      if (r.c || HEDGE_RD.has(r.id) || r.k > 7) continue;
+      for (const end of [0, r.p.length - 1]) {
+        const q = r.p[end]; if (!inHedgeRun(q[0], q[1]) || Math.hypot(q[0] - RBT.x, q[1] - RBT.z) < 35 || Math.hypot(q[0] + 358, q[1] + 392) < 12) continue;
+        if (!main.some(m => roadDist(q[0], q[1], -1, true) < 1 && m)) continue;
+        const nb = r.p[end === 0 ? 1 : r.p.length - 2], L = Math.hypot(nb[0] - q[0], nb[1] - q[1]) || 1, tx = (nb[0] - q[0]) / L, tz = (nb[1] - q[1]) / L, e = r.w / 2 + 0.9;
+        for (const sd of [-1, 1]) { const px = q[0] + tx * 7 + tz * sd * e, pz = q[1] + tz * 7 - tx * sd * e; if (roadDist(px, pz, r.id, true) > 1) { ybM.add(ybG, mat4(px, 0.5, pz)); addCircle(px, pz, 0.15); } }
+        const gx = q[0] + tx * 10 + tz * (r.w / 2 + 1.2), gz = q[1] + tz * 10 - tx * (r.w / 2 + 1.2);
+        if (roadDist(gx, gz, r.id, true) > 1) { pm5.add(post, mat4(gx, 1.1, gz, 0, 1, 2.2, 1)); gwM.add(new THREE.PlaneGeometry(0.75, 0.75), mat4(gx, 2.4, gz, Math.atan2(tx, tz) + Math.PI)); }
+      }
+    }
+    const cycM = mg('cycSign', stdMat({ map: mkTex(32, 32, (g) => { g.fillStyle = '#1f4fa8'; g.beginPath(); g.arc(16, 16, 15, 0, 7); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.arc(10, 20, 4, 0, 7); g.stroke(); g.beginPath(); g.arc(22, 20, 4, 0, 7); g.stroke(); g.beginPath(); g.moveTo(10, 20); g.lineTo(15, 12); g.lineTo(22, 20); g.moveTo(13, 12); g.lineTo(19, 12); g.stroke(); }), transparent: true, alphaTest: 0.5, side: DS }));
+    for (const r of roads) if (r.c && r.p.some(q => inHedgeRun(q[0], q[1]))) walk(r.p, 140, (x, z, tx, tz) => {
+      if (!inHedgeRun(x, z)) return; const px = x + tz * (r.w / 2 + 0.5), pz = z - tx * (r.w / 2 + 0.5); if (inBuilding(px, pz)) return;
+      pm5.add(post, mat4(px, 1.1, pz, 0, 1, 2.2, 1)); cycM.add(new THREE.PlaneGeometry(0.6, 0.6), mat4(px, 2.35, pz, Math.atan2(tx, tz)));
+    }, 40);
+  }
+  // green mesh security fence and white gate behind the hedge on the south side near the roundabout (warehouse plot)
+  {
+    const fm2 = mg('meshFence', stdMat({ map: mkTex(32, 32, (g) => { g.clearRect(0, 0, 32, 32); g.strokeStyle = '#2e6b3e'; g.lineWidth = 2; for (let x = 0; x <= 32; x += 8) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 32); g.stroke(); } g.lineWidth = 1; for (let y = 0; y <= 32; y += 8) { g.beginPath(); g.moveTo(0, y); g.lineTo(32, y); g.stroke(); } }), transparent: true, alphaTest: 0.4, side: DS }), false, false);
+    const r = roads[145]; if (r) walk(r.p, 2.5, (x, z, tx, tz) => {
+      if (x < 150 || x > 232) return; const nx = -tz, nz = tx, fx = x + nx * (r.w / 2 + 11), fz = z + nz * (r.w / 2 + 11);
+      if (inBuilding(fx, fz) || roadDist(fx, fz, -1) < 1.5) return;
+      const yaw = Math.atan2(-tz, tx), gate = Math.abs(x - 196) < 2;
+      if (gate) { mg('gateW', stdMat({ color: 0xe8e8e4, roughness: 0.6 })).add(new THREE.BoxGeometry(2.6, 1.8, 0.08), mat4(fx, 0.9, fz, yaw)); return; }
+      fm2.add(new THREE.PlaneGeometry(2.5, 2.4).translate(0, 1.2, 0), mat4(fx, 0, fz, yaw)); pm5.add(post, mat4(fx, 1.2, fz, 0, 1, 2.4, 1)); addCircle(fx, fz, 0.3);
+    }, 0);
+  }
+  // traffic-light junction at the business-park entrance: signal heads on black poles, a central island with keep-left bollard, stop lines
+  const sigPole = new THREE.CylinderGeometry(0.07, 0.07, 3.2, 8), sigHead = new THREE.BoxGeometry(0.32, 0.95, 0.28), lens = new THREE.CylinderGeometry(0.1, 0.1, 0.05, 10);
+  const signal = (x, z, face) => {
+    mg('sigPole', stdMat({ color: 0x1b1d1f, roughness: 0.5 })).add(sigPole, mat4(x, 1.6, z)); mg('sigHead', stdMat({ color: 0x15171a, roughness: 0.5 })).add(sigHead, mat4(x, 3.0, z, face));
+    const fx = Math.sin(face), fz = Math.cos(face);
+    mg('sigGreen', stdMat({ color: 0x29e05a, emissive: 0x1fb848, emissiveIntensity: 1.2 }), false, false).add(lens, mat4(x + fx * 0.16, 2.7, z + fz * 0.16, face).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)));
+    for (const y of [3.0, 3.3]) mg('sigOff', stdMat({ color: 0x2a2a2a, roughness: 0.4 }), false, false).add(lens, mat4(x + fx * 0.16, y, z + fz * 0.16, face).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)));
+    addCircle(x, z, 0.25);
+  };
+  const J = { x: -358, z: -392 }, wr = roads[145] ? roads[145].w / 2 : 4;
+  signal(J.x + 14, J.z + wr + 1.2, 0); signal(J.x - 12, J.z - wr - 1.2, Math.PI); signal(J.x + 5, J.z - wr - 1.2, Math.PI / 2); signal(J.x - 5, J.z - wr - 3, -Math.PI / 2);
+  signal(J.x - 14, J.z + wr + 1.2, 0); signal(J.x + 8, J.z + wr + 1.2, Math.PI / 2);
+  {                                                                  // central island on Wobaston Road east of the junction (right-turn layout)
+    const ix = J.x + 22, iz = J.z + 0.1, isl = mg('curb', curbMat, false, true);
+    isl.add(new THREE.BoxGeometry(9, 0.14, 1.3), mat4(ix, 0.07, iz)); addCircle(ix - 3, iz, 0.6); addCircle(ix, iz, 0.6); addCircle(ix + 3, iz, 0.6);
+    keepLeft(ix - 4.2, iz); signal(ix + 3.8, iz, 0);
+    const sl = mg('dash', dashMat, false, true), y = 0.07;
+    sl.quad([J.x + 12.5, y, J.z + 0.8], [J.x + 12.9, y, J.z + 0.8], [J.x + 12.9, y, J.z + wr], [J.x + 12.5, y, J.z + wr], [0, 0], [1, 0], [1, 1], [0, 1], UP);
+    for (let k = 0; k < 6; k++) { const hx2 = J.x + 28 + k * 1.6; sl.quad([hx2, y, J.z - 0.6], [hx2 + 0.25, y, J.z - 0.6], [hx2 + 1.25, y, J.z + 0.6], [hx2 + 1.0, y, J.z + 0.6], [0, 0], [1, 0], [1, 1], [0, 1], UP); }   // hatched approach
+  }
+  // black railings on a low brick plinth along the south side, west of the junction
+  {
+    const rail = mg('rail', stdMat({ color: 0x141618, roughness: 0.5, metalness: 0.4 })), br2 = mg('brickWall', brickMat), z0 = J.z + wr + 6;
+    for (let x = J.x - 4; x > J.x - 60; x -= 2.4) {
+      if (!clear(x, z0, 145)) continue;
+      br2.add(new THREE.BoxGeometry(2.4, 0.45, 0.35), mat4(x - 1.2, 0.22, z0)); rail.add(new THREE.BoxGeometry(2.4, 0.05, 0.05), mat4(x - 1.2, 1.85, z0)); rail.add(new THREE.BoxGeometry(2.4, 0.05, 0.05), mat4(x - 1.2, 0.6, z0));
+      for (let k = 0; k < 16; k++) rail.add(new THREE.BoxGeometry(0.025, 1.5, 0.025), mat4(x - k * 0.15, 1.2, z0));
+      addCircle(x - 1.2, z0, 0.4);
+    }
+    br2.add(new THREE.BoxGeometry(0.6, 2.2, 0.6), mat4(J.x - 4, 1.1, z0));
+  }
+  // low brick name wall at the park entrance (board left blank), 10 mph signs, birch avenue and double yellows along the block-paved entrance road
+  {
+    const bm3 = mg('brickWall', brickMat), wx = J.x - 9, wz = J.z - wr - 5;
+    bm3.add(new THREE.BoxGeometry(5, 0.9, 0.4), mat4(wx, 0.45, wz, 0.3)); mg('signw', stdMat({ color: 0xf2f2ee, roughness: 0.6 })).add(new THREE.BoxGeometry(3.6, 0.5, 0.05), mat4(wx + 0.07, 0.6, wz + 0.22, 0.3));
+    const er = roads[ENTRY_RD], ov = roads[42];
+    const tenSign = (x, z) => { pm5.add(post, mat4(x, 1.0, z, 0, 1, 2, 1)); mg('sign10', stdMat({ map: mkTex(32, 32, (g) => { g.fillStyle = '#fff'; g.beginPath(); g.arc(16, 16, 15, 0, 7); g.fill(); g.strokeStyle = '#d0202a'; g.lineWidth = 4; g.beginPath(); g.arc(16, 16, 13, 0, 7); g.stroke(); g.fillStyle = '#111'; g.font = 'bold 13px sans-serif'; g.textAlign = 'center'; g.fillText('10', 16, 21); }), transparent: true, alphaTest: 0.5 })).add(new THREE.PlaneGeometry(0.6, 0.6), mat4(x, 2.15, z, 0)); };
+    if (er) {
+      const yel = mg('yellow', stdMat({ color: 0xd9b230, roughness: 0.8 }), false, true), tm = mg('birchTrunk', stdMat({ color: 0xe6e3dc, roughness: 0.9 })), lm3 = mg('birchLeaf', stdMat({ color: 0x78a24a, roughness: 1, flatShading: true }));
+      const trunkG = new THREE.CylinderGeometry(0.12, 0.2, 9, 6), leafG = new THREE.IcosahedronGeometry(1, 1), e = er.w / 2;
+      for (const rr of [er, ov]) if (rr) walk(rr.p, 1.6, (x, z, tx, tz) => {
+        if (z > -340 || z < J.z + 2 && rr === er && z < J.z + 6) {} 
+        if (z < -392 + 3 || z > -320) return;
+        for (const sd of [-1, 1]) { const nx = tz * sd, nz = -tx * sd; for (const m of [e - 0.3, e - 0.5]) { const x0 = x + nx * m, z0 = z + nz * m; yel.quad([x0 - nx * 0.05, 0.07, z0 - nz * 0.05], [x0 + nx * 0.05, 0.07, z0 + nz * 0.05], [x0 + nx * 0.05 + tx * 1.6, 0.07, z0 + nz * 0.05 + tz * 1.6], [x0 - nx * 0.05 + tx * 1.6, 0.07, z0 - nz * 0.05 + tz * 1.6], [0, 0], [1, 0], [1, 1], [0, 1], UP); } }
+      }, 0);
+      for (const rr of [er, ov]) if (rr) walk(rr.p, 7, (x, z, tx, tz) => {
+        if (z < J.z + 6 || z > -322) return;
+        for (const sd of [-1, 1]) {
+          const bx = x + tz * sd * (e + 3.2) + sr(-0.6, 0.6), bz = z - tx * sd * (e + 3.2) + sr(-0.6, 0.6);
+          if (inBuilding(bx, bz) || roadDist(bx, bz, -1, true) < 2.5 || nearWall(bx, bz, 1.5)) continue;
+          tm.add(trunkG, mat4(bx, 4.5, bz)); const sc = sr(1.2, 1.6); addCircle(bx, bz, 0.3);
+          for (const [ox, oy, oz, rad] of [[0, 6.4, 0, 1.9], [0.9, 5.2, 0.4, 1.5], [-0.8, 4.4, -0.5, 1.4], [0.2, 3.6, 0.9, 1.1]]) lm3.add(leafG, mat4(bx + ox, oy * sc, bz + oz, 0, rad, rad * 1.35, rad));
+        }
+      }, 3);
+      const p0 = er.p[er.p.length - 1], p1 = er.p[er.p.length - 2], L = Math.hypot(p0[0] - p1[0], p0[1] - p1[1]), tx = (p1[0] - p0[0]) / L, tz = (p1[1] - p0[1]) / L;
+      {                                                              // triangular A-frame sign stands with yellow sandbags on the right-hand verge
+        const fr = mg('aframe', stdMat({ color: 0x6a4630, roughness: 0.8 })), tri = mg('aSign', stdMat({ color: 0xdedbd2, roughness: 0.7 })), bag = mg('sandbag', stdMat({ color: 0xd8b02c, roughness: 0.9 }));
+        for (const k of [16, 21]) {
+          const ax = p0[0] + tx * k - tz * (e + 2.2), az = p0[1] + tz * k + tx * (e + 2.2), yaw = Math.atan2(tx, tz);
+          for (const o of [-0.45, 0.45]) fr.add(new THREE.BoxGeometry(0.05, 1.5, 0.05), mat4(ax + Math.cos(yaw) * o, 0.75, az - Math.sin(yaw) * o, yaw, 1, 1, 1).multiply(new THREE.Matrix4().makeRotationX(0.25)));
+          tri.add(new THREE.ConeGeometry(0.55, 0.9, 3, 1), mat4(ax, 1.7, az, yaw + Math.PI, 1, 1, 0.12)); bag.add(new THREE.BoxGeometry(0.45, 0.2, 0.3), mat4(ax + 0.3, 0.1, az + 0.3)); addCircle(ax, az, 0.4);
+        }
+      }
+      {                                                              // park directory board (oval cap, two posts) at the Overstrand junction
+        const bx = -353.5, bz = -318;
+        for (const o of [-0.9, 0.9]) pm5.add(post, mat4(bx + o, 1.0, bz, 0, 1.4, 2, 1.4));
+        mg('signw', stdMat({ color: 0xf2f2ee, roughness: 0.6 })).add(new THREE.BoxGeometry(2.2, 1.1, 0.08), mat4(bx, 1.6, bz, Math.PI / 2));
+        mg('signw', stdMat({ color: 0xf2f2ee, roughness: 0.6 })).add(new THREE.CylinderGeometry(1.1, 1.1, 0.08, 16, 1, false, 0, Math.PI), mat4(bx, 2.15, bz, Math.PI / 2).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)).multiply(new THREE.Matrix4().makeScale(1, 1, 0.3)));
+        addCircle(bx, bz, 0.5);
+      }
+      for (const sd of [-1, 1]) tenSign(p0[0] + tx * 9 + tz * sd * (e + 1.0), p0[1] + tz * 9 - tx * sd * (e + 1.0));
+    }
+  }
 }
 // globe lamps (three-globe heads) along the business-park aisles
 {
