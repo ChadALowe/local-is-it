@@ -600,6 +600,17 @@ for (const b of builds) {
     const sg = b.area >= 0 ? 1 : -1; let best = null;
     for (let i = 0; i < n; i++) {
       const a = b.p[i], c = b.p[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 9) continue;
+      const ox = sg * (c[1] - a[1]) / L, oz = -sg * (c[0] - a[0]) / L, tx = (c[0] - a[0]) / L, tz = (c[1] - a[1]) / L;
+      for (const r of roads) {                                           // a road that dead-ends at this wall: the entrance faces it
+        if (r.c || r.k !== 8) continue;
+        for (const e of [r.p[0], r.p[r.p.length - 1]]) {
+          const u = (e[0] - a[0]) * tx + (e[1] - a[1]) * tz, dn = (e[0] - a[0]) * ox + (e[1] - a[1]) * oz;
+          if (u > 0.5 && u < L - 0.5 && dn > -1 && dn < 16 && (!best || dn < best.d)) { const uc = Math.max(2.6, Math.min(L - 2.6, u)); best = { a, c, L, ox, oz, mx: a[0] + tx * uc, mz: a[1] + tz * uc, d: dn }; }
+        }
+      }
+    }
+    if (!best) for (let i = 0; i < n; i++) {
+      const a = b.p[i], c = b.p[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 9) continue;
       const ox = sg * (c[1] - a[1]) / L, oz = -sg * (c[0] - a[0]) / L, mx = (a[0] + c[0]) / 2, mz = (a[1] + c[1]) / 2, d = roadDist(mx + ox * 7, mz + oz * 7, -1, true);
       if (!best || d < best.d) best = { a, c, L, ox, oz, mx, mz, d };
     }
