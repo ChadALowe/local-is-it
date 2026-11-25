@@ -52,7 +52,7 @@
   #joyKnob{position:absolute;left:50%;top:50%;width:46%;height:46%;margin:-23% 0 0 -23%;border-radius:50%;background:rgba(255,255,255,.55);pointer-events:none}
   #lookPad{position:fixed;right:0;top:0;width:55%;height:100%;touch-action:none;z-index:1;display:none} body.foot #lookPad{display:block}
   body.foot #tGas, body.foot #tBrake, body.foot #tHand, body.foot #speed, body.foot #gear, body.foot #rpm{display:none}
-  #tAct{display:none;width:calc(var(--b)*1.25);height:calc(var(--b)*1.25);right:calc(20px + env(safe-area-inset-right));bottom:calc(30px + env(safe-area-inset-bottom));background:rgba(31,92,58,.7);font-size:13px;z-index:5} #tAct.show{display:flex} #tAct2{display:none;width:calc(var(--b)*1.25);height:calc(var(--b)*1.25);right:calc(20px + env(safe-area-inset-right));bottom:calc(46px + var(--b)*1.25 + env(safe-area-inset-bottom));background:rgba(110,70,30,.75);font-size:13px;z-index:5} #tAct2.show{display:flex}
+  #tAct{display:none;width:calc(var(--b)*1.25);height:calc(var(--b)*1.25);right:calc(20px + env(safe-area-inset-right));bottom:calc(30px + env(safe-area-inset-bottom));background:rgba(31,92,58,.7);font-size:13px;z-index:5} #tAct.show{display:flex} .mpb{font:600 12px system-ui;color:#fff;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.25);border-radius:7px;padding:4px 8px;cursor:pointer;pointer-events:auto} #lbPanel table{width:100%;border-collapse:collapse} #lbPanel td{padding:2px 6px} #lbPanel .me{color:#7dff9a;font-weight:700} #lbPanel h3{margin:0 0 8px;font-size:17px} #tAct2{display:none;width:calc(var(--b)*1.25);height:calc(var(--b)*1.25);right:calc(20px + env(safe-area-inset-right));bottom:calc(46px + var(--b)*1.25 + env(safe-area-inset-bottom));background:rgba(110,70,30,.75);font-size:13px;z-index:5} #tAct2.show{display:flex}
   #tJump{display:none;right:calc(30px + var(--b)*1.25 + env(safe-area-inset-right));bottom:calc(20px + env(safe-area-inset-bottom))} body.foot #tJump{display:flex}
   #xhair{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:#fff;box-shadow:0 0 0 1.5px rgba(0,0,0,.55);pointer-events:none;z-index:6;display:none} body.foot #xhair{display:block} #xhair.on{background:#ffd23a;width:10px;height:10px;margin:-5px 0 0 -5px}
   #money{position:fixed;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top));font:800 20px/1.2 'Segoe UI',system-ui,Arial,sans-serif;color:#7dffa0;background:rgba(0,0,0,.55);padding:4px 14px;border-radius:10px;display:none;z-index:7;letter-spacing:.5px} body.touch #money{top:calc(62px + env(safe-area-inset-top))} #money.show{display:block}
@@ -89,7 +89,10 @@
 <canvas class="hud" id="mm" width="150" height="150"></canvas>
 <div id="xhair"></div><div id="aimLbl" style="position:fixed;left:50%;top:calc(50% + 14px);transform:translateX(-50%);font:700 13px system-ui,sans-serif;color:#fff;text-shadow:0 1px 3px #000;pointer-events:none;z-index:6"></div><div id="bpanel"></div><div id="toast" style="position:fixed;left:50%;top:38%;transform:translateX(-50%);max-width:80%;text-align:center;font:700 15px/1.3 'Segoe UI',system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.6);padding:8px 14px;border-radius:10px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:8"></div><div class="hud" id="money"></div><div class="hud" id="basket"></div>
 <div id="fade" style="position:fixed;inset:0;background:#000;opacity:0;transition:opacity .25s;pointer-events:none;z-index:50"></div>
-<div class="hud" id="online" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 174px);left:10px;font:600 12px/1.3 system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.45);padding:3px 8px;border-radius:6px;z-index:5;cursor:pointer;pointer-events:auto" title="Tap to change your name">⚪ offline</div><div class="hud" id="coords" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 150px);left:10px;font:600 12px/1.3 monospace;color:#fff;background:rgba(0,0,0,.45);padding:3px 7px;border-radius:6px;pointer-events:none;z-index:5">x 0 z 0</div>
+<div class="hud" id="online" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 174px);left:10px;font:600 12px/1.3 system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.45);padding:3px 8px;border-radius:6px;z-index:5;cursor:pointer;pointer-events:auto" title="Tap to change your name">⚪ offline</div><div id="mpBtns" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 200px);left:10px;display:flex;gap:6px;z-index:6"><button id="chatBtn" class="mpb">💬 Chat</button><button id="lbBtn" class="mpb">🏆 Top</button></div>
+<div id="chatBox" style="display:none;position:fixed;left:50%;transform:translateX(-50%);top:28%;z-index:30;background:rgba(0,0,0,.7);padding:8px;border-radius:12px;gap:6px"><input id="chatIn" maxlength="140" placeholder="Say something… (Enter to send)" style="width:min(70vw,420px);font:16px system-ui;padding:8px 10px;border-radius:8px;border:0"><button id="chatSend" class="mpb" style="font-size:15px">Send</button></div>
+<div id="lbPanel" style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;background:rgba(14,18,24,.92);color:#fff;padding:16px 18px;border-radius:14px;font:14px/1.45 system-ui;min-width:min(86vw,520px);box-shadow:0 10px 40px rgba(0,0,0,.5)"></div>
+<div class="hud" id="coords" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 150px);left:10px;font:600 12px/1.3 monospace;color:#fff;background:rgba(0,0,0,.45);padding:3px 7px;border-radius:6px;pointer-events:none;z-index:5">x 0 z 0</div>
 <div class="hud" id="mmcap">PENDEFORD<br>WOLVERHAMPTON<small>Map data &copy; OpenStreetMap contributors</small></div>
 <div class="hud" id="br">
   <div id="speed"><span id="spd">0</span><small>MPH</small></div>
@@ -2599,7 +2602,7 @@ function cycleColor() { paintIdx = (paintIdx + 1) % paintChoices.length; player.
 addEventListener('keydown', e => {
   if (keyMap[e.code]) { keys[keyMap[e.code]] = 1; e.preventDefault(); }
   if (e.code === 'Enter' && state === 'menu') start();
-  if (state === 'play') { if (e.code === 'KeyR') resetCar(); if (e.code === 'KeyC') cycleColor(); if (e.code === 'KeyB') switchCar(); if (e.code === 'KeyF') toggleFoot(); if (e.code === 'KeyE') doAction(); if (e.code === 'KeyQ') doAction2(); if (e.code === 'Space' && W.on && !e.repeat) jump(); if (e.code === 'KeyV') camMode = (camMode + 1) % 2; if (e.code === 'KeyN') { document.exitPointerLock && document.exitPointerLock(); keys.up = keys.down = keys.left = keys.right = 0; MP.rename(); } }
+  if (state === 'play') { if (e.code === 'KeyR') resetCar(); if (e.code === 'KeyC') cycleColor(); if (e.code === 'KeyB') switchCar(); if (e.code === 'KeyF') toggleFoot(); if (e.code === 'KeyE') doAction(); if (e.code === 'KeyQ') doAction2(); if (e.code === 'Space' && W.on && !e.repeat) jump(); if (e.code === 'KeyV') camMode = (camMode + 1) % 2; if (e.code === 'KeyT') { e.preventDefault(); openChat(); return; } if (e.code === 'KeyN') { document.exitPointerLock && document.exitPointerLock(); keys.up = keys.down = keys.left = keys.right = 0; MP.rename(); } }
 });
 addEventListener('keyup', e => { if (keyMap[e.code]) keys[keyMap[e.code]] = 0; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = 0; });
@@ -3319,13 +3322,14 @@ const MP = (() => {
     if (!/^https?:$/.test(location.protocol) || window.__noMP) return;
     let ws; try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'); } catch (_) { return retry(); }
     o.ws = ws;
-    ws.onopen = () => { o.tries = 0; hud(); };
+    ws.onopen = () => { o.tries = 0; lbSent = ''; hud(); setTimeout(sendScore, 1500); };
     ws.onmessage = e => { let d; try { d = JSON.parse(e.data); } catch (_) { return; }
       if (d.t === 'hi') { o.id = d.id; for (const id of [...o.peers.keys()]) dropPeer(id, true); for (const s of d.players) if (s.id !== o.id) onState(s); if (d.world) onWorld(d.world); if (d.npc) NPC.onNet(Object.assign({ a: 'state' }, d.npc), null); if (d.wc) WC.load(d.wc); hud(); }
       else if (d.t === 'ev') onEv(d);
       else if (d.t === 's' && d.id !== o.id) onState(d);
       else if (d.t === 'bye') dropPeer(d.id);
-      else if (d.t === 'chat') toast('💬 ' + d.n + ': ' + d.m); };
+      else if (d.t === 'chat') onChat(d);
+      else if (d.t === 'lb') o.onLB(d); };
     ws.onclose = () => { o.ws = null; for (const id of [...o.peers.keys()]) dropPeer(id, true); o.online = 1; hud(); retry(); };
     ws.onerror = () => { try { ws.close(); } catch (_) {} };
   }
@@ -3342,6 +3346,26 @@ const MP = (() => {
   // parked cars: find by key (a phone has fewer parked cars than a PC, so make one if it's missing here)
   const carByKey = (k, x, z, yaw, col) => { let c = PK.get(k); if (!c && x != null) { c = { x, z, yaw, color: col ?? 0x888888, ims: [], i: -1, key: k, phantom: true }; PK.set(k, c); parked.push(c); wreckOf(c); } return c; };
   o.npcEv = e => send(Object.assign({ t: 'ev', e: 'npc' }, e));
+  // ---- chat: bubbles over heads
+  const bubble = txt => { const c = document.createElement('canvas'); c.width = 512; c.height = 128; const g = c.getContext('2d'); g.font = '600 30px system-ui,sans-serif';
+    const words = txt.split(' '), lines = ['']; for (const w of words) { const t = (lines[lines.length - 1] + ' ' + w).trim(); if (g.measureText(t).width > 470 && lines[lines.length - 1]) lines.push(w); else lines[lines.length - 1] = t; } lines.length = Math.min(lines.length, 3);
+    const W2 = Math.min(500, Math.max(...lines.map(l => g.measureText(l).width)) + 30), H2 = lines.length * 34 + 18; g.fillStyle = 'rgba(255,255,255,.95)'; g.beginPath(); g.roundRect ? g.roundRect(256 - W2 / 2, 4, W2, H2, 16) : g.rect(256 - W2 / 2, 4, W2, H2); g.fill();
+    g.beginPath(); g.moveTo(244, H2 + 3); g.lineTo(256, H2 + 18); g.lineTo(268, H2 + 3); g.fill(); g.fillStyle = '#111'; g.textAlign = 'center'; lines.forEach((l, i) => g.fillText(l, 256, 38 + i * 34));
+    const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false, transparent: true })); s.scale.set(2.6, 0.65, 1); s.renderOrder = 6; return s; };
+  o.say = m => { m = (m || '').trim().slice(0, 140); if (!m) return; if (o.ws && o.ws.readyState === 1) send({ t: 'chat', n: name, m }); else toast('💬 ' + name + ': ' + m + ' (offline)'); };
+  function onChat(d) { toast('💬 ' + d.n + ': ' + d.m); const P = o.peers.get(d.id); if (P) { if (P.bub) o.g.remove(P.bub); P.bub = bubble(d.m); P.bubT = 7; o.g.add(P.bub); } }
+  // ---- leaderboard: best money and best drift, kept on the server
+  o.lb = null; let lbSent = '';
+  function sendScore() { const s = JSON.stringify([Math.round(money * 100) / 100, best, name]); if (s === lbSent || !(o.ws && o.ws.readyState === 1)) return; lbSent = s; send({ t: 'score', n: name, money: Math.round(money * 100) / 100, drift: best }); }
+  setInterval(sendScore, 8000);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  function renderLB() { const p = $('lbPanel'), L = o.lb, row = (r, i, v) => `<tr class="${r.n === name ? 'me' : ''}"><td>${i + 1}.</td><td>${esc(r.n)}</td><td style="text-align:right">${v}</td></tr>`;
+    p.innerHTML = `<h3>🏆 Leaderboard <span style="float:right;opacity:.6;font-size:13px">tap to close</span></h3>` + (!L ? '<div style="opacity:.7">Connecting…</div>' :
+      `<div style="display:flex;gap:18px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>💷 Most money</b><table>${(L.money || []).map((r, i) => row(r, i, '£' + (+r.money).toFixed(2))).join('') || '<tr><td style="opacity:.6">No one yet</td></tr>'}</table></div>
+       <div style="flex:1;min-width:200px"><b>🏎️ Best drift</b><table>${(L.drift || []).map((r, i) => row(r, i, (+r.drift).toLocaleString())).join('') || '<tr><td style="opacity:.6">No one yet</td></tr>'}</table></div></div>`); }
+  o.showLB = () => { const p = $('lbPanel'); if (p.style.display === 'block') { p.style.display = 'none'; return; } sendScore(); renderLB(); p.style.display = 'block'; };
+  o.onLB = d => { o.lb = d; if ($('lbPanel').style.display === 'block') renderLB(); };
+  o.stepBubbles = dt => { for (const P of o.peers.values()) if (P.bub) { P.bubT -= dt; const hd = P.lab ? P.lab.position : null; if (hd) P.bub.position.set(hd.x, hd.y + 0.55, hd.z); P.bub.visible = !!(P.lab && P.lab.visible); if (P.bubT <= 0) { o.g.remove(P.bub); P.bub = null; } } };
   o.wcEv = e => send(Object.assign({ t: 'ev', e: 'wc' }, e));
   o.tuckEv = e => send(Object.assign({ t: 'ev', e: 'tuck' }, e));
   o.parkedDent = (c, wx, wz, inx, inz, s) => { const [lx, lz] = toL(c.yaw, wx - c.x, wz - c.z), [dx, dz] = toL(c.yaw, inx, inz);
@@ -3388,6 +3412,7 @@ const MP = (() => {
       const q = P.I[n]; q.x = x + lx * c + lz * s; q.y = y + ly; q.z = z - lx * s + lz * c; }
   }
   o.step = dt => {
+    o.stepBubbles(dt);
     if (o.ws && o.ws.readyState === 1) sendParked(dt);
     o.sendT -= dt; if (o.ws && o.ws.readyState === 1 && o.sendT <= 0 && state === 'play') { o.sendT = W.fly ? 0.08 : 0.1; try { o.ws.send(JSON.stringify(snapshot())); } catch (_) {} }
     const now = performance.now(), myIn = INSIDE ? DOORS.findIndex(q => q.g === INSIDE) : -1, k = Math.min(1, dt * 10);
@@ -3430,6 +3455,16 @@ const MP = (() => {
   return o;
 })();
 setTimeout(() => MP.connect(), 300); MP.hud();
+for (const id of ['mpBtns', 'chatBox', 'lbPanel']) { const e = $(id); for (const ev of ['touchstart', 'touchend', 'mousedown', 'pointerdown']) e.addEventListener(ev, x => x.stopPropagation(), { passive: true }); }
+const openChat = () => { document.exitPointerLock && document.exitPointerLock(); for (const k in keys) keys[k] = 0; $('chatBox').style.display = 'flex'; setTimeout(() => $('chatIn').focus(), 30); };
+const closeChat = () => { $('chatBox').style.display = 'none'; $('chatIn').blur(); };
+const sendChat = () => { MP.say($('chatIn').value); $('chatIn').value = ''; closeChat(); };
+$('chatBtn').addEventListener('click', e => { e.stopPropagation(); $('chatBox').style.display === 'flex' ? closeChat() : openChat(); });
+$('chatSend').addEventListener('click', e => { e.stopPropagation(); sendChat(); });
+$('chatIn').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') sendChat(); else if (e.key === 'Escape') closeChat(); });
+$('chatIn').addEventListener('keyup', e => e.stopPropagation());
+$('lbBtn').addEventListener('click', e => { e.stopPropagation(); document.exitPointerLock && document.exitPointerLock(); MP.showLB(); });
+$('lbPanel').addEventListener('click', e => { e.stopPropagation(); $('lbPanel').style.display = 'none'; });
 $('online').addEventListener('click', e => { e.stopPropagation(); MP.rename(); }); $('online').addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
 /* ================= camera / HUD ================= */
 let camA = player.h;
