@@ -710,7 +710,7 @@ function insetRoof(b, wallH, o) {
   return true;
 }
 function buildLInterior(b, door, wallH) {
-  const CE = 4.6, tri = triangulate(b.p), carpet = mg('carpet', lit({ map: mkTex(64, 64, (g, w, h) => { g.fillStyle = '#5d6671'; g.fillRect(0, 0, w, h); for (let i = 0; i < 700; i++) { g.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,.12)' : 'rgba(255,255,255,.06)'; g.fillRect(Math.random() * w, Math.random() * h, 1, 1); } g.strokeStyle = 'rgba(0,0,0,.18)'; g.strokeRect(0, 0, w, h); }), color: 0xffffff }, 0.42), false, true);
+  const CE = 2.75, tri = triangulate(b.p), carpet = mg('carpet', lit({ map: mkTex(64, 64, (g, w, h) => { g.fillStyle = '#5d6671'; g.fillRect(0, 0, w, h); for (let i = 0; i < 700; i++) { g.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,.12)' : 'rgba(255,255,255,.06)'; g.fillRect(Math.random() * w, Math.random() * h, 1, 1); } g.strokeStyle = 'rgba(0,0,0,.18)'; g.strokeRect(0, 0, w, h); }), color: 0xffffff }, 0.42), false, true);
   const ceil = mg('ceilTiles', lit({ map: mkTex(64, 64, (g, w, h) => { g.fillStyle = '#f1efe9'; g.fillRect(0, 0, w, h); g.fillStyle = '#c9c6bd'; g.fillRect(0, 0, w, 2); g.fillRect(0, 0, 2, h); }), color: 0xffffff }, 0.4), false, false);
   for (const [i, j, k] of tri) { const A = b.p[i], B = b.p[j], C = b.p[k];
     carpet.tri([A[0], 0.07, A[1]], [B[0], 0.07, B[1]], [C[0], 0.07, C[1]], [A[0] / 2.4, A[1] / 2.4], [B[0] / 2.4, B[1] / 2.4], [C[0] / 2.4, C[1] / 2.4], UP);
@@ -728,21 +728,32 @@ function buildLInterior(b, door, wallH) {
   const wood = mg('deskWood', lit({ color: 0xb08a5c }, 0.35)), white = mg('deskWhite', lit({ color: 0xe9e9e4 }, 0.45)), dark = mg('chair', lit({ color: 0x2b2f36 }, 0.3));
   const porc = mg('porcelain', lit({ color: 0xf7f7f4 }, 0.5)), steel = mg('steel', lit({ color: 0xa9adb1 }, 0.4)), green = mg('plant', lit({ color: 0x3d7a3a }, 0.35), true, false), pot = mg('pot', lit({ color: 0x6b5a4a }, 0.3));
   const exitG = mg('exitSign', new THREE.MeshBasicMaterial({ color: 0x19b24b }), false, false), Lm = mg('ceilLight', new THREE.MeshBasicMaterial({ color: 0xfffbea }), false, false);
+  const pine = mg('pine', lit({ map: mkTex(64, 32, (g, w, h) => { g.fillStyle = '#d8b57e'; g.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 2) { g.fillStyle = `rgba(150,100,50,${0.05 + Math.random() * 0.12})`; g.fillRect(0, y, w, 1); } g.fillStyle = 'rgba(120,75,35,.35)'; g.beginPath(); g.ellipse(40, 16, 4, 2, 0, 0, 7); g.fill(); }) }, 0.4));
+  const blackLeg = mg('deskLeg', lit({ color: 0x111214 }, 0.25)), screenM = mg('screen', new THREE.MeshBasicMaterial({ color: 0x2b4a6a }), false, false), kb = mg('keyboard', lit({ color: 0x1a1b1d }, 0.3));
+  const mU = 1 / SU, mV = 1 / SV;                                       // metres -> plan pixels along plan x / plan y
   // a box laid out in plan pixels: centre, size along plan x / plan y, height, base
   const pbox = (m, pxc, pyc, wpx, hpx, h, y0 = 0, collide = false) => {
     const [x, z] = PG(pxc, pyc), w = wpx * SU, d = hpx * SV; m.add(new THREE.BoxGeometry(w, h, d), mat4(x, y0 + h / 2, z, yawU));
     if (collide) { const c = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b2]) => PG(pxc + a * wpx / 2, pyc + b2 * hpx / 2)); for (let k = 0; k < 4; k++) addSeg(c[k][0], c[k][1], c[(k + 1) % 4][0], c[(k + 1) % 4][1]); }
   };
   // partition walls with door openings (gaps in plan pixels along the wall), each opening framed with an open door leaf
-  const wall = (px0, py0, px1, py1, gaps = []) => {
+  const glassM = mg('glassPart', new THREE.MeshStandardMaterial({ color: 0xbfd6df, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false }), false, false);
+  const wall = (px0, py0, px1, py1, gaps = [], o = {}) => {
     const hor = py0 === py1, a0 = hor ? px0 : py0, a1 = hor ? px1 : py1, at = t => hor ? PG(t, py0) : PG(px0, t);
     let s2 = a0; const runs = []; for (const [g0, g1] of gaps) { runs.push([s2, g0]); s2 = g1; } runs.push([s2, a1]);
     for (const [r0, r1] of runs) { if (r1 - r0 < 0.5) continue; const p = at(r0), q = at(r1), L = Math.hypot(q[0] - p[0], q[1] - p[1]), yaw = Math.atan2(-(q[1] - p[1]), q[0] - p[0]);
-      plaster.add(new THREE.BoxGeometry(L, CE, 0.12), mat4((p[0] + q[0]) / 2, CE / 2, (p[1] + q[1]) / 2, yaw)); addSeg(p[0], p[1], q[0], q[1]); }
+      if (o.glass) {                                                     // glazed screen: glass panes between slim black mullions, black head and base rails
+        glassM.add(new THREE.BoxGeometry(L, CE - 0.1, 0.02), mat4((p[0] + q[0]) / 2, CE / 2, (p[1] + q[1]) / 2, yaw));
+        for (const yy of [0.05, CE - 0.05]) blackLeg.add(new THREE.BoxGeometry(L, 0.08, 0.08), mat4((p[0] + q[0]) / 2, yy, (p[1] + q[1]) / 2, yaw));
+        const nm = Math.max(1, Math.round(L / 1.2)); for (let k = 0; k <= nm; k++) { const t = k / nm; blackLeg.add(new THREE.BoxGeometry(0.05, CE, 0.06), mat4(p[0] + (q[0] - p[0]) * t, CE / 2, p[1] + (q[1] - p[1]) * t, yaw)); }
+      } else plaster.add(new THREE.BoxGeometry(L, CE, 0.12), mat4((p[0] + q[0]) / 2, CE / 2, (p[1] + q[1]) / 2, yaw));
+      addSeg(p[0], p[1], q[0], q[1]); }
     for (const [g0, g1] of gaps) { const p = at(g0), q = at(g1), L = Math.hypot(q[0] - p[0], q[1] - p[1]), yaw = Math.atan2(-(q[1] - p[1]), q[0] - p[0]), nx = -(q[1] - p[1]) / L, nz = (q[0] - p[0]) / L;
-      plaster.add(new THREE.BoxGeometry(L, CE - DH, 0.12), mat4((p[0] + q[0]) / 2, DH + (CE - DH) / 2, (p[1] + q[1]) / 2, yaw));                       // lintel over the opening
-      frameM.add(new THREE.BoxGeometry(L + 0.1, 0.06, 0.16), mat4((p[0] + q[0]) / 2, DH, (p[1] + q[1]) / 2, yaw));
-      for (const e of [p, q]) frameM.add(new THREE.BoxGeometry(0.06, DH, 0.16), mat4(e[0], DH / 2, e[1], yaw));
+      (o.glass ? glassM : plaster).add(new THREE.BoxGeometry(L, CE - DH, o.glass ? 0.02 : 0.12), mat4((p[0] + q[0]) / 2, DH + (CE - DH) / 2, (p[1] + q[1]) / 2, yaw));   // panel over the opening
+      const fr = o.glass ? blackLeg : frameM; fr.add(new THREE.BoxGeometry(L + 0.1, 0.06, 0.16), mat4((p[0] + q[0]) / 2, DH, (p[1] + q[1]) / 2, yaw));
+      for (const e of [p, q]) fr.add(new THREE.BoxGeometry(0.06, DH, 0.16), mat4(e[0], DH / 2, e[1], yaw));
+      if (o.noLeaf && o.noLeaf.includes(g0)) continue;
+      if (o.glass) { const cx2 = p[0] + nx * (L / 2), cz2 = p[1] + nz * (L / 2); glassM.add(new THREE.BoxGeometry(0.02, DH - 0.08, L - 0.12), mat4(cx2, (DH - 0.05) / 2, cz2, yaw)); blackLeg.add(new THREE.BoxGeometry(0.05, DH - 0.05, 0.05), mat4(p[0] + nx * (L - 0.06), (DH - 0.05) / 2, p[1] + nz * (L - 0.06), yaw)); blackLeg.add(new THREE.BoxGeometry(0.03, 0.03, 0.4), mat4(p[0] + nx * (L - 0.1), 1.05, p[1] + nz * (L - 0.1), yaw)); addSeg(p[0], p[1], p[0] + nx * L, p[1] + nz * L); continue; }
       doorM.add(new THREE.BoxGeometry(0.04, DH - 0.05, L - 0.08), mat4(p[0] + nx * (L / 2), (DH - 0.05) / 2, p[1] + nz * (L / 2), yaw)); addSeg(p[0], p[1], p[0] + nx * L, p[1] + nz * L);   // leaf swung open against the wall
     }
   };
@@ -752,13 +763,13 @@ function buildLInterior(b, door, wallH) {
   // the closed-off, unplanned part of the L
   wall(288, 39, 288, 275);
   // service core: stairs | back exit, WCs, kitchen (all open onto the main room through the east wall of the core)
-  wall(363, 39, 363, 155, [[47, 66], [120, 146]]);
+  wall(363, 39, 363, 155, [[47, 66], [120, 146]], { noLeaf: [120] });
   wall(288, 155, 363, 155); wall(288, 113, 363, 113); wall(288, 84, 363, 84, [[320, 333], [345, 358]]); wall(340, 84, 340, 113); wall(325, 39, 325, 62);
   // board rooms and the entrance lobby along the road side
-  wall(478, 39, 478, 275, [[88, 106], [128, 152], [232, 253]]); wall(478, 118, 533, 118); wall(478, 225, 533, 225);
+  wall(478, 39, 478, 225, [[88, 106], [128, 152]], { glass: true }); wall(478, 225, 478, 275, [[232, 253]]); wall(478, 118, 533, 118); wall(478, 225, 533, 225);
   // stairs: a flight rising towards the outside wall
-  for (let k = 0; k < 12; k++) pbox(white, 299, 82 - k * 3.6, 22, 3.6, 0.26 * (k + 1), 0, false);
-  pbox(steel, 311, 60, 1.2, 46, 1.0, 0.26 * 6, false); pbox(white, 299, 60, 22, 44, 0.02, 3.2, true);
+  for (let k = 0; k < 12; k++) pbox(white, 299, 82 - k * 3.6, 22, 3.6, 0.2 * (k + 1), 0, false);
+  pbox(steel, 311, 60, 1.2, 46, 0.9, 0.2 * 6, false); pbox(white, 299, 60, 22, 44, 0.02, 2.45, true);
   // back exit: a door in the outside wall with a green running-man sign above it
   { const [dx, dz] = PG(342, 39.6); doorM.add(new THREE.BoxGeometry(1.0 / SU * SU, DH, 0.06), mat4(dx, DH / 2, dz, yawU)); exitG.add(new THREE.BoxGeometry(0.4, 0.18, 0.04), mat4(dx, DH + 0.2, dz, yawU));
     const [bx, bz] = PG(342, 41); steel.add(new THREE.BoxGeometry(0.8, 0.05, 0.05), mat4(bx, 1.0, bz, yawU)); }
@@ -767,10 +778,11 @@ function buildLInterior(b, door, wallH) {
   // kitchen: worktop with sink along the back, fridge, small table
   pbox(white, 322, 118.5, 64, 9, 0.9, 0, true); pbox(wood, 322, 118.5, 64, 9, 0.04, 0.9, false); pbox(steel, 340, 118.5, 9, 6, 0.02, 0.94, false);
   pbox(steel, 294, 119, 9, 10, 1.85, 0, true); pbox(wood, 320, 140, 18, 14, 0.04, 0.74, true); for (const [ox2, oy2] of [[-12, 0], [12, 0]]) pbox(dark, 320 + ox2, 140 + oy2, 6, 7, 0.45, 0, false);
+  const chairAt = (pxc, pyc, fx, fy) => {                              // office chair facing (fx, fy) in plan directions
+    pbox(dark, pxc, pyc, 0.48 * mU, 0.48 * mV, 0.08, 0.46, false); pbox(steel, pxc, pyc, 0.05 * mU, 0.05 * mV, 0.46, 0, false);
+    pbox(dark, pxc - fx * 0.22 * mU, pyc - fy * 0.22 * mV, fx ? 0.06 * mU : 0.46 * mU, fy ? 0.06 * mV : 0.46 * mV, 0.55, 0.52, false);
+  };
   // desks (orange on the plan): white tops on legs, a monitor, and a chair on the side the plan leaves open
-  const pine = mg('pine', lit({ map: mkTex(64, 32, (g, w, h) => { g.fillStyle = '#d8b57e'; g.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 2) { g.fillStyle = `rgba(150,100,50,${0.05 + Math.random() * 0.12})`; g.fillRect(0, y, w, 1); } g.fillStyle = 'rgba(120,75,35,.35)'; g.beginPath(); g.ellipse(40, 16, 4, 2, 0, 0, 7); g.fill(); }) }, 0.4));
-  const blackLeg = mg('deskLeg', lit({ color: 0x111214 }, 0.25)), screenM = mg('screen', new THREE.MeshBasicMaterial({ color: 0x2b4a6a }), false, false), kb = mg('keyboard', lit({ color: 0x1a1b1d }, 0.3));
-  const mU = 1 / SU, mV = 1 / SV;                                       // metres -> plan pixels along plan x / plan y
   // desk: pine worktop on black legs, two monitors at the back, keyboard and mouse at the front, chair on the open side
   const desk = (px0, py0, px1, py1, cdx, cdy) => {
     const pxc = (px0 + px1) / 2, pyc = (py0 + py1) / 2, w = px1 - px0 - 1, h = py1 - py0 - 1;
@@ -794,12 +806,15 @@ function buildLInterior(b, door, wallH) {
   for (const xs of [[365, 380, 381, 395], [419, 434, 435, 449]]) for (const [ya, yb] of [[199, 233], [236, 272]]) { desk(xs[0], ya, xs[1], yb, -1, 0); desk(xs[2], ya, xs[3], yb, 1, 0); }
   desk(392, 118, 415, 133, 0, -1); desk(419, 118, 445, 133, 0, -1); desk(392, 136, 415, 155, 0, 1); desk(419, 136, 445, 155, 0, 1);
   for (const [ya, yb] of [[41, 61], [64, 90]]) { desk(436, ya, 447, yb, -1, 0); desk(450, ya, 462, yb, 1, 0); }
-  desk(384, 41, 395, 65, -1, 0); desk(395, 52, 414, 65, 0, 1);                      // the L-shaped desk
+  {                                                                      // the L-shaped desk: one continuous worktop, chair tucked in the inside corner
+    pbox(pine, 389.5, 53, 11, 24, 0.035, 0.72, true); pbox(pine, 404.5, 58.5, 19, 13, 0.035, 0.72, true);
+    for (const [lx, ly] of [[384.6, 41.6], [384.6, 64.4], [413.4, 64.4], [413.4, 52.6], [394.4, 41.6]]) pbox(blackLeg, lx, ly, 0.05 * mU, 0.05 * mV, 0.72, 0, false);
+    pbox(blackLeg, 386, 47, 0.03 * mU, 0.5 * mV, 0.33, 0.93, false); pbox(screenM, 386.6, 47, 0.005 * mU, 0.46 * mV, 0.29, 0.95, false); pbox(blackLeg, 386, 47, 0.18 * mU, 0.22 * mV, 0.2, 0.755, false);
+    pbox(blackLeg, 405, 63.4, 0.54 * mU, 0.03 * mV, 0.33, 0.93, false); pbox(screenM, 405, 62.9, 0.5 * mU, 0.005 * mV, 0.29, 0.95, false); pbox(blackLeg, 405, 63.4, 0.22 * mU, 0.18 * mV, 0.2, 0.755, false);
+    pbox(kb, 393, 58, 0.3 * mU, 0.3 * mV, 0.025, 0.755, false); pbox(kb, 398, 55, 0.07 * mU, 0.07 * mV, 0.03, 0.755, false);
+    chairAt(401, 47, -1, 0);
+  }
   // board rooms: long table with chairs round it
-  const chairAt = (pxc, pyc, fx, fy) => {                              // office chair facing (fx, fy) in plan directions
-    pbox(dark, pxc, pyc, 0.48 * mU, 0.48 * mV, 0.08, 0.46, false); pbox(steel, pxc, pyc, 0.05 * mU, 0.05 * mV, 0.46, 0, false);
-    pbox(dark, pxc - fx * 0.22 * mU, pyc - fy * 0.22 * mV, fx ? 0.06 * mU : 0.46 * mU, fy ? 0.06 * mV : 0.46 * mV, 0.55, 0.52, false);
-  };
   // board room 2: table with chairs round it
   { const pyc = 78, len = 44; pbox(wood, 507, pyc, 22, len, 0.05, 0.74, true); pbox(blackLeg, 507, pyc, 6, len * 0.6, 0.7, 0, false);
     for (let k = 0; k < 3; k++) { const y2 = pyc - len / 2 + 7 + k * 15; chairAt(507 - 17, y2, 1, 0); chairAt(507 + 17, y2, -1, 0); } }
@@ -2025,7 +2040,7 @@ function stepCamera(dt) {
     const sx = camera.position.x - p.x, sz = camera.position.z - p.z, L = Math.hypot(sx, sz) || 1; let k = 0.4;
     for (; k < L; k += 0.2) { const qx = p.x + sx * k / L, qz = p.z + sz * k / L, list = cgrid.at(qx, qz); if (list && list.some(c => c.t === 2 && (!c.lv || (c.lv === 2) === (p.y > -1)) && distSeg(qx, qz, c.x0, c.z0, c.x1, c.z1) < 0.25)) break; }
     if (k < L) { camera.position.x = p.x + sx * (k - 0.2) / L; camera.position.z = p.z + sz * (k - 0.2) / L; }
-    if (LB && inPoly(p.x, p.z, LB.p)) camera.position.y = Math.min(camera.position.y, 3.9);
+    if (LB && inPoly(p.x, p.z, LB.p)) camera.position.y = Math.min(camera.position.y, 2.45);
   }
   if (p.y < -1) { const l = TR.loc(camera.position.x, camera.position.z); if (Math.abs(l.q) < TR.band + 0.5 && Math.abs(l.t) < TR.Ld + 0.6) camera.position.y = Math.min(camera.position.y, -1.25); else if (!TR.foot(camera.position.x, camera.position.z)) camera.position.y = Math.max(camera.position.y, 0.6); }
   shake = Math.max(0, shake - dt * 2.4); const sh = shake * 0.3 + spd * 0.0003; camera.position.x += rand(-sh, sh); camera.position.y += rand(-sh, sh) * 0.6;
