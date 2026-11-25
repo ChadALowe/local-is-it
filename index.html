@@ -224,7 +224,10 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(2400, 32, 16), skyMat);
 sky.frustumCulled = false; sky.renderOrder = -10; scene.add(sky);
 {
   const ss = new THREE.Scene(); ss.add(new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), skyMat));
-  const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(ss, 0.03).texture; pm.dispose();
+  // software rendering (SwiftShader, used when the browser has no GPU acceleration) turns every lit surface black with this environment map, so skip it there
+  const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info'), gpu = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+  if (/swiftshader|llvmpipe|software|basic render/i.test(gpu)) { hemi.intensity = 1.1; window.__noEnv = true; }
+  else { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(ss, 0.03).texture; pm.dispose(); }
 }
 const clouds = new THREE.Group();
 {
@@ -1989,7 +1992,7 @@ const W = (() => {
 const follow = () => W.on ? W : player;
 function toggleFoot() {
   if (W.seated) { standUp(); return; }
-  setTimeout(() => document.body.classList.toggle('foot', W.on), 0);
+  setTimeout(() => { document.body.classList.toggle('foot', W.on); window.__lockMouse && window.__lockMouse(W.on); }, 0);
   if (state !== 'play') return;
   if (!W.on) {
     if (spdNow > 3) return;                                            // stop first
@@ -2004,7 +2007,7 @@ function toggleFoot() {
 let INSIDE = null; const hidden = [];
 function setInside(g) {
   INSIDE = g || null; const on = !!g, d = DOORS.find(q => q.g === g);
-  sun.intensity = on ? (d ? d.light : 0.35) : 3.0; hemi.intensity = on ? 0.55 : 0.5; if (renderer.__exp == null) renderer.__exp = renderer.toneMappingExposure; renderer.toneMappingExposure = on ? renderer.__exp * 0.85 : renderer.__exp;
+  sun.intensity = on ? (d ? d.light : 0.35) : 3.0; hemi.intensity = window.__noEnv ? (on ? 1.0 : 1.1) : on ? 0.55 : 0.5; if (renderer.__exp == null) renderer.__exp = renderer.toneMappingExposure; renderer.toneMappingExposure = on ? renderer.__exp * 0.85 : renderer.__exp;
   for (const c of hidden) c.visible = true; hidden.length = 0; for (const q of DOORS) q.g.visible = false;
   if (on) { for (const c of scene.children) if (c !== g && c !== W.g && !c.isLight && c.visible) { c.visible = false; hidden.push(c); } g.visible = true; scene.background = new THREE.Color(0x2a2c30); }
   else scene.background = null;
@@ -2208,7 +2211,11 @@ const joy = { x: 0, y: 0, id: null }, look = { id: null, lx: 0, ly: 0 }; W.pitch
     W.h -= dx * 0.0062; W.pitch = clamp(W.pitch - dy * 0.0055, -1.2, 1.2); });
   const endL = e => { if (e.pointerId === look.id) look.id = null; }; P.addEventListener('pointerup', endL); P.addEventListener('pointercancel', endL);
   // desktop: drag with the mouse to look while on foot
-  addEventListener('mousemove', e => { if (W.on && e.buttons === 1 && !isTouch) { W.h -= e.movementX * 0.004; W.pitch = clamp(W.pitch - e.movementY * 0.004, -1.2, 1.2); } });
+  // desktop: on foot the mouse is captured and looking simply follows it (Esc frees it, click the game to capture again)
+  const lockOK = () => !isTouch && W.on && renderer.domElement.requestPointerLock;
+  window.__lockMouse = on => { try { if (on && lockOK()) renderer.domElement.requestPointerLock(); else if (!on && document.pointerLockElement) document.exitPointerLock(); } catch (_) {} };
+  renderer.domElement.addEventListener('click', () => { if (lockOK() && !document.pointerLockElement) window.__lockMouse(true); });
+  addEventListener('mousemove', e => { if (!W.on || isTouch) return; if (document.pointerLockElement || e.buttons === 1) { W.h -= e.movementX * 0.0028; W.pitch = clamp(W.pitch - e.movementY * 0.0028, -1.2, 1.2); } });
 }
 const keyMap = { KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', Space: 'hand' };
 function cycleColor() { paintIdx = (paintIdx + 1) % paintChoices.length; player.car.paint.color.setHex(paintChoices[paintIdx]); }
@@ -2253,7 +2260,7 @@ function start() {
   $('overlay').style.display = 'none'; document.body.classList.add('playing'); initAudio(); tryFullscreen();
   if (actx && actx.state === 'suspended') actx.resume(); state = 'play'; setTimeout(() => { $('hint').style.opacity = 0; }, 14000);
 }
-function resetCar() { if (W.seated) standUp(); if (INSIDE) setInside(null); document.body.classList.remove('foot'); if (W.on) { W.on = false; W.g.visible = false; $('tOut').textContent = 'OUT'; } Object.assign(player, { x: spawn.x, z: spawn.z, y: 0, h: spawn.h, vx: 0, vz: 0, steer: 0 }); drift.pts = 0; drift.on = false; drift.t = 0; showCombo(false); }
+function resetCar() { window.__lockMouse && window.__lockMouse(false); if (W.seated) standUp(); if (INSIDE) setInside(null); document.body.classList.remove('foot'); if (W.on) { W.on = false; W.g.visible = false; $('tOut').textContent = 'OUT'; } Object.assign(player, { x: spawn.x, z: spawn.z, y: 0, h: spawn.h, vx: 0, vz: 0, steer: 0 }); drift.pts = 0; drift.on = false; drift.t = 0; showCombo(false); }
 
 /* ================= driving ================= */
 function surfaceAt(x, z) {                                             // 0 = road / pavement, 1 = grass
