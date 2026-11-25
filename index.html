@@ -1281,7 +1281,8 @@ const spawn = (() => {                                                 // a driv
   return { x: best.x + best.dz * -1.6, z: best.z + best.dx * 1.6, h: Math.atan2(-best.dx, -best.dz) };
 })();
 const parked = []; let PARKED_GROUPS = null;
-function addParked(x, z, yaw) { const p = { x, z, yaw, color: pick(carColors) }; parked.push(p); const c = Math.cos(yaw), s = Math.sin(yaw); for (const o of [-1.0, 1.0]) { const cx = x - s * o, cz = z - c * o; cgrid.ins({ t: 0, x: cx, z: cz, r: 0.9, car: p }, cx - 2.2, cx + 2.2, cz - 2.2, cz + 2.2); } }
+const PK = new Map();
+function addParked(x, z, yaw) { const p = { x, z, yaw, color: pick(carColors), ims: [], i: -1 }; p.key = Math.round(x * 4) + '_' + Math.round(z * 4); PK.set(p.key, p); parked.push(p); const c = Math.cos(yaw), s = Math.sin(yaw); for (const o of [-1.0, 1.0]) { const cx = x - s * o, cz = z - c * o; cgrid.ins({ t: 0, x: cx, z: cz, r: 0.9, car: p }, cx - 2.2, cx + 2.2, cz - 2.2, cz + 2.2); } }
 const carColors = [0xf2f2f0, 0xb8bcc2, 0x15171a, 0xa32a2a, 0x2a4e86, 0x2f5a3e, 0xc9b896, 0xd1a12a, 0x6d2a3a, 0x7a8590];
 for (const r of roads) {
   if (r.c || r.k < 4 || r.k > 7 || r.w < 5.5) continue;
@@ -2510,7 +2511,7 @@ function dentMesh(mesh, pt, dir, depth, rad) {
 const _dp = new THREE.Vector3(), _dd = new THREE.Vector3();
 // dent every paint (and trim) mesh of a car model group at a world contact point; crack the glass on a big hit
 function damageModel(grp, wx, wy, wz, inx, inz, speed) {
-  if (speed < 3) return; const depth = clamp(speed * 0.022, 0.06, 0.4), rad = 0.55 + Math.min(0.6, speed * 0.035); grp.updateMatrixWorld(true);
+  if (speed < 3) return; if (grp === player.car.grp && typeof MP !== 'undefined') MP.myDent(wx, wy, wz, inx, inz, speed); const depth = clamp(speed * 0.022, 0.06, 0.4), rad = 0.55 + Math.min(0.6, speed * 0.035); grp.updateMatrixWorld(true);
   grp.traverse(m => { if (!m.isMesh || m.userData.glass) return; if (!(m.userData.paint || m.userData.body)) return;
     _dp.set(wx, wy, wz); m.worldToLocal(_dp); const inv = new THREE.Matrix4().copy(m.matrixWorld).invert(); _dd.set(inx, 0, inz).transformDirection(inv); dentMesh(m, _dp, _dd, depth, rad); });
   if (speed > 7) grp.traverse(m => { if (m.isMesh && m.userData.glass && !m.userData.cracked) { m.userData.cracked = true; m.material = crackedMat; } });
@@ -2697,12 +2698,12 @@ let damageCooldown = 0;
 function crashDamage(c, cx, cz, nx, nz, speed, P) {                    // n points from the parked car towards the player's car
   if (speed > 19) bigCrash(P, -nx, -nz, speed);
   if (speed < 3.5 || damageCooldown > 0) return; damageCooldown = 0.15;
-  const w = wreckOf(c); if (w) damageModel(w, cx, 0.62, cz, -nx, -nz, speed);
+  const w = wreckOf(c); if (w) { damageModel(w, cx, 0.62, cz, -nx, -nz, speed); MP.parkedDent(c, cx, cz, -nx, -nz, speed); }
   damageModel(P.car.grp, cx, 0.62 + P.y, cz, nx, nz, speed * 0.8); P.damaged = true;
   spray(cx, 0.6, cz, nx * 0.3, nz * 0.3, speed, c.paintMat || shardMat, speed > 7);
 }
 const DYN = [], CAR_I = (4.2 * 4.2 + 1.8 * 1.8) / 12, CAR_OFF = [-1.0, 1.0], CR = 0.9;
-function wakeCar(c) { if (c.dyn) return; c.dyn = true; c.vx = c.vz = c.w = 0; c.sleep = 0; DYN.push(c); }
+function wakeCar(c) { c.touched = true; if (c.dyn) return; c.dyn = true; c.vx = c.vz = c.w = 0; c.sleep = 0; DYN.push(c); }
 const carCircles = c => { const s2 = Math.sin(c.yaw), c2 = Math.cos(c.yaw); return CAR_OFF.map(o => [c.x - s2 * o, c.z - c2 * o]); };
 function impulse(c, cx, cz, nx, nz, j) {                               // impulse j along n (pointing away from the car) applied at contact point
   c.vx -= nx * j; c.vz -= nz * j; const rx = cx - c.x, rz = cz - c.z; c.w += (rz * -nx * j - rx * -nz * j) / CAR_I; c.sleep = 0;
@@ -2718,12 +2719,17 @@ function carVsCars(p, cf, cz2, cir) {
         p.x += nx * ov * 0.55; p.z += nz * ov * 0.55; c.x -= nx * ov * 0.45; c.z -= nz * ov * 0.45;
         const [cvx, cvz] = carPointVel(c, cx, cz), vn = (p.vx - cvx) * nx + (p.vz - cvz) * nz;
         if (vn < 0) { const j = -(1 + 0.25) * vn / (1 / 1.0 + 1 / 0.9);   // player ~10% heavier than a parked car
-          p.vx += nx * j / 1.0; p.vz += nz * j / 1.0; impulse(c, cx, cz, nx, nz, j / 0.9); worst = Math.max(worst, -vn); crashDamage(c, cx, cz, nx, nz, -vn, p); } } } }
+          p.vx += nx * j / 1.0; p.vz += nz * j / 1.0; impulse(c, cx, cz, nx, nz, j / 0.9); c.rT = 0; worst = Math.max(worst, -vn); crashDamage(c, cx, cz, nx, nz, -vn, p); } } } }
   return worst;
 }
 function stepCars(dt) {
   damageCooldown -= dt; stepDebris(dt);
+  const nowMs = performance.now();
   for (const c of DYN) {
+    if (c.rT && nowMs - c.rT < 1500) {                                   // another player is pushing this one: follow their copy
+      const k = Math.min(1, dt * 10); c.x += (c.tx - c.x) * k; c.z += (c.tz - c.z) * k; let dy = c.tyaw - c.yaw; dy = ((dy + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; c.yaw += dy * k; c.vx = c.vz = c.w = 0; c.sleep = 0;
+      if (c.wreck) { c.wreck.position.set(c.x, 0.05, c.z); c.wreck.rotation.y = c.yaw; } else { const m = mat4(c.x, 0.05, c.z, c.yaw); for (const im of c.ims) { im.setMatrixAt(c.i, m); im.instanceMatrix.needsUpdate = true; } }
+      continue; }
     if (c.sleep > 1.2) continue;
     const fx = -Math.sin(c.yaw), fz = -Math.cos(c.yaw), vf = c.vx * fx + c.vz * fz, vlx = c.vx - fx * vf, vlz = c.vz - fz * vf;
     const kf = Math.exp(-1.1 * dt), kl = Math.exp(-5.5 * dt);           // rolls a little along its length, scrubs hard sideways
@@ -2859,8 +2865,11 @@ const MP = (() => {
     let P = o.peers.get(d.id); const isNew = !P; if (!P) P = makePeer(d.id);
     P.s = d; P.seen = performance.now();
     if (d.n !== P.n) { P.n = d.n || 'Player'; if (P.lab) o.g.remove(P.lab); P.lab = label(P.n); o.g.add(P.lab); if (isNew) toast('🚗 ' + P.n + ' joined'); }
-    if (d.k !== P.k || d.c !== P.c || (P.wr && !d.w)) { if (P.car) o.g.remove(P.car.grp); P.k = d.k; P.c = d.c; P.wr = 0; P.car = (d.k ? createCar2 : createCar)(paintChoices[d.c] || paintChoices[0]); o.g.add(P.car.grp); P.fresh = true; }
-    if (d.w && !P.wr) { P.wr = 1; P.car.grp.traverse(m => { if (m.isMesh) { if (m.userData.glass) m.visible = false; else m.material = charMat; } }); }
+    if (d.k !== P.k || d.c !== P.c || (P.wr && !d.w) || (d.g !== P.g && P.g != null)) { P.dnC = 0; if (P.car) o.g.remove(P.car.grp); P.k = d.k; P.c = d.c; P.wr = 0; P.car = (d.k ? createCar2 : createCar)(paintChoices[d.c] || paintChoices[0]); o.g.add(P.car.grp); P.fresh = true; }
+    P.g = d.g;
+    if (d.dn && d.dc > (P.dnC || 0)) { P.car.grp.position.set(d.x, d.y, d.z); P.car.grp.rotation.set(0, d.h, 0);
+      for (let i = Math.max(0, d.dn.length - (d.dc - (P.dnC || 0))); i < d.dn.length; i++) { const q = d.dn[i], [ox, oz] = toW(d.h, q[0], q[2]), [ix, iz] = toW(d.h, q[3], q[4]); damageModel(P.car.grp, d.x + ox, d.y + q[1], d.z + oz, ix, iz, q[5]); } P.dnC = d.dc; }
+    if (d.w && !P.wr) { P.wr = 1; if (P.fresh) P.car.grp.traverse(m => { if (m.isMesh) { if (m.userData.glass) m.visible = false; else m.material = charMat; } }); else explodeCar({ car: P.car, x: d.x, y: d.y, z: d.z }); }
     if (P.fresh) { P.x = d.x; P.y = d.y; P.z = d.z; P.h = d.h; if (d.f) { P.fx = d.f[0]; P.fy = d.f[1]; P.fz = d.f[2]; P.fh = d.f[3]; } P.fresh = false; }
     o.online = o.peers.size + 1; hud();
   }
@@ -2870,7 +2879,8 @@ const MP = (() => {
     o.ws = ws;
     ws.onopen = () => { o.tries = 0; hud(); };
     ws.onmessage = e => { let d; try { d = JSON.parse(e.data); } catch (_) { return; }
-      if (d.t === 'hi') { o.id = d.id; for (const id of [...o.peers.keys()]) dropPeer(id, true); for (const s of d.players) if (s.id !== o.id) onState(s); hud(); }
+      if (d.t === 'hi') { o.id = d.id; for (const id of [...o.peers.keys()]) dropPeer(id, true); for (const s of d.players) if (s.id !== o.id) onState(s); if (d.world) onWorld(d.world); hud(); }
+      else if (d.t === 'ev') onEv(d);
       else if (d.t === 's' && d.id !== o.id) onState(d);
       else if (d.t === 'bye') dropPeer(d.id);
       else if (d.t === 'chat') toast('💬 ' + d.n + ': ' + d.m); };
@@ -2879,9 +2889,41 @@ const MP = (() => {
   }
   function retry() { o.tries++; setTimeout(connect, Math.min(15000, 1500 * o.tries)); }
   const r2 = v => Math.round(v * 100) / 100;
+  const send = d => { if (o.ws && o.ws.readyState === 1) try { o.ws.send(JSON.stringify(d)); } catch (_) {} };
+  // car-local <-> world (rotation about y by yaw)
+  const toL = (yaw, dx, dz) => { const c = Math.cos(yaw), s = Math.sin(yaw); return [dx * c - dz * s, dx * s + dz * c]; };
+  const toW = (yaw, lx, lz) => { const c = Math.cos(yaw), s = Math.sin(yaw); return [lx * c + lz * s, -lx * s + lz * c]; };
+  // my own car's dents, sent with my state so everyone (and late joiners) see the same damage
+  let carGen = 0, myDents = [], myDentN = 0, lastCar = null;
+  o.myDent = (wx, wy, wz, inx, inz, s) => { if (player.car !== lastCar) { lastCar = player.car; carGen++; myDents = []; myDentN = 0; }
+    const [lx, lz] = toL(player.h, wx - player.x, wz - player.z), [dx, dz] = toL(player.h, inx, inz); myDents.push([r2(lx), r2(wy - player.y), r2(lz), r2(dx), r2(dz), r2(s)]); myDentN++; if (myDents.length > 14) myDents.shift(); };
+  // parked cars: find by key (a phone has fewer parked cars than a PC, so make one if it's missing here)
+  const carByKey = (k, x, z, yaw, col) => { let c = PK.get(k); if (!c && x != null) { c = { x, z, yaw, color: col ?? 0x888888, ims: [], i: -1, key: k, phantom: true }; PK.set(k, c); parked.push(c); wreckOf(c); } return c; };
+  o.parkedDent = (c, wx, wz, inx, inz, s) => { const [lx, lz] = toL(c.yaw, wx - c.x, wz - c.z), [dx, dz] = toL(c.yaw, inx, inz);
+    send({ t: 'ev', e: 'dent', k: c.key, x: r2(c.x), z: r2(c.z), y: r2(c.yaw), col: c.color, d: [r2(lx), 0.62, r2(lz), r2(dx), r2(dz), r2(s)] }); };
+  const applyParkedDent = (c, d) => { const w = wreckOf(c); if (!w) return; const [ox, oz] = toW(c.yaw, d[0], d[2]), [ix, iz] = toW(c.yaw, d[3], d[4]); damageModel(w, c.x + ox, d[1], c.z + oz, ix, iz, d[5]); };
+  const posePark = (c, x, z, yaw, final) => { if (!c.dyn) wakeCar(c); c.touched = false; c.sentFinal = true; c.tx = x; c.tz = z; c.tyaw = yaw; c.rT = performance.now(); if (final) { c.x = x; c.z = z; c.yaw = yaw; c.rT = performance.now() - 1400; } };
+  function onWorld(list) { for (const w of list) { const c = carByKey(w.k, w.x, w.z, w.y, w.col); if (!c) continue; if (w.p) posePark(c, w.p[0], w.p[1], w.p[2], true); if (w.d) for (const d of w.d) applyParkedDent(c, d); } }
+  function onEv(d) {
+    if (d.e === 'dent') { const c = carByKey(d.k, d.x, d.z, d.y, d.col); if (c) { applyParkedDent(c, d.d); const [ox, oz] = toW(c.yaw, d.d[0], d.d[2]); if (camera.position.distanceTo(new THREE.Vector3(c.x + ox, 1, c.z + oz)) < 60) { spray(c.x + ox, 0.6, c.z + oz, 0, 0, d.d[5] * 0.6, c.paintMat || shardMat, d.d[5] > 7); thud(55, 0.25); } } }
+    else if (d.e === 'pk') for (const q of d.l) { const c = carByKey(q[0], q[1], q[2], q[3], q[5]); if (c) posePark(c, q[1], q[2], q[3], q[4]); }
+    else if (d.e === 'hitp' && d.to === o.id && !player.wrecked) {                 // someone drove into me: get shoved and dented
+      player.vx -= d.nx * d.j; player.vz -= d.nz * d.j; shake = Math.max(shake, Math.min(0.9, d.s * 0.05)); thud(60, Math.min(0.4, d.s * 0.03));
+      damageModel(player.car.grp, d.cx, 0.62 + player.y, d.cz, -d.nx, -d.nz, d.s * 0.8); player.damaged = true; spray(d.cx, 0.6, d.cz, -d.nx * 0.3, -d.nz * 0.3, d.s, player.car.paint, d.s > 7);
+      if (d.s > 19 && !W.on) bigCrash(player, -d.nx, -d.nz, d.s); }
+  }
+  let pkT = 0;
+  function sendParked(dt) {                                                // cars I'm pushing: stream their poses; a last one when they settle
+    pkT -= dt; if (pkT > 0) return; pkT = 0.1; const l = [], now = performance.now();
+    for (const c of DYN) { if (c.rT && now - c.rT < 1500) continue; const moving = c.sleep <= 1.2;
+      if (moving) { c.sentFinal = false; if (c.touched) l.push([c.key, r2(c.x), r2(c.z), r2(c.yaw), 0, c.color]); }
+      else if (c.touched && !c.sentFinal) { c.sentFinal = true; l.push([c.key, r2(c.x), r2(c.z), r2(c.yaw), 1, c.color]); } }
+    if (l.length) send({ t: 'ev', e: 'pk', l: l.slice(0, 30) });
+  }
   function snapshot() {
     const d = { t: 's', n: name, x: r2(player.x), y: r2(player.y), z: r2(player.z), h: r2(player.h), k: carModel, c: paintIdx, s: r2(player.steer), v: r2(spdNow), w: player.wrecked ? 1 : 0,
       i: INSIDE ? DOORS.findIndex(q => q.g === INSIDE) : -1, m: W.on ? (W.fly ? 2 : 1) : 0 };
+    if (player.car !== lastCar) { lastCar = player.car; carGen++; myDents = []; myDentN = 0; } d.g = carGen; if (myDents.length) { d.dn = myDents; d.dc = myDentN; }
     if (W.on) d.f = [r2(W.x), r2(W.y), r2(W.z), r2(W.h), r2(Math.hypot(W.vx, W.vz)), W.seated ? 1 : 0];
     if (W.fly) { d.j = []; for (const n of RAG.names) { const q = RAG.I[n]; d.j.push(r2(q.x), r2(q.y), r2(q.z)); } }
     return d;
@@ -2898,6 +2940,7 @@ const MP = (() => {
       const q = P.I[n]; q.x = x + lx * c + lz * s; q.y = y + ly; q.z = z - lx * s + lz * c; }
   }
   o.step = dt => {
+    if (o.ws && o.ws.readyState === 1) sendParked(dt);
     o.sendT -= dt; if (o.ws && o.ws.readyState === 1 && o.sendT <= 0 && state === 'play') { o.sendT = W.fly ? 0.08 : 0.1; try { o.ws.send(JSON.stringify(snapshot())); } catch (_) {} }
     const now = performance.now(), myIn = INSIDE ? DOORS.findIndex(q => q.g === INSIDE) : -1, k = Math.min(1, dt * 10);
     for (const P of [...o.peers.values()]) {
@@ -2921,7 +2964,9 @@ const MP = (() => {
         if (!W.on || W.fly) for (const [ax, az] of carCircles({ x: player.x, z: player.z, yaw: player.h })) for (const [bx, bz] of rc) {
           const dx = ax - bx, dz = az - bz, dd = Math.hypot(dx, dz), R = 2 * CR; if (dd >= R || dd < 1e-4 || Math.abs(player.y - P.y) > 1.5) continue;
           const nx = dx / dd, nz = dz / dd, ov = R - dd; player.x += nx * ov; player.z += nz * ov;
-          const vn = player.vx * nx + player.vz * nz; if (vn < 0) { player.vx -= vn * nx * 1.5; player.vz -= vn * nz * 1.5; if (-vn > 3) { thud(60, Math.min(0.4, -vn * 0.03)); shake = Math.max(shake, Math.min(0.8, -vn * 0.05)); spray((ax + bx) / 2, 0.6, (az + bz) / 2, nx * 0.3, nz * 0.3, -vn, c.paint || shardMat, -vn > 7); } } }
+          const vn = player.vx * nx + player.vz * nz; if (vn < 0) { player.vx -= vn * nx * 1.5; player.vz -= vn * nz * 1.5;
+            if (-vn > 2 && (P.hitT || 0) < now - 250) { P.hitT = now; const cx = bx + nx * CR, cz = bz + nz * CR; send({ t: 'ev', e: 'hitp', to: P.id, cx: r2(cx), cz: r2(cz), nx: r2(nx), nz: r2(nz), j: r2(-vn * 0.7), s: r2(-vn) }); if (-vn > 4) damageModel(player.car.grp, cx, 0.62 + player.y, cz, nx, nz, -vn * 0.8); }
+            if (-vn > 3) { thud(60, Math.min(0.4, -vn * 0.03)); shake = Math.max(shake, Math.min(0.8, -vn * 0.05)); spray((ax + bx) / 2, 0.6, (az + bz) / 2, nx * 0.3, nz * 0.3, -vn, c.paint || shardMat, -vn > 7); } } }
         if (W.on && !W.fly) for (const [bx, bz] of rc) { const dx = W.x - bx, dz = W.z - bz, dd = Math.hypot(dx, dz); if (dd < 0.32 + CR && dd > 1e-4) { W.x += dx / dd * (0.32 + CR - dd); W.z += dz / dd * (0.32 + CR - dd); } }
       }
     }
