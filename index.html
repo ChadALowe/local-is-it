@@ -1310,6 +1310,8 @@ for (const r of roads) {
         const nx = tz * sd, nz = -tx * sd, d0 = r.w / 2 + 0.1, cx = x + nx * (d0 + depth / 2), cz = z + nz * (d0 + depth / 2), fx = x + nx * (d0 + depth), fz = z + nz * (d0 + depth);
         const shopBay = inShop(cx, cz);
         if (shopBay && inShelter(cx, cz)) continue;
+        if (shopBay && Math.hypot(cx + 38.8, cz - 423.5) < 13.5) continue;   // keep the area in front of the Morrisons entrance clear
+        if (!shopBay && Math.hypot(cx + 463.8, cz + 278) < 10) continue;      // and in front of the L office's front doors
         if (r.id === ENTRY_RD || r.id === 42) continue;          // entrance road is verge and birches, not parking
         if (!shopBay && roads.indexOf(r) !== 314 && Math.hypot(cx + 436, cz + 290) < 40) continue;     // the entrance approach is open verge and hedges, no bays (as in the real park)
         if (!shopBay && (cx > -335 || !inPark(cx, cz)) || inBuilding(cx, cz) || inBuilding(fx, fz) || inBuilding(x + nx * d0, z + nz * d0) || nearWall(cx, cz, 1.0)) continue;
