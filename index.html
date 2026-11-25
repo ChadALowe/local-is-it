@@ -228,6 +228,15 @@ sky.frustumCulled = false; sky.renderOrder = -10; scene.add(sky);
   const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info'), gpu = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
   if (/swiftshader|llvmpipe|software|basic render/i.test(gpu)) { hemi.intensity = 1.1; window.__noEnv = true; }
   else { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(ss, 0.03).texture; pm.dispose(); }
+  // test it: light a white ball with only the environment map, read the pixel back; if it comes out black (some GPUs/drivers can't use it), drop it
+  const probe = () => { try {
+      const ps = new THREE.Scene(), cam = new THREE.PerspectiveCamera(40, 1, 0.1, 10), rt = new THREE.WebGLRenderTarget(8, 8); ps.environment = scene.environment;
+      ps.add(new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0 }))); cam.position.set(0, 0, 3);
+      renderer.setRenderTarget(rt); renderer.render(ps, cam); const px = new Uint8Array(4); renderer.readRenderTargetPixels(rt, 4, 4, 1, 1, px); renderer.setRenderTarget(null); rt.dispose();
+      return px[0] + px[1] + px[2]; } catch (e) { return -1; } };
+  window.__gfx = { gpu, env: !!scene.environment };
+  if (scene.environment) { const v = probe(); window.__gfx.probe = v; if (!(v > 20)) { scene.environment = null; hemi.intensity = 1.1; window.__noEnv = true; window.__gfx.env = false; } }
+  console.log('Pendeford Drift graphics:', JSON.stringify(window.__gfx));
 }
 const clouds = new THREE.Group();
 {
