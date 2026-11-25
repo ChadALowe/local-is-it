@@ -838,7 +838,7 @@ function buildLInterior(b, door, wallH) {
       const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.022, 28), seatM); lid.scale.set(1, 1, 1.28); lid.position.set(0, 0.0, 0.215); lid.castShadow = true; lidH.add(lid); lidH.rotation.x = -1.45;   // lid up against the cistern
       mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.05, 8), chromeM, -0.14, 0.43, 0.205).rotation.z = Math.PI / 2; mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.05, 8), chromeM, 0.14, 0.43, 0.205).rotation.z = Math.PI / 2;
       // invisible targets for the aiming dot
-      const inv = new THREE.MeshBasicMaterial({ visible: false }), bowlHit = mesh(new THREE.BoxGeometry(0.5, 1.1, 0.5), inv, 0, 0.55, 0.47), flushHit = mesh(new THREE.BoxGeometry(0.5, 0.8, 0.22), inv, 0, 0.85, 0.11);
+      const inv = new THREE.MeshBasicMaterial({ visible: false }), bowlHit = mesh(new THREE.BoxGeometry(0.46, 0.55, 0.53), inv, 0, 0.275, 0.485), flushHit = mesh(new THREE.BoxGeometry(0.56, 0.7, 0.26), inv, 0, 0.9, 0.1);   // look down into the bowl to use it, at the cistern to flush
       // toilet-roll holder on the side wall
       g.updateMatrixWorld(true);
       { const c = [[-0.22, 0.02], [0.22, 0.02], [0.22, 0.66], [-0.22, 0.66]].map(([x, z]) => new THREE.Vector3(x, 0, z).applyMatrix4(g.matrixWorld)); for (let k = 0; k < 4; k++) addSeg(c[k].x, c[k].z, c[(k + 1) % 4].x, c[(k + 1) % 4].z); }
@@ -986,8 +986,8 @@ function buildLInterior(b, door, wallH) {
     const sm = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.6), new THREE.MeshBasicMaterial({ map: sign, transparent: true })), [sx, sz] = PG(506, 225 + 0.08 * mV); sm.position.set(sx, 1.75, sz); sm.rotation.y = yawOf(506, 225, 0, 1); interiorGroup.add(sm);
     const fabric = mg('tubGrey', lit({ color: 0x45494f, roughness: 1 }, 0.22)), leather = mg('tubBlack', lit({ color: 0x18191b, roughness: 0.4 }, 0.25));
     tubChair(495, 234, 1, 0.35, fabric); tubChair(517, 234, -1, 0.35, fabric); tubChair(527, 247, -1, 0, leather, false);
-    roundTable(506, 231, 0.24, 1.0, mg('tableGrey', lit({ color: 0xc9ced2 }, 0.45)), chrome); roundTable(486, 247, 0.26, 0.52, glassTop, chrome);
-    plant(487, 230, 1.2); plant(526, 230, 1.5);
+    roundTable(506, 231, 0.24, 1.0, mg('tableGrey', lit({ color: 0xc9ced2 }, 0.45)), chrome); roundTable(483, 264, 0.26, 0.52, glassTop, chrome);
+    plant(482, 228.5, 1.2); plant(526, 230, 1.5);
     pbox(mg('doorMat', lit({ color: 0x6b4a2a }, 0.3)), 506, 268, 22, 11, 0.012, 0.076, false);
     const [tx2, tz2] = PG(479, 252); blackLeg.add(new THREE.BoxGeometry(0.06, 0.4, 0.55), mat4(tx2 + 0.03, 1.7, tz2, yawU + Math.PI / 2)); screenM.add(new THREE.BoxGeometry(0.01, 0.34, 0.48), mat4(tx2 + 0.065, 1.7, tz2, yawU + Math.PI / 2)); }
   // ---- meeting rooms: light grey carpet tiles with a strip of green turf along the inside of the glass
