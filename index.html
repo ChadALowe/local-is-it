@@ -239,6 +239,9 @@ function mkTex(w, h, draw, srgb = true) {
 function speckle(g, w, h, density, lo, hi, tint = 0) {
   for (let i = 0; i < w * h * density; i++) { const v = (lo + Math.random() * (hi - lo)) | 0; g.fillStyle = `rgb(${v},${v},${v + tint})`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
 }
+function softSpeckle(g, w, h, density) {                               // subtle brick weathering: faint light/dark flecks rather than salt-and-pepper noise
+  for (let i = 0; i < w * h * density; i++) { g.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,.10)' : 'rgba(255,240,220,.07)'; g.fillRect(Math.random() * w, Math.random() * h, 2, 1); }
+}
 const asphaltTex = mkTex(256, 256, (g, w, h) => {
   g.fillStyle = '#3c3d41'; g.fillRect(0, 0, w, h); speckle(g, w, h, 0.03, 38, 82, 3);
   g.strokeStyle = 'rgba(15,15,18,.4)'; g.lineWidth = 1;
@@ -257,6 +260,12 @@ const woodTex = mkTex(256, 256, (g, w, h) => {
   g.fillStyle = '#3f6a30'; g.fillRect(0, 0, w, h);
   for (let i = 0; i < 4000; i++) { const l = 18 + Math.random() * 18; g.fillStyle = `hsl(${90 + Math.random() * 30},${35 + Math.random() * 20}%,${l}%)`; g.fillRect(Math.random() * w, Math.random() * h, 2, 3); }
 });
+const shedRoofTex = mkTex(128, 128, (g, w, h) => {                 // big-shed roof: pale ribbed cladding with rooflight strips (tiles every 16 m)
+  g.fillStyle = '#dfe3e5'; g.fillRect(0, 0, w, h);
+  for (let x = 0; x < w; x += 4) { g.fillStyle = x % 8 ? 'rgba(0,0,0,.05)' : 'rgba(0,0,0,.12)'; g.fillRect(x, 0, 1, h); }
+  g.fillStyle = '#a9bcc8'; for (const x of [28, 92]) g.fillRect(x, 0, 8, h); g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(0, 0, w, 2);
+});
+const shedRoofMat = new THREE.MeshStandardMaterial({ map: shedRoofTex, roughness: 0.7, metalness: 0.15, envMapIntensity: 0.6, side: THREE.DoubleSide });
 const roofTex = mkTex(128, 128, (g, w, h) => { g.fillStyle = '#5b5c60'; g.fillRect(0, 0, w, h); speckle(g, w, h, 0.05, 70, 115, 0); });
 const shingleTex = mkTex(128, 128, (g, w, h) => {
   g.fillStyle = '#8a4a36'; g.fillRect(0, 0, w, h);
@@ -267,7 +276,7 @@ function facadeTex(wall, brick) {
   return mkTex(256, 128, (g, w, h) => {
     g.fillStyle = wall; g.fillRect(0, 0, w, h);
     if (brick) { g.strokeStyle = 'rgba(0,0,0,.22)'; g.lineWidth = 1; for (let y = 0; y < h; y += 8) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = ((y / 8) % 2) * 10; x < w; x += 20) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 8); g.stroke(); } } }
-    speckle(g, w, h, 0.02, 0, 255, 0);
+    softSpeckle(g, w, h, 0.02);
     for (const wx of [28, 156]) {
       g.fillStyle = '#ece9e1'; g.fillRect(wx - 5, 19, 82, 90);
       const gr = g.createLinearGradient(0, 24, 0, 102); gr.addColorStop(0, '#9bbad6'); gr.addColorStop(.5, '#4b6781'); gr.addColorStop(1, '#2a3a4d');
@@ -289,7 +298,7 @@ const officeTex = mkTex(256, 128, (g, w, h) => {                      // one sto
   g.fillStyle = '#a4513a'; g.fillRect(0, 0, w, h);
   g.strokeStyle = 'rgba(0,0,0,.2)'; g.lineWidth = 1;
   for (let y = 0; y < h; y += 8) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = ((y / 8) % 2) * 10; x < w; x += 20) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 8); g.stroke(); } }
-  speckle(g, w, h, 0.04, 0, 255, 0);
+  softSpeckle(g, w, h, 0.04);
   const cream = '#d9c49a';
   g.fillStyle = cream; g.fillRect(0, 0, w, 3); g.fillRect(0, h - 10, w, 10);                                   // string courses at floor level
   g.fillStyle = '#a4513a'; for (let x = 4; x < w; x += 24) g.fillRect(x, h - 8, 16, 6);                          // brick-panel pattern inside the lower band
@@ -305,13 +314,13 @@ const officeTex = mkTex(256, 128, (g, w, h) => {                      // one sto
 const brickTex = mkTex(64, 64, (g, w, h) => {                       // plain red brick for garden walls and sign walls
   g.fillStyle = '#a4513a'; g.fillRect(0, 0, w, h); g.strokeStyle = 'rgba(0,0,0,.22)'; g.lineWidth = 1;
   for (let y = 0; y < h; y += 8) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = ((y / 8) % 2) * 8; x < w; x += 16) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 8); g.stroke(); } }
-  speckle(g, w, h, 0.05, 0, 255, 0);
+  softSpeckle(g, w, h, 0.05);
 });
 const officeEndTex = mkTex(128, 128, (g, w, h) => {                  // end wall (4 m x one storey): brick, two buff piers, one tall narrow window
   g.fillStyle = '#a4513a'; g.fillRect(0, 0, w, h);
   g.strokeStyle = 'rgba(0,0,0,.2)'; g.lineWidth = 1;
   for (let y = 0; y < h; y += 8) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = ((y / 8) % 2) * 10; x < w; x += 20) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 8); g.stroke(); } }
-  speckle(g, w, h, 0.04, 0, 255, 0);
+  softSpeckle(g, w, h, 0.04);
   g.fillStyle = '#d9c49a'; g.fillRect(8, 0, 12, h); g.fillRect(w - 20, 0, 12, h); g.fillRect(0, h - 8, w, 8); g.fillRect(0, 0, w, 3);
   g.fillStyle = '#2f3438'; g.fillRect(52, 22, 24, 86); const gr = g.createLinearGradient(0, 26, 0, 104); gr.addColorStop(0, '#5f7078'); gr.addColorStop(1, '#222d33'); g.fillStyle = gr; g.fillRect(56, 26, 16, 78);
 });
@@ -319,7 +328,7 @@ const archTex = mkTex(96, 192, (g, w, h) => {                        // flush en
   g.fillStyle = '#a4513a'; g.fillRect(0, 0, w, h);
   g.strokeStyle = 'rgba(0,0,0,.2)'; g.lineWidth = 1;
   for (let y = 0; y < h; y += 8) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = ((y / 8) % 2) * 10; x < w; x += 20) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 8); g.stroke(); } }
-  speckle(g, w, h, 0.04, 0, 255, 0);
+  softSpeckle(g, w, h, 0.04);
   g.fillStyle = '#d9c49a'; for (const y of [6, 100, 184]) g.fillRect(0, y, w, 4);
   g.beginPath(); g.arc(w / 2, 128, 34, Math.PI, 0); g.lineTo(w / 2 + 28, 128); g.arc(w / 2, 128, 28, 0, Math.PI, true); g.closePath(); g.fill();
   g.fillStyle = '#2f3438'; g.fillRect(22, 126, 52, 64); g.fillStyle = '#12161a'; g.fillRect(26, 130, 44, 60);
@@ -332,7 +341,7 @@ const porchTex = mkTex(96, 192, (g, w, h) => {
   g.fillStyle = '#a4513a'; g.fillRect(0, 0, w, h);
   g.strokeStyle = 'rgba(0,0,0,.2)'; g.lineWidth = 1;
   for (let y = 0; y < h; y += 8) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = ((y / 8) % 2) * 10; x < w; x += 20) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 8); g.stroke(); } }
-  speckle(g, w, h, 0.04, 0, 255, 0);
+  softSpeckle(g, w, h, 0.04);
   const cream = '#d9c49a'; g.fillStyle = cream;
   g.fillRect(0, 0, 7, h); g.fillRect(w - 7, 0, 7, h); g.fillRect(w / 2 - 3, 28, 6, 80);                     // outer piers + central pier
   for (const y of [6, 100, 150, 184]) g.fillRect(0, y, w, 4);                                                // bands
@@ -787,8 +796,10 @@ for (const b of builds) {
     }
   }
   if (!((shopB && insetRoof(b, wallH, { d: 10, rise: 4.4 })) || ((rowB || pubB) && insetRoof(b, wallH, { d: pubB ? 6 : 4, rise: pubB ? 5 : 2.6 })) || (parkB && insetRoof(b, wallH)) || (pitched && pitchedRoof(b, wallH, fi < 0 ? 0 : fi, hsh)))) {
-    const rm = mg('roofflat', roofMat), tr = triangulate(b.p);
-    for (const [i, j, k] of tr) { const A = b.p[i], B = b.p[j], C = b.p[k]; rm.tri([A[0], wallH + 0.05, A[1]], [B[0], wallH + 0.05, B[1]], [C[0], wallH + 0.05, C[1]], [A[0] / 4, A[1] / 4], [B[0] / 4, B[1] / 4], [C[0] / 4, C[1] / 4], UP); }
+    const shed = Math.abs(b.area) > 3000, rm = shed ? mg('roofShed', shedRoofMat) : mg('roofflat', roofMat), tr = triangulate(b.p), us = shed ? 16 : 4;
+    let ang = 0, best = 0; for (let i = 0; i < n; i++) { const a = b.p[i], c = b.p[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L > best) { best = L; ang = Math.atan2(c[1] - a[1], c[0] - a[0]); } }
+    const ca = Math.cos(ang), sa = Math.sin(ang), U = p => shed ? [(p[0] * sa - p[1] * ca) / us, (p[0] * ca + p[1] * sa) / us] : [p[0] / 4, p[1] / 4];   // ribs run along the longest side
+    for (const [i, j, k] of tr) { const A = b.p[i], B = b.p[j], C = b.p[k]; rm.tri([A[0], wallH + 0.05, A[1]], [B[0], wallH + 0.05, B[1]], [C[0], wallH + 0.05, C[1]], U(A), U(B), U(C), UP); }
   }
 }
 // trees, lamps, parked cars
@@ -1328,6 +1339,23 @@ for (const r of roads) {
       for (const [a2, b2] of [[-1, -1], [-1, 1], [-0.02, -1], [-0.02, 1]]) { const fx = cx + ux * a2 * Lu / 2 + (-uz) * b2 * (Lv / 2 + 1), fz = cz + uz * a2 * Lu / 2 + ux * b2 * (Lv / 2 + 1);
         if (inBuilding(fx, fz) || roadDist(fx, fz, -1) < 2) continue; mg('pole', poleMat).add(new THREE.CylinderGeometry(0.12, 0.2, 14, 8), mat4(fx, 7, fz)); mg('floodHead', stdMat({ color: 0x3a3f42, roughness: 0.5 })).add(new THREE.BoxGeometry(1.4, 0.6, 0.4), mat4(fx, 14, fz)); addCircle(fx, fz, 0.3); }
     } else { const [U, Lu, Lv] = l1 >= l2 ? [e1, l1, l2] : [e2, l2, l1]; pitch(cx, cz, U[0] / Lu, U[1] / Lu, Lu - m * 2, Lv - m * 2); }
+  }
+}
+// big staff car parks north of Wobaston Road: white bay lines along every service aisle, lightly occupied
+{
+  const lm = mg('dash', dashMat, false, true), pad = mg('asphalt', asphaltMat, false, true), y = 0.056, bw = 2.5, dep = 4.8;
+  for (const r of roads) {
+    if (r.c || r.k !== 8 || !r.p.every(q => q[0] > -300 && q[0] < 350 && q[1] < -415)) continue;
+    walk(r.p, bw, (x, z, tx, tz) => {
+      for (const sd of [-1, 1]) {
+        const nx = tz * sd, nz = -tx * sd, d0 = r.w / 2 + 0.1, cx = x + nx * (d0 + dep / 2), cz = z + nz * (d0 + dep / 2), fx = x + nx * (d0 + dep), fz = z + nz * (d0 + dep);
+        if (inBuilding(cx, cz) || inBuilding(fx, fz) || roadDist(cx, cz, r.id) < 1.6 || roadDist(fx, fz, r.id) < 0.4 || nearWall(cx, cz, 1.0)) continue;
+        const ex = x + tx * bw / 2, ez = z + tz * bw / 2, lx = tx * 0.05, lz = tz * 0.05, hx = tx * (bw / 2 + 0.02), hz = tz * (bw / 2 + 0.02), ax = x + nx * (d0 - 0.15), az = z + nz * (d0 - 0.15), bx = x + nx * (d0 + dep + 0.3), bz = z + nz * (d0 + dep + 0.3);
+        pad.quad([ax - hx, 0.044, az - hz], [ax + hx, 0.044, az + hz], [bx + hx, 0.044, bz + hz], [bx - hx, 0.044, bz - hz], [ax / 6, az / 6], [(ax + hx) / 6, (az + hz) / 6], [bx / 6, bz / 6], [(bx - hx) / 6, (bz - hz) / 6], UP);
+        lm.quad([ex + nx * d0 - lx, y, ez + nz * d0 - lz], [ex + nx * d0 + lx, y, ez + nz * d0 + lz], [ex + nx * (d0 + dep) + lx, y, ez + nz * (d0 + dep) + lz], [ex + nx * (d0 + dep) - lx, y, ez + nz * (d0 + dep) - lz], [0, 0], [1, 0], [1, 1], [0, 1], UP);
+        if (srand() < (isTouch ? 0.04 : 0.08)) addParked(cx, cz, Math.atan2(-nx, -nz) + (srand() < 0.5 ? 0 : Math.PI));
+      }
+    }, sr(0, bw));
   }
 }
 // globe lamps (three-globe heads) along the business-park aisles
