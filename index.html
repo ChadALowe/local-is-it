@@ -1281,7 +1281,7 @@ const spawn = (() => {                                                 // a driv
   return { x: best.x + best.dz * -1.6, z: best.z + best.dx * 1.6, h: Math.atan2(-best.dx, -best.dz) };
 })();
 const parked = [];
-function addParked(x, z, yaw) { parked.push({ x, z, yaw, color: pick(carColors) }); const c = Math.cos(yaw), s = Math.sin(yaw); for (const o of [-1.0, 1.0]) addCircle(x - s * o, z - c * o, 0.9); }
+function addParked(x, z, yaw) { const p = { x, z, yaw, color: pick(carColors) }; parked.push(p); const c = Math.cos(yaw), s = Math.sin(yaw); for (const o of [-1.0, 1.0]) { const cx = x - s * o, cz = z - c * o; cgrid.ins({ t: 0, x: cx, z: cz, r: 0.9, car: p }, cx - 2.2, cx + 2.2, cz - 2.2, cz + 2.2); } }
 const carColors = [0xf2f2f0, 0xb8bcc2, 0x15171a, 0xa32a2a, 0x2a4e86, 0x2f5a3e, 0xc9b896, 0xd1a12a, 0x6d2a3a, 0x7a8590];
 for (const r of roads) {
   if (r.c || r.k < 4 || r.k > 7 || r.w < 5.5) continue;
@@ -1974,7 +1974,8 @@ function createCar(color) {
     };
     const ims = groups.map(([g, m, cast]) => mk(g, m, cast));
     const far = [mk(lowPaint, groups[0][1], true), mk(lowDark, groups[3][1], true)];
-    list.forEach((p, i) => { const m = mat4(p.x, 0.05, p.z, p.yaw); ims.forEach(im => im.setMatrixAt(i, m)); ims[0].setColorAt(i, colr.setHex(p.color)); });
+    sph.radius += 25;                                                    // room for cars that get shunted out of their bay
+    list.forEach((p, i) => { const m = mat4(p.x, 0.05, p.z, p.yaw); ims.forEach(im => im.setMatrixAt(i, m)); ims[0].setColorAt(i, colr.setHex(p.color)); p.ims = ims; p.i = i; });
     ims.forEach(im => { im.instanceMatrix.needsUpdate = true; }); if (ims[0].instanceColor) ims[0].instanceColor.needsUpdate = true;
     far[0].instanceMatrix = far[1].instanceMatrix = ims[0].instanceMatrix; far[0].instanceColor = ims[0].instanceColor;   // share the instance buffers
     far.forEach(im => { im.visible = false; });
@@ -2334,6 +2335,7 @@ function stepWalker(dt) {
   const R = 0.32, list = cgrid.at(W.x, W.z);
   if (list) for (const c of list) {
     if (c.lv && (c.lv === 2) !== (W.y > -1)) continue;
+    if (c.car && c.car.dyn) continue;
     let nx, nz, ov;
     if (c.t === 0) { const dx = W.x - c.x, dz = W.z - c.z, d = Math.hypot(dx, dz); if (d >= R + c.r || d < 1e-4) continue; nx = dx / d; nz = dz / d; ov = R + c.r - d; }
     else { const sx = c.x1 - c.x0, sz = c.z1 - c.z0, l2 = sx * sx + sz * sz || 1, t = clamp(((W.x - c.x0) * sx + (W.z - c.z0) * sz) / l2, 0, 1), dx = W.x - (c.x0 + sx * t), dz = W.z - (c.z0 + sz * t), d = Math.hypot(dx, dz); if (d >= R || d < 1e-4) continue; nx = dx / d; nz = dz / d; ov = R - d; }
@@ -2341,6 +2343,7 @@ function stepWalker(dt) {
   }
   { const cf = -Math.sin(player.h), cz = -Math.cos(player.h), rx = Math.cos(player.h), rz = -Math.sin(player.h), dx = W.x - player.x, dz = W.z - player.z, u = dx * cf + dz * cz, v = dx * rx + dz * rz;   // walk round the parked car
     if (Math.abs(u) < 2.4 && Math.abs(v) < 1.2) { if (2.4 - Math.abs(u) < 1.2 - Math.abs(v)) { const nu = Math.sign(u) * 2.4; W.x += cf * (nu - u); W.z += cz * (nu - u); } else { const nv = Math.sign(v) * 1.2; W.x += rx * (nv - v); W.z += rz * (nv - v); } } }
+  for (const c of DYN) { if (Math.abs(c.x - W.x) > 5 || Math.abs(c.z - W.z) > 5) continue; for (const [qx, qz] of carCircles(c)) { const dx = W.x - qx, dz = W.z - qz, d = Math.hypot(dx, dz); if (d < 0.32 + CR && d > 1e-4) { W.x += dx / d * (0.32 + CR - d); W.z += dz / d * (0.32 + CR - d); } } }
   W.x = clamp(W.x, -LIM, LIM); W.z = clamp(W.z, -LIM, LIM);
   if (sp > 0 && mf > 0) for (const d of DOORS) {                                  // walk-in doors: step up to one, heading towards it, and you go through
     const toOut = -Math.sin(W.h) * d.ox - Math.cos(W.h) * d.oz;
@@ -2483,6 +2486,53 @@ function crashDrift() {
 }
 const cir = [-1.05, 0, 1.05];
 let shake = 0, gearNow = 1, rpmNow = 0.3, spdNow = 0;
+// ===== crash physics: parked cars become rigid bodies when hit — they get shunted, spin, slide and knock into each other =====
+const DYN = [], CAR_I = (4.2 * 4.2 + 1.8 * 1.8) / 12, CAR_OFF = [-1.0, 1.0], CR = 0.9;
+function wakeCar(c) { if (c.dyn) return; c.dyn = true; c.vx = c.vz = c.w = 0; c.sleep = 0; DYN.push(c); }
+const carCircles = c => { const s2 = Math.sin(c.yaw), c2 = Math.cos(c.yaw); return CAR_OFF.map(o => [c.x - s2 * o, c.z - c2 * o]); };
+function impulse(c, cx, cz, nx, nz, j) {                               // impulse j along n (pointing away from the car) applied at contact point
+  c.vx -= nx * j; c.vz -= nz * j; const rx = cx - c.x, rz = cz - c.z; c.w += (rz * -nx * j - rx * -nz * j) / CAR_I; c.sleep = 0;
+}
+const carPointVel = (c, x, z) => [c.vx + c.w * (z - c.z), c.vz - c.w * (x - c.x)];
+// the player's car (circles along its length) against every awake car body
+function carVsCars(p, cf, cz2, cir) {
+  let worst = 0;
+  for (const c of DYN) { if (Math.abs(c.x - p.x) > 7 || Math.abs(c.z - p.z) > 7) continue;
+    for (const off of cir) { const px = p.x + cf * off, pz = p.z + cz2 * off;
+      for (const [qx, qz] of carCircles(c)) { const dx = px - qx, dz = pz - qz, d = Math.hypot(dx, dz), R = 0.86 + CR; if (d >= R || d < 1e-4) continue;
+        const nx = dx / d, nz = dz / d, ov = R - d, cx = qx + nx * CR, cz = qz + nz * CR;
+        p.x += nx * ov * 0.55; p.z += nz * ov * 0.55; c.x -= nx * ov * 0.45; c.z -= nz * ov * 0.45;
+        const [cvx, cvz] = carPointVel(c, cx, cz), vn = (p.vx - cvx) * nx + (p.vz - cvz) * nz;
+        if (vn < 0) { const j = -(1 + 0.25) * vn / (1 / 1.0 + 1 / 0.9);   // player ~10% heavier than a parked car
+          p.vx += nx * j / 1.0; p.vz += nz * j / 1.0; impulse(c, cx, cz, nx, nz, j / 0.9); worst = Math.max(worst, -vn); } } } }
+  return worst;
+}
+function stepCars(dt) {
+  for (const c of DYN) {
+    if (c.sleep > 1.2) continue;
+    const fx = -Math.sin(c.yaw), fz = -Math.cos(c.yaw), vf = c.vx * fx + c.vz * fz, vlx = c.vx - fx * vf, vlz = c.vz - fz * vf;
+    const kf = Math.exp(-1.1 * dt), kl = Math.exp(-5.5 * dt);           // rolls a little along its length, scrubs hard sideways
+    c.vx = fx * vf * kf + vlx * kl; c.vz = fz * vf * kf + vlz * kl; c.w *= Math.exp(-3.2 * dt);
+    c.x += c.vx * dt; c.z += c.vz * dt; c.yaw += c.w * dt;
+    // against the world: walls, kerbs, posts, trees, and other parked cars (which get knocked on)
+    for (const [qx, qz] of carCircles(c)) { const list = cgrid.at(qx, qz); if (!list) continue;
+      for (const o of list) { if (o.car === c) continue; let nx, nz, ov, ox, oz;
+        if (o.car) { if (!o.car.dyn) { if (Math.hypot(qx - o.x, qz - o.z) < CR * 2) wakeCar(o.car); } continue; }
+        if (o.lv) continue;
+        if (o.t === 0) { const dx = qx - o.x, dz = qz - o.z, d = Math.hypot(dx, dz); if (d >= CR + o.r || d < 1e-4) continue; nx = dx / d; nz = dz / d; ov = CR + o.r - d; }
+        else { const sx = o.x1 - o.x0, sz = o.z1 - o.z0, l2 = sx * sx + sz * sz || 1, t = clamp(((qx - o.x0) * sx + (qz - o.z0) * sz) / l2, 0, 1), dx = qx - (o.x0 + sx * t), dz = qz - (o.z0 + sz * t), d = Math.hypot(dx, dz); if (d >= CR || d < 1e-4) continue; nx = dx / d; nz = dz / d; ov = CR - d; }
+        c.x += nx * ov; c.z += nz * ov; const cx = qx - nx * CR, cz = qz - nz * CR, [pvx, pvz] = carPointVel(c, cx, cz), vn = pvx * nx + pvz * nz;
+        if (vn < 0) impulse(c, cx, cz, -nx, -nz, -(1.3) * vn); } }
+    if (Math.hypot(c.vx, c.vz) < 0.08 && Math.abs(c.w) < 0.03) c.sleep += dt; else c.sleep = 0;
+    const m = mat4(c.x, 0.05, c.z, c.yaw); for (const im of c.ims) { im.setMatrixAt(c.i, m); im.instanceMatrix.needsUpdate = true; }
+  }
+  for (let a = 0; a < DYN.length; a++) for (let b2 = a + 1; b2 < DYN.length; b2++) {   // awake cars against each other
+    const A = DYN[a], B = DYN[b2]; if ((A.sleep > 1.2 && B.sleep > 1.2) || Math.abs(A.x - B.x) > 5 || Math.abs(A.z - B.z) > 5) continue;
+    for (const [ax, az] of carCircles(A)) for (const [bx, bz] of carCircles(B)) { const dx = ax - bx, dz = az - bz, d = Math.hypot(dx, dz); if (d >= CR * 2 || d < 1e-4) continue;
+      const nx = dx / d, nz = dz / d, ov = CR * 2 - d; A.x += nx * ov / 2; A.z += nz * ov / 2; B.x -= nx * ov / 2; B.z -= nz * ov / 2;
+      const cx = bx + nx * CR, cz = bz + nz * CR, [av, aw] = carPointVel(A, cx, cz), [bv, bw] = carPointVel(B, cx, cz), vn = (av - bv) * nx + (aw - bw) * nz;
+      if (vn < 0) { const j = -(1.25) * vn / 2; impulse(A, cx, cz, -nx, -nz, j); impulse(B, cx, cz, nx, nz, j); } } }
+}
 function stepPlayer(dt) {
   const p = player, playing = state === 'play' && !W.on;
   const thr = playing ? keys.up : 0, brk = playing ? keys.down : W.on ? 0 : 1, st = playing ? clamp(keys.left - keys.right - joy.x * 1.15, -1, 1) : 0;
@@ -2511,6 +2561,7 @@ function stepPlayer(dt) {
     const px = p.x + cf * off, pz = p.z + cz2 * off, R = 0.86, list = cgrid.at(px, pz); if (!list) continue;
     for (const c of list) {
       if (c.lv && (c.lv === 2) !== (p.y > -1)) continue;                 // underpass: cutting walls (below) vs railings (above)
+      if (c.car) { if (!c.car.dyn && Math.hypot(px - c.x, pz - c.z) < R + c.r) wakeCar(c.car); continue; }   // parked cars are pushable bodies
       let nx, nz, ov;
       if (c.t === 0) { const dx = px - c.x, dz = pz - c.z, d = Math.hypot(dx, dz); if (d >= R + c.r || d < 1e-4) continue; nx = dx / d; nz = dz / d; ov = R + c.r - d; }
       else {
@@ -2522,6 +2573,7 @@ function stepPlayer(dt) {
       if (vn < 0) { p.vx -= nx * vn * 1.22; p.vz -= nz * vn * 1.22; p.vx *= 0.97; p.vz *= 0.97; hit = Math.max(hit, -vn); }
     }
   }
+  hit = Math.max(hit, carVsCars(p, cf, cz2, cir));
   if (Math.abs(p.x) > LIM + 8) { p.x = Math.sign(p.x) * (LIM + 8); p.vx *= -0.3; hit = Math.max(hit, 4); }
   if (Math.abs(p.z) > LIM + 8) { p.z = Math.sign(p.z) * (LIM + 8); p.vz *= -0.3; hit = Math.max(hit, 4); }
   if (hit > 3) { shake = Math.max(shake, Math.min(1, hit / 16)); thud(60 + hit * 3, Math.min(0.35, 0.05 + hit * 0.02)); if (hit > 5) crashDrift(); }
@@ -2616,7 +2668,7 @@ let last = performance.now(), hudT = 0, skidAccInit = 0, frameN = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
-  stepPlayer(dt); if (W.on) stepWalker(dt); updateWork(dt); updateTills(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
+  stepPlayer(dt); if (W.on) stepWalker(dt); updateWork(dt); updateTills(dt); stepCars(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
   { const f = follow(); sun.position.set(f.x + SUN.x * 220, SUN.y * 220, f.z + SUN.z * 220); sun.target.position.set(f.x, 0, f.z); } sun.target.updateMatrixWorld();
   sky.position.copy(camera.position); clouds.position.set(camera.position.x, 0, camera.position.z);
   hudT -= dt;
