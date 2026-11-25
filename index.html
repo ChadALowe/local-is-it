@@ -2461,7 +2461,7 @@ function start() {
   if (actx && actx.state === 'suspended') actx.resume(); state = 'play'; showMoney(); setTimeout(() => { $('hint').style.opacity = 0; }, 14000);
 }
 function resetCar() {
-  if (W.fly) { W.fly = null; W.busy = false; W.g.rotation.set(0, 0, 0); }
+  if (W.fly) { W.fly = null; W.busy = false; RAG.g.visible = false; W.g.rotation.set(0, 0, 0); }
   if (player.damaged || player.wrecked) { player.wrecked = false; scene.remove(player.car.grp); player.car = carModel ? createCar2(paintChoices[paintIdx]) : createCar(paintChoices[paintIdx]); scene.add(player.car.grp); player.damaged = false; } window.__lockMouse && window.__lockMouse(false); if (W.seated) standUp(); if (INSIDE) setInside(null); document.body.classList.remove('foot'); if (W.on) { W.on = false; W.g.visible = false; $('tOut').textContent = 'OUT'; } Object.assign(player, { x: spawn.x, z: spawn.z, y: 0, h: spawn.h, vx: 0, vz: 0, steer: 0 }); drift.pts = 0; drift.on = false; drift.t = 0; showCombo(false); }
 
 /* ================= driving ================= */
@@ -2537,6 +2537,89 @@ function stepDebris(dt) {
     if (d.vy !== 0 || d.m.position.y > 0.04) { d.vy -= 9.8 * dt; d.m.position.x += d.vx * dt; d.m.position.y += d.vy * dt; d.m.position.z += d.vz * dt; d.m.rotation.x += d.wx * dt; d.m.rotation.z += d.wz * dt;
       if (d.m.position.y < 0.04) { d.m.position.y = 0.04; if (Math.abs(d.vy) < 1.2) { d.vy = 0; d.vx = d.vz = 0; d.m.rotation.x = 0; d.m.rotation.z = 0; } else { d.vy *= -0.3; d.vx *= 0.5; d.vz *= 0.5; d.wx *= 0.5; d.wz *= 0.5; } } } }
 }
+// ===== ragdoll: a floppy body of joints held together by sticks (verlet), thrown out of the car =====
+const RAG = (() => {
+  const M = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 });
+  const skin = M(0xd9a785), top = M(0x2c4f7c), legs = M(0x2d2f36), shoe = M(0x18191b), hair = M(0x3a2618), g = new THREE.Group();
+  const cyl = (r0, r1, m) => { const geo = new THREE.CylinderGeometry(r0, r1, 1, 8); geo.translate(0, 0.5, 0); const o = new THREE.Mesh(geo, m); o.castShadow = true; g.add(o); return o; };
+  const ball = (r, m) => { const o = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), m); o.castShadow = true; g.add(o); return o; };
+  // joints in the standing pose (x right, y up, z back), radius for touching the ground
+  const J = { head: [0, 1.66, 0, 0.12], neck: [0, 1.5, 0, 0.07], shL: [-0.22, 1.44, 0, 0.07], shR: [0.22, 1.44, 0, 0.07], elL: [-0.25, 1.14, 0, 0.05], elR: [0.25, 1.14, 0, 0.05],
+    haL: [-0.25, 0.84, 0, 0.05], haR: [0.25, 0.84, 0, 0.05], pel: [0, 0.95, 0, 0.12], hiL: [-0.1, 0.9, 0, 0.08], hiR: [0.1, 0.9, 0, 0.08], knL: [-0.1, 0.48, 0, 0.07], knR: [0.1, 0.48, 0, 0.07], ftL: [-0.1, 0.06, 0, 0.06], ftR: [0.1, 0.06, 0, 0.06] };
+  const names = Object.keys(J), P = names.map(n => ({ n, r: J[n][3], x: 0, y: 0, z: 0, px: 0, py: 0, pz: 0, gy: 0 })), I = {}; names.forEach((n, i) => I[n] = P[i]);
+  const S = [], stick = (a, b, k = 1) => { const A = J[a], B = J[b]; S.push({ a: I[a], b: I[b], L: Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]), k }); };
+  const minD = (a, b, L) => S.push({ a: I[a], b: I[b], L, min: true, k: 1 });
+  // rigid torso box (shoulders, neck, hips, pelvis all braced) and head
+  const torso = ['neck', 'shL', 'shR', 'pel', 'hiL', 'hiR']; for (let i = 0; i < torso.length; i++) for (let j = i + 1; j < torso.length; j++) stick(torso[i], torso[j]);
+  stick('head', 'neck'); stick('head', 'shL', 0.6); stick('head', 'shR', 0.6); stick('head', 'pel', 0.5);
+  // limbs: floppy sticks, with a little stiffness so elbows/knees don't fold flat or into the body
+  for (const s of ['L', 'R']) { stick('sh' + s, 'el' + s); stick('el' + s, 'ha' + s); stick('hi' + s, 'kn' + s); stick('kn' + s, 'ft' + s);
+    minD('sh' + s, 'ha' + s, 0.3); minD('hi' + s, 'ft' + s, 0.5); minD('kn' + s, 'neck', 0.5); minD('ft' + s, 'neck', 0.75); minD('ha' + s, 'pel', 0.12); }
+  minD('knL', 'knR', 0.12); minD('ftL', 'ftR', 0.1);
+  // meshes
+  const torsoM = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.16, 0.6, 10), top); torsoM.scale.set(1, 1, 0.7); torsoM.castShadow = true; g.add(torsoM);
+  const headM = ball(0.12, skin), hairM = new THREE.Mesh(new THREE.SphereGeometry(0.125, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hair); g.add(hairM);
+  const neckM = cyl(0.07, 0.07, skin), bones = [];
+  for (const s of ['L', 'R']) { bones.push([cyl(0.055, 0.05, top), I['sh' + s], I['el' + s]], [cyl(0.05, 0.045, top), I['el' + s], I['ha' + s]], [cyl(0.075, 0.07, legs), I['hi' + s], I['kn' + s]], [cyl(0.07, 0.064, legs), I['kn' + s], I['ft' + s]]); }
+  const hands = [ball(0.05, skin), ball(0.05, skin)], shoes = [0, 1].map(() => { const o = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.26), shoe); o.castShadow = true; g.add(o); return o; });
+  g.visible = false; scene.add(g);
+  const up = new THREE.Vector3(0, 1, 0), v = new THREE.Vector3(), q = new THREE.Quaternion(), mx = new THREE.Matrix4(), ax = new THREE.Vector3(), ay = new THREE.Vector3(), az = new THREE.Vector3();
+  const place = (o, a, b) => { v.set(b.x - a.x, b.y - a.y, b.z - a.z); const L = v.length() || 1e-3; o.position.set(a.x, a.y, a.z); o.quaternion.setFromUnitVectors(up, v.multiplyScalar(1 / L)); o.scale.set(1, L, 1); };
+  const ground = (x, z, y) => { if (!TR.foot(x, z, 0.5)) return 0; const l = TR.loc(x, z); if (Math.abs(l.q) > TR.band) return 0; return (Math.abs(l.t) < TR.Ld + 0.2 && y > -1) ? 0 : -TR.depth(l.t); };
+  const o = { g, P, I, rest: 0 };
+  o.start = (x, y, z, h, vx, vy, vz, spin) => {           // stand the body at (x,y,z) facing h, pitched forward (diving out), moving at v and tumbling
+    const c = Math.cos(h), s = Math.sin(h), pitch = 1.0, cp = Math.cos(pitch), sp = Math.sin(pitch);
+    for (const p of P) { const j = J[p.n], ly = j[1] - 0.95, lz0 = j[2];
+      const ry = ly * cp + lz0 * sp, rz = -ly * sp + lz0 * cp;            // lean forward about the hips
+      const lx = j[0], wx = lx * c + rz * s, wz = -lx * s + rz * c;          // turn to face h (forward = -z)
+      p.x = x + wx; p.y = y + 0.95 + ry; p.z = z + wz;
+      // tumble: spin about the body's right axis (w = -spin * right), so the head goes forward and down: v = w x r
+      const Rx = c, Rz = -s, rx0 = wx, ry0 = ry, rz0 = wz, wxv = -spin * Rx, wzv = -spin * Rz;
+      const tvx = -wzv * ry0, tvy = wzv * rx0 - wxv * rz0, tvz = wxv * ry0, jit = () => (Math.random() - 0.5) * 1.2, dt0 = 1 / 120;
+      p.px = p.x - (vx + tvx + jit()) * dt0; p.py = p.y - (vy + tvy + jit()) * dt0; p.pz = p.z - (vz + tvz + jit()) * dt0; }
+    o.rest = 0; o.t = 0; o.hits = 0; g.visible = true; o.draw();
+  };
+  o.step = (dt, car) => {
+    o.t += dt; const n = Math.max(1, Math.ceil(dt / (1 / 120))), h = Math.min(dt, 0.05) / n;
+    for (const p of P) p.gy = ground(p.x, p.z, p.y);
+    let maxV = 0, impact = 0;
+    for (let it = 0; it < n; it++) {
+      for (const p of P) { const onG = p.y - p.r <= p.gy + 0.03, fr = onG ? 0.8 : 0.999;
+        const vx = (p.x - p.px) * fr, vy = (p.y - p.py) * 0.999, vz = (p.z - p.pz) * fr; p.px = p.x; p.py = p.y; p.pz = p.z; p.x += vx; p.y += vy - 9.8 * h * h; p.z += vz; }
+      for (let k = 0; k < 6; k++) {
+        for (const c of S) { const dx = c.b.x - c.a.x, dy = c.b.y - c.a.y, dz = c.b.z - c.a.z, d = Math.hypot(dx, dy, dz) || 1e-4; if (c.min && d >= c.L) continue; const f = (d - c.L) / d * 0.5 * c.k;
+          c.a.x += dx * f; c.a.y += dy * f; c.a.z += dz * f; c.b.x -= dx * f; c.b.y -= dy * f; c.b.z -= dz * f; }
+        for (const p of P) {
+          if (p.y - p.r < p.gy) { const vel = p.y - p.py; p.y = p.gy + p.r; if (vel < 0) { impact = Math.max(impact, -vel / h); p.py = p.y + vel * 0.2; } }
+          if (p.y < p.gy + 2.4) { const list = cgrid.at(p.x, p.z); if (list) for (const c of list) {      // walls, posts, parked cars
+            if (c.lv && (c.lv === 2) !== (p.y > -1)) continue; if (c.car && c.car.dyn) continue; let nx, nz, ov;
+            if (c.t === 0) { const dx = p.x - c.x, dz = p.z - c.z, d = Math.hypot(dx, dz); if (d >= p.r + c.r || d < 1e-4) continue; nx = dx / d; nz = dz / d; ov = p.r + c.r - d; }
+            else { const sx = c.x1 - c.x0, sz = c.z1 - c.z0, l2 = sx * sx + sz * sz || 1, t = clamp(((p.x - c.x0) * sx + (p.z - c.z0) * sz) / l2, 0, 1), dx = p.x - (c.x0 + sx * t), dz = p.z - (c.z0 + sz * t), d = Math.hypot(dx, dz); if (d >= p.r || d < 1e-4) continue; nx = dx / d; nz = dz / d; ov = p.r - d; }
+            p.x += nx * ov; p.z += nz * ov; p.px += nx * ov * 0.5; p.pz += nz * ov * 0.5; } }
+          if (car && p.y < car.y + 1.35) {                                        // the wrecked car itself
+            const cf = -Math.sin(car.h), cz = -Math.cos(car.h), rx = Math.cos(car.h), rz = -Math.sin(car.h), dx = p.x - car.x, dz = p.z - car.z, u = dx * cf + dz * cz, w = dx * rx + dz * rz;
+            if (Math.abs(u) < 2.2 && Math.abs(w) < 0.95) { if (2.2 - Math.abs(u) < 0.95 - Math.abs(w)) { const d = Math.sign(u) * 2.2 - u; p.x += cf * d; p.z += cz * d; } else { const d = Math.sign(w) * 0.95 - w; p.x += rx * d; p.z += rz * d; } }
+          }
+        }
+      }
+    }
+    for (const p of P) maxV = Math.max(maxV, Math.hypot(p.x - p.px, p.y - p.py, p.z - p.pz) / h);
+    if (impact > 3 && o.t - (o.lastThud || 0) > 0.25) { o.lastThud = o.t; thud(60 + Math.random() * 20, Math.min(0.35, impact * 0.04)); }
+    o.rest = maxV < 0.6 ? o.rest + dt : 0;
+    o.draw(); return maxV;
+  };
+  o.draw = () => {
+    const pl = I.pel, nk = I.neck; ay.set(nk.x - pl.x, nk.y - pl.y, nk.z - pl.z).normalize(); ax.set(I.shR.x - I.shL.x, I.shR.y - I.shL.y, I.shR.z - I.shL.z); ax.addScaledVector(ay, -ax.dot(ay)).normalize(); az.crossVectors(ax, ay);
+    mx.makeBasis(ax, ay, az); torsoM.quaternion.setFromRotationMatrix(mx); torsoM.position.set((pl.x + nk.x) / 2 + ay.x * -0.02, (pl.y + nk.y) / 2, (pl.z + nk.z) / 2);
+    place(neckM, nk, I.head); headM.position.set(I.head.x, I.head.y, I.head.z);
+    const hy = v.set(I.head.x - nk.x, I.head.y - nk.y, I.head.z - nk.z).normalize(), hx = ax.clone().addScaledVector(hy, -ax.dot(hy)).normalize(), hz = new THREE.Vector3().crossVectors(hx, hy);
+    mx.makeBasis(hx, hy, hz); hairM.quaternion.setFromRotationMatrix(mx); hairM.position.set(I.head.x + hy.x * 0.02 + hz.x * 0.01, I.head.y + hy.y * 0.02 + hz.y * 0.01, I.head.z + hy.z * 0.02 + hz.z * 0.01);
+    for (const [m, a, b] of bones) place(m, a, b);
+    hands[0].position.set(I.haL.x, I.haL.y, I.haL.z); hands[1].position.set(I.haR.x, I.haR.y, I.haR.z);
+    [[shoes[0], I.knL, I.ftL], [shoes[1], I.knR, I.ftR]].forEach(([m, k, f]) => { const sy = v.set(k.x - f.x, k.y - f.y, k.z - f.z).normalize(); m.position.set(f.x - az.x * 0.05, f.y, f.z - az.z * 0.05); const sx2 = ax.clone().addScaledVector(sy, -ax.dot(sy)).normalize(); mx.makeBasis(sx2, sy, new THREE.Vector3().crossVectors(sx2, sy)); m.quaternion.setFromRotationMatrix(mx); });
+  };
+  return o;
+})();
 // ===== big crash: you are thrown out through the windscreen and the car explodes =====
 const BOOM_LIGHT = new THREE.PointLight(0xffa040, 0, 40, 2); scene.add(BOOM_LIGHT);   // always in the scene (off) so adding it never forces a recompile
 const fireMatShared = new THREE.MeshBasicMaterial({ color: 0xffa23a, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending });
@@ -2548,8 +2631,9 @@ function bigCrash(P, dx, dz, speed) {                                  // d = di
   const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L; const fx = -Math.sin(P.h), fz = -Math.cos(P.h);
   // out through the windscreen: launched forward and up, tumbling
   Object.assign(W, { on: true, x: P.x + fx * 1.6, z: P.z + fz * 1.6, y: P.y, h: P.h, vx: 0, vz: 0, pitch: 0, jh: 0, busy: true });
-  W.fly = { vx: dx * speed * 0.55 + fx * 3, vz: dz * speed * 0.55 + fz * 3, vy: 6 + speed * 0.12, h: 1.2, t: 0, sx: 8 + Math.random() * 5, sz: (Math.random() - 0.5) * 6, landed: 0 };
-  W.g.visible = true; document.body.classList.add('foot'); $('tOut').textContent = 'IN';
+  W.fly = { t: 0, car: P };
+  RAG.start(W.x, P.y + 0.35, W.z, P.h, dx * speed * 0.5 + fx * 2, 4.5 + speed * 0.1, dz * speed * 0.5 + fz * 2, 4 + Math.random() * 3);
+  W.g.visible = false; document.body.classList.add('foot'); $('tOut').textContent = 'IN';
   for (const m of P.car.grp.children[0].children) if (m.isMesh && m.userData.glass) { m.visible = false; }      // windscreen gone
   spray(P.x + fx * 1.8, 1.1, P.z + fz * 1.8, dx, dz, 20, shardMat, true); toast('💥 You went through the windscreen!');
   setTimeout(() => explodeCar(P), 900);
@@ -2583,11 +2667,11 @@ function stepFX(dt) { for (let i = FX.length - 1; i >= 0; i--) if (FX[i](dt)) FX
 // flying through the air, landing, lying there, then getting up
 function stepFly(dt) {
   const F = W.fly; if (!F) return false; F.t += dt;
-  if (!F.landed) { F.vy -= 9.8 * dt; W.x += F.vx * dt; W.z += F.vz * dt; F.h += F.vy * dt; W.g.rotation.set(F.t * F.sx, W.h, F.t * F.sz);
-    if (F.h <= 0.18 && F.vy < 0) { F.h = 0.18; if (Math.abs(F.vy) > 3) { F.vy *= -0.3; F.vx *= 0.45; F.vz *= 0.45; thud(70, 0.3); } else { F.landed = F.t; thud(55, 0.25); } } }
-  else { F.vx *= Math.exp(-6 * dt); F.vz *= Math.exp(-6 * dt); W.x += F.vx * dt; W.z += F.vz * dt; W.g.rotation.set(-Math.PI / 2, W.h, 0); F.h = 0.15;
-    if (F.t - F.landed > 2.4) { W.fly = null; W.busy = false; W.g.visible = false; W.g.rotation.set(0, W.h, 0); W.pitch = 0; toast('Ouch. You\'re OK. Press reset for a new car.'); return false; } }
-  W.g.position.set(W.x, W.y + F.h - (F.landed ? 0 : 0.9), W.z); return true;
+  const P = F.car, car = P && !P.car.grp.parent ? null : P; RAG.step(dt, car);
+  const pl = RAG.I.pel; W.x = pl.x; W.z = pl.z; W.y = Math.min(0, pl.y - 0.95);
+  if (!F.down && RAG.rest > 0.4) F.down = F.t;
+  if ((F.down && F.t - F.down > 2.2) || F.t > 9) { W.fly = null; W.busy = false; RAG.g.visible = false; W.g.visible = false; W.g.rotation.set(0, W.h, 0); W.pitch = 0; W.y = Math.max(-TR.D, Math.min(0, W.y)); toast('Ouch. You\'re OK. Press reset for a new car.'); return false; }
+  return true;
 }
 let damageCooldown = 0;
 function crashDamage(c, cx, cz, nx, nz, speed, P) {                    // n points from the parked car towards the player's car
@@ -2734,9 +2818,11 @@ let camA = player.h;
 camera.position.set(player.x + 6, 3, player.z + 9);
 function stepCamera(dt) {
   if (!W.on && camera.near !== 0.15) { camera.near = 0.15; camera.updateProjectionMatrix(); }
-  if (W.on && W.fly) {                                                   // thrown from the car: chase the tumbling body
-    const F = W.fly, tx2 = W.x, tz2 = W.z, ty = W.g.position.y + 0.6, back = F.landed ? 0 : 1; camera.position.lerp(new THREE.Vector3(tx2 + Math.sin(W.h) * (5 * back + 1.5), ty + (F.landed ? 3.2 : 2.2), tz2 + Math.cos(W.h) * (5 * back + 1.5)), Math.min(1, dt * 5));
-    camera.lookAt(tx2, ty - 0.4, tz2); return;
+  if (W.on && W.fly) {                                                   // thrown from the car: chase the ragdoll
+    const F = W.fly, pl = RAG.I.pel, down = !!F.down, back = down ? 2.2 : 5.5, tx2 = pl.x, tz2 = pl.z, ty = pl.y;
+    if (camera.near !== 0.15) { camera.near = 0.15; camera.updateProjectionMatrix(); }
+    const want = new THREE.Vector3(tx2 + Math.sin(W.h) * back, Math.max(ty, 0) + (down ? 3.0 : 2.0), tz2 + Math.cos(W.h) * back); camera.position.lerp(want, Math.min(1, dt * 4));
+    camera.lookAt(tx2, ty, tz2); return;
   }
   if (W.on) {                                                            // first person: eyes of the walker, looking where they face
     const fx = -Math.sin(W.h), fz = -Math.cos(W.h), bob = Math.abs(W.vx) + Math.abs(W.vz) > 0.1 ? Math.sin(W.ph * 2) * 0.03 : 0;
