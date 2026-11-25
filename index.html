@@ -842,68 +842,112 @@ function buildLInterior(b, door, wallH) {
   pbox(white, 372, 100, 9, 11, 1.0, 0, true);
 }
 const STORE = {};
-const SD = { t: 0, want: 0, panes: [] };                               // Morrisons sliding entrance doors
+const SD = { t: 0, want: 0, panes: [] }, SHOPGATE = {};                               // Morrisons sliding entrance doors
 function buildShopInterior(b, F, wallH) {
-  const { ax, az, tx, tz, ox, oz, L } = F, CE = Math.min(3.6, wallH - 0.1), yawU = Math.atan2(-tz, tx), u0 = L * 0.93;
-  const I = (u, w) => [ax + tx * u - ox * w, az + tz * u - oz * w];     // u along the shop front (towards the entrance end), w into the shop
+  const { ax, az, tx, tz, ox, oz } = F, CE = Math.min(3.6, wallH - 0.1), yawU = Math.atan2(-tz, tx);
+  const I = (u, w) => [ax + tx * u - ox * w, az + tz * u - oz * w];     // u: along the shop front (north), w: into the shop (east)
   const inside = (x, z, m = 0.8) => inPoly(x, z, b.p) && !nearWall(x, z, m);
   const ibox = (m, u, w, du, dw, h, y0 = 0, collide = false) => { const [x, z] = I(u, w); m.add(new THREE.BoxGeometry(du, h, dw), mat4(x, y0 + h / 2, z, yawU));
     if (collide) { const c = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, c2]) => I(u + a * du / 2, w + c2 * dw / 2)); for (let k = 0; k < 4; k++) addSeg(c[k][0], c[k][1], c[(k + 1) % 4][0], c[(k + 1) % 4][1]); } };
+  const wallW = u => { for (let w = 70; w > 0; w -= 0.25) { const [x, z] = I(u, w); if (inPoly(x, z, b.p)) return w; } return 0; };   // depth of the back wall at u
+  // the entrance: the north face of the block that sticks out of the front, just south of the big sign
+  const sg = b.area >= 0 ? 1 : -1, n = b.p.length; let E = null;
+  for (let i = 0; i < n; i++) { const a = b.p[i], c = b.p[(i + 1) % n], Le = Math.hypot(c[0] - a[0], c[1] - a[1]), nx = sg * (c[1] - a[1]) / Le, nz = -sg * (c[0] - a[0]) / Le;
+    if (nz < -0.9 && Le > 2.5 && Le < 6 && (c[0] + a[0]) / 2 < ax) E = { a, c, Le, nx, nz, ex: (c[0] - a[0]) / Le, ez: (c[1] - a[1]) / Le, mx: (a[0] + c[0]) / 2, mz: (a[1] + c[1]) / 2 }; }
+  if (!E) return;
   // floor, ceiling and wall lining
   const floor = mg('shopFloor', lit({ map: mkTex(64, 64, (g, w, h) => { g.fillStyle = '#d9d6cf'; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(0, 0, w, 1); g.fillRect(0, 0, 1, h); for (let i = 0; i < 160; i++) { g.fillStyle = 'rgba(90,80,70,.08)'; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); } }), color: 0xc8c4bb }, 0.22), false, true);
   const ceil = mg('shopCeil', lit({ color: 0xe4e2dc }, 0.35), false, false), lin = mg('shopLin', lit({ color: 0xd9d3c4 }, 0.25), false, false), winIn = mg('shopWinIn', lit({ color: 0x9fc3d6 }, 0.9), false, false);
   for (const [i, j, k] of triangulate(b.p)) { const A = b.p[i], B = b.p[j], C = b.p[k];
     floor.tri([A[0], 0.06, A[1]], [B[0], 0.06, B[1]], [C[0], 0.06, C[1]], [A[0] / 1.6, A[1] / 1.6], [B[0] / 1.6, B[1] / 1.6], [C[0] / 1.6, C[1] / 1.6], UP);
     ceil.tri([A[0], CE, A[1]], [C[0], CE, C[1]], [B[0], CE, B[1]], [0, 0], [1, 0], [1, 1], [0, -1, 0]); }
-  const sg = b.area >= 0 ? 1 : -1, n = b.p.length;
   for (let i = 0; i < n; i++) { const a = b.p[i], c = b.p[(i + 1) % n], Le = Math.hypot(c[0] - a[0], c[1] - a[1]), nx = -sg * (c[1] - a[1]) / Le * 0.12, nz = sg * (c[0] - a[0]) / Le * 0.12;
     const front = Math.abs((c[0] - a[0]) / Le * tx + (c[1] - a[1]) / Le * tz) > 0.98 && Math.abs((a[0] - ax) * ox + (a[1] - az) * oz) < 0.5;
     lin.quad([a[0] + nx, 0, a[1] + nz], [c[0] + nx, 0, c[1] + nz], [c[0] + nx, CE, c[1] + nz], [a[0] + nx, CE, a[1] + nz], [0, 0], [1, 0], [1, 1], [0, 1], [nx, 0, nz]);
-    if (front) winIn.quad([a[0] + nx * 1.1, 0.5, a[1] + nz * 1.1], [c[0] + nx * 1.1, 0.5, c[1] + nz * 1.1], [c[0] + nx * 1.1, CE - 0.3, c[1] + nz * 1.1], [a[0] + nx * 1.1, CE - 0.3, a[1] + nz * 1.1], [0, 0], [1, 0], [1, 1], [0, 1], [nx, 0, nz]); }   // shop-front glazing seen from inside
-  // long strip lights
+    if (front) winIn.quad([a[0] + nx * 1.1, 0.5, a[1] + nz * 1.1], [c[0] + nx * 1.1, 0.5, c[1] + nz * 1.1], [c[0] + nx * 1.1, CE - 0.3, c[1] + nz * 1.1], [a[0] + nx * 1.1, CE - 0.3, a[1] + nz * 1.1], [0, 0], [1, 0], [1, 1], [0, 1], [nx, 0, nz]); }
   const Lm = mg('shopLight', new THREE.MeshBasicMaterial({ color: 0xffffff }), false, false);
-  for (let u = -24; u < L + 2; u += 3.4) for (let w = 3; w < 60; w += 6) { const [x, z] = I(u, w); if (inside(x, z, 0.6)) Lm.add(new THREE.BoxGeometry(0.25, 0.04, 4.2), mat4(x, CE - 0.03, z, yawU)); }
-  const grey = mg('shopGrey', lit({ color: 0x8d949a }, 0.35)), black = mg('shopBlack', lit({ color: 0x1b1d20 }, 0.25)), green = mg('shopGreen', lit({ color: 0x1f5c3a }, 0.4)), steel = mg('shopSteel', lit({ color: 0xb4b8bb }, 0.4));
-  // checkouts along the front, between the entrance and the far end
-  for (let k = 0; k < 7; k++) { const u = u0 - 7 - k * 3.1, w = 8.2, [x, z] = I(u, w); if (!inside(x, z, 1.8)) continue;
-    ibox(grey, u, w, 0.9, 3.4, 0.86, 0, true); ibox(black, u, w + 0.25, 0.7, 2.6, 0.03, 0.86); ibox(steel, u, w - 1.6, 0.9, 0.3, 0.06, 0.86);
-    ibox(black, u - 0.2, w - 1.3, 0.05, 0.3, 0.25, 0.92); ibox(green, u, w - 1.55, 0.06, 0.06, 0.9, 0.9); ibox(green, u, w - 1.55, 0.35, 0.05, 0.25, 1.85);   // till screen and lane light
-    ibox(black, u - 1.0, w - 0.9, 0.5, 0.5, 0.45, 0); }
-  // product shelving: aisles running into the shop, each made of 2.5 m modules, products on both faces
-  const prodMat = col => lit({ map: mkTex(128, 64, (g, w, h) => { g.fillStyle = '#e2e2dc'; g.fillRect(0, 0, w, h); const pal = col;
-    for (let r = 0; r < 4; r++) { const y0 = r * 16; g.fillStyle = '#9aa0a4'; g.fillRect(0, y0 + 14, w, 2); for (let x = 1; x < w;) { const bw = 4 + Math.random() * 7; g.fillStyle = pal[(Math.random() * pal.length) | 0]; g.fillRect(x, y0 + 3 + Math.random() * 3, bw - 1, 11 - Math.random() * 3); x += bw; } } }) }, 0.45);
+  for (let u = -22; u < 48; u += 3.4) for (let w = -3; w < 60; w += 6) { const [x, z] = I(u, w); if (inside(x, z, 0.6)) Lm.add(new THREE.BoxGeometry(0.25, 0.04, 4.2), mat4(x, CE - 0.03, z, yawU)); }
+  const grey = mg('shopGrey', lit({ color: 0x8d949a }, 0.35)), black = mg('shopBlack', lit({ color: 0x1b1d20 }, 0.25)), green = mg('shopGreen', lit({ color: 0x1f5c3a }, 0.4)), steel = mg('shopSteel', lit({ color: 0xb4b8bb }, 0.4)), wood = mg('crateWood', lit({ color: 0x9c7a52 }, 0.35));
+  const glassC = mg('counterGlass', new THREE.MeshStandardMaterial({ color: 0xcfe3ea, roughness: 0.05, transparent: true, opacity: 0.35, depthWrite: false }), false, false);
+  const signM = (txt, bg = '#1f5c3a') => new THREE.MeshBasicMaterial({ map: mkTex(128, 32, (g, w, h) => { g.fillStyle = bg; g.fillRect(0, 0, w, h); g.fillStyle = '#f5c400'; g.fillRect(0, h - 4, w, 4); g.fillStyle = '#fff'; g.font = 'bold 18px Arial, sans-serif'; g.textAlign = 'center'; g.fillText(txt, w / 2, 21); }) });
+  const hang = (txt, u, w, wide = 1.8) => { const [x, z] = I(u, w), m = new THREE.Mesh(new THREE.PlaneGeometry(wide, wide / 4), signM(txt)); m.position.set(x, CE - 0.65, z); m.rotation.y = yawU + Math.PI / 2; shopGroup.add(m); const m2 = m.clone(); m2.rotation.y += Math.PI; shopGroup.add(m2); };
+  // where the door lands you: inside the entrance block, facing into the shop (east)
+  const [eu, ew] = (() => { const dx = E.mx - ax, dz = E.mz - az; return [dx * tx + dz * tz, -(dx * ox + dz * oz)]; })(), su = eu - 2.6, sw = ew;
+  // customer service desk on your right as you come in
+  ibox(wood, su - 3.6, sw + 2.2, 0.9, 3.4, 1.05, 0, true); ibox(mg('deskTop', lit({ color: 0xe9e6de }, 0.4)), su - 3.6, sw + 2.2, 1.1, 3.6, 0.05, 1.05); ibox(black, su - 3.7, sw + 1.6, 0.05, 0.4, 0.3, 1.1);
+  hang('Customer Service', su - 3.6, sw + 2.2, 2.4);
+  // a line of display units with the automatic entry gate in it
+  const gw = sw + 5.5; for (const [a2, b2] of [[su - 7, su - 1.0], [su + 1.0, su + 6]]) ibox(mg('promo', lit({ color: 0xc8102e }, 0.35)), (a2 + b2) / 2, gw, b2 - a2, 0.8, 1.1, 0, true);
+  const gate = { t: 0, leaves: [] };
+  for (const sd of [-1, 1]) { const [hx, hz] = I(su + sd * 1.0, gw), g = new THREE.Group(); g.position.set(hx, 0, hz); const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.9, 0.04), new THREE.MeshStandardMaterial({ color: 0xcfe3ea, roughness: 0.05, transparent: true, opacity: 0.5 })); leaf.position.set(-sd * 0.49, 0.55, 0); g.add(leaf);
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.05, 0.05), new THREE.MeshStandardMaterial({ color: 0x9aa0a4, metalness: 0.6, roughness: 0.3 })); rail.position.set(-sd * 0.49, 1.0, 0); g.add(rail); g.rotation.y = yawU; shopGroup.add(g); gate.leaves.push({ g, sd }); }
+  SHOPGATE.at = I(su, gw); SHOPGATE.g = gate; SHOPGATE.yaw = yawU;
+  // produce: fruit down the middle and on the right, vegetables on the left, salad bar across the far end
+  const crate = ['#c8102e', '#f08a1c', '#f2d33a', '#7fb93a', '#5c2a6a', '#e44d26'].map((c, k) => mg('fruit' + k, lit({ color: parseInt(c.slice(1), 16) }, 0.4)));
+  const veg = ['#3f7d2c', '#8a6a3c', '#e07b25', '#9bcf55', '#e8e0c8', '#6b2a3a'].map((c, k) => mg('veg' + k, lit({ color: parseInt(c.slice(1), 16) }, 0.4)));
+  const rowTo = (u, cols, wEnd) => { for (let w = gw + 3; w + 1.3 < wEnd; w += 2.8) { const [x, z] = I(u, w); if (!inside(x, z, 1.2)) continue; ibox(wood, u, w, 1.5, 2.5, 0.75, 0, true);
+    for (let c = 0; c < 4; c++) ibox(cols[(Math.round(w) + c) % 6], u + (c % 2 - 0.5) * 0.7, w + (Math.floor(c / 2) - 0.5) * 1.2, 0.66, 1.1, 0.16, 0.75); } };
+  const saladW = Math.min(wallW(su - 4), wallW(su + 4)) - 4.5;
+  const row = (u, cols) => rowTo(u, cols, saladW - 2.2);
+  row(su, crate); row(su - 4.2, crate); row(su + 4.2, veg);
+  hang('Fruit', su - 2.1, gw + 6); hang('Vegetables', su + 4.2, gw + 9, 2.2);
+  { const w = saladW; ibox(steel, su - 1, w, 11, 1.1, 0.9, 0, true); ibox(mg('salad', lit({ color: 0x86c440 }, 0.45)), su - 1, w, 10.5, 0.8, 0.08, 0.9); ibox(glassC, su - 1, w - 0.45, 10.6, 0.03, 0.5, 1.05); hang('Salad Bar', su - 1, w, 2.0); }
+  // grocery aisles to the left, running from the front towards the back, each a run of 2.5 m shelf modules
+  const prodMat = col => lit({ map: mkTex(128, 64, (g, w, h) => { g.fillStyle = '#e2e2dc'; g.fillRect(0, 0, w, h);
+    for (let r = 0; r < 4; r++) { const y0 = r * 16; g.fillStyle = '#9aa0a4'; g.fillRect(0, y0 + 14, w, 2); for (let x = 1; x < w;) { const bw = 4 + Math.random() * 7; g.fillStyle = col[(Math.random() * col.length) | 0]; g.fillRect(x, y0 + 3 + Math.random() * 3, bw - 1, 11 - Math.random() * 3); x += bw; } } }) }, 0.45);
   const shelfMats = [['#c8102e', '#f2c500', '#2a6db0', '#ffffff', '#e86a10'], ['#2f8f3a', '#86c440', '#e9d8a6', '#7a4e2d', '#ffffff'], ['#5b2a86', '#e43d8b', '#2fb6c8', '#f4f4f4', '#1d3f8a'], ['#d9a21b', '#9c5a2c', '#e8e0c8', '#b2382d', '#2c2c2c']].map((c, k) => mg('shelf' + k, prodMat(c)));
-  const signMat = n2 => new THREE.MeshBasicMaterial({ map: mkTex(64, 32, (g, w, h) => { g.fillStyle = '#1f5c3a'; g.fillRect(0, 0, w, h); g.fillStyle = '#f5c400'; g.fillRect(0, h - 4, w, 4); g.fillStyle = '#fff'; g.font = 'bold 20px Arial, sans-serif'; g.textAlign = 'center'; g.fillText(String(n2), w / 2, 22); }) });
-  let aisle = 1;
-  for (let u = u0 - 6; u > -26; u -= 3.4) {
-    let placed = false;
-    for (const [wa, wb] of [[13, 26], [28.5, 41]]) for (let w = wa; w + 2.5 <= wb + 0.01; w += 2.5) {
-      const [x0, z0] = I(u, w), [x1, z1] = I(u, w + 2.5); if (!inside(x0, z0, 1.3) || !inside(x1, z1, 1.3)) continue;
-      const m = shelfMats[(aisle + Math.round(w)) % 4]; ibox(m, u, w + 1.25, 1.0, 2.5, 1.75, 0.08, true); ibox(grey, u, w + 1.25, 1.04, 2.52, 0.06, 1.83); ibox(grey, u, w + 1.25, 1.04, 2.52, 0.12, 0.0); placed = true;
-    }
-    if (placed) { const [sx, sz] = I(u + 1.7, 20); if (inside(sx, sz, 0.5)) { const sgn = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.45), signMat(aisle)); sgn.position.set(sx, CE - 0.7, sz); sgn.rotation.y = yawU + Math.PI / 2; shopGroup.add(sgn);
-      const s2 = sgn.clone(); s2.rotation.y += Math.PI; shopGroup.add(s2); aisle++; } }
-  }
-  // chilled cabinets along the back of the shop: lit glass fronts
+  const tillW = 9.5, aw0 = 13, aw1 = 36; let aisle = 1;
+  // one continuous box along w (into the shop), with its texture repeated every 2.5 m so the shelves read as an unbroken run
+  const runBox = (m, u, w0, w1, du, h, y0, collide) => { const Lr = w1 - w0, [x, z] = I(u, (w0 + w1) / 2), g = new THREE.BoxGeometry(du, h, Lr), uv = g.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setX(k, uv.getX(k) * Lr / 2.5); m.add(g, mat4(x, y0 + h / 2, z, yawU));
+    if (collide) { const c = [[-1, w0], [1, w0], [1, w1], [-1, w1]].map(([a, w]) => I(u + a * du / 2, w)); for (let k = 0; k < 4; k++) addSeg(c[k][0], c[k][1], c[(k + 1) % 4][0], c[(k + 1) % 4][1]); } };
+  const extent = (u, w0, w1, m = 1.3) => { let a = null, e = null; for (let w = w0; w <= w1; w += 0.25) { const [x, z] = I(u, w), [x2, z2] = I(u + 0.5, w); if (inside(x, z, m) && inside(x2, z2, m)) { if (a == null) a = w; e = w; } else if (a != null) break; } return a == null || e - a < 3 ? null : [a, e]; };
+  const freezerMat = mg('freezer', lit({ map: mkTex(64, 128, (g, w, h) => { g.fillStyle = '#7f8a90'; g.fillRect(0, 0, w, h);
+    for (let d = 0; d < 2; d++) { const x0 = d * 32 + 2; g.fillStyle = '#dff1fb'; g.fillRect(x0, 6, 28, h - 12); for (let r = 0; r < 5; r++) { g.fillStyle = '#a9c3cf'; g.fillRect(x0, 10 + r * 22 + 18, 28, 2); for (let x = x0 + 2; x < x0 + 26; x += 5) { g.fillStyle = ['#ffffff', '#3d7ec9', '#e9b53a', '#d24646', '#6fbf5a', '#7a4ea3'][(Math.random() * 6) | 0]; g.fillRect(x, 12 + r * 22 + 4, 4, 13); } }
+      g.fillStyle = 'rgba(255,255,255,.25)'; g.fillRect(x0 + 3, 8, 4, h - 16); g.fillStyle = '#c9ced1'; g.fillRect(x0 + (d ? 3 : 24), 40, 2, 40); } }) }, 0.85));
+  // the far-left (north) end of the shop is the freezer section: full-height glass-door freezers along the wall and in rows
+  let uTopAll = su; for (let u = su; u < 50; u += 0.5) if (wallW(u) > 8) uTopAll = u;
+  const uAisleMax = uTopAll - 10.5;                                     // aisles stop short of the freezer section
+  for (let u = su + 9; u < uAisleMax; u += 3.4) {
+    const ext = extent(u, aw0, Math.min(wallW(u), wallW(u + 1)) - 4.2); if (!ext) continue; const [w0, w1] = ext;
+    runBox(shelfMats[aisle % 4], u, w0, w1, 1.0, 1.75, 0.08, true); runBox(grey, u, w0 - 0.01, w1 + 0.01, 1.04, 0.06, 1.83, false); runBox(grey, u, w0 - 0.01, w1 + 0.01, 1.06, 0.12, 0, false);
+    for (const e of [w0, w1]) ibox(mg('shelfEnd', lit({ color: 0x1f5c3a }, 0.35)), u, e, 1.06, 0.06, 1.9, 0);   // green end caps
+    hang(String(aisle), u + 1.7, w0 + 3, 0.9); aisle++; }
+  for (let u = uAisleMax + 1.2; u < uTopAll - 3.5; u += 3.6) {           // double-sided freezer rows
+    const ext = extent(u, aw0, Math.min(wallW(u), wallW(u + 1)) - 4.2); if (!ext) continue; const [w0, w1] = ext;
+    runBox(freezerMat, u, w0, w1, 1.3, 2.15, 0, true); runBox(grey, u, w0 - 0.01, w1 + 0.01, 1.34, 0.12, 2.15, false); }
+  { const fw0 = aw0 - 1, fw1 = wallW(uTopAll) - 13;                     // a run of freezers against the north wall, facing into the shop
+    for (let w = fw0; w + 1.6 <= fw1; w += 1.6) { let uT = null; for (let u = uTopAll + 6; u > su; u -= 0.25) { const [x, z] = I(u, w + 0.8), [x2, z2] = I(u, w + 0.8); if (inPoly(x, z, b.p) && !nearWall(x, z, 0.45)) { uT = u; break; } }
+      if (uT == null) continue; ibox(freezerMat, uT - 0.5, w + 0.8, 0.85, 1.6, 2.15, 0, true); ibox(grey, uT - 0.5, w + 0.8, 0.9, 1.62, 0.12, 2.15); } }
+  hang('Frozen', uTopAll - 5, aw0 + 8, 1.6);
+  // shelving running across the back of the shop, chilled cabinets against the back wall
   const fridge = mg('fridge', lit({ map: mkTex(64, 64, (g, w, h) => { g.fillStyle = '#d7edf5'; g.fillRect(0, 0, w, h); for (let r = 0; r < 4; r++) for (let x = 2; x < w - 2; x += 6) { g.fillStyle = ['#f4f4f4', '#7fb3d9', '#e0b33c', '#c93b3b', '#9bd06a'][(Math.random() * 5) | 0]; g.fillRect(x, r * 15 + 5, 5, 8); } g.fillStyle = '#9aa7ad'; for (let x = 0; x < w; x += 16) g.fillRect(x, 0, 2, h); }) }, 0.85));
-  for (let u = u0 - 2; u > -26; u -= 2.6) { for (let w = 46; w > 40; w -= 0.5) { const [x, z] = I(u, w); if (inside(x, z, 0.6) && !inside(...I(u, w + 1.6), 0.0)) { ibox(fridge, u, w, 2.5, 0.9, 2.0, 0, true); ibox(grey, u, w + 0.1, 2.5, 1.1, 0.2, 2.0); break; } } }
-  // fresh produce near the entrance: low tables of crates
-  const crate = ['#3e8f3a', '#d23a2a', '#f08a1c', '#f2d33a', '#7a3d8f', '#9bcf55'].map((c, k) => mg('crate' + k, lit({ color: parseInt(c.slice(1), 16) }, 0.4)));
-  for (let k = 0; k < 6; k++) { const u = u0 - 2 - (k % 3) * 3.6, w = 13 + Math.floor(k / 3) * 4; const [x, z] = I(u, w); if (!inside(x, z, 1.5)) continue;
-    ibox(mg('crateWood', lit({ color: 0x9c7a52 }, 0.35)), u, w, 1.6, 2.6, 0.75, 0, true); for (let c = 0; c < 4; c++) ibox(crate[(k * 2 + c) % 6], u + (c % 2 - 0.5) * 0.75, w + (Math.floor(c / 2) - 0.5) * 1.25, 0.7, 1.2, 0.14, 0.75); }
-  // a line of trolleys by the entrance
-  for (let k = 0; k < 5; k++) ibox(steel, u0 + 2.2, 3.2 + k * 0.35, 0.6, 0.9, 0.95, 0.1, false);
-  ibox(steel, u0 + 2.2, 3.9, 0.7, 2.2, 0.02, 0.05, true);
-  // sliding entrance doors: outside pair (world) and inside pair (shop only)
-  const gl = new THREE.MeshStandardMaterial({ color: 0x9fb9c4, roughness: 0.05, metalness: 0.3, transparent: true, opacity: 0.45 }), fr = new THREE.MeshStandardMaterial({ color: 0x1f5c3a, roughness: 0.4 });
-  const pane = () => { const g = new THREE.Group(); const a2 = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.3, 0.03), gl); a2.position.y = 1.15; g.add(a2); for (const y of [0.04, 2.28]) { const r = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.08, 0.06), fr); r.position.y = y; g.add(r); } for (const x of [-0.72, 0.72]) { const r = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.3, 0.06), fr); r.position.set(x, 1.15, 0); g.add(r); } return g; };
-  const Wo = (u, v) => [ax + tx * u + ox * v, az + tz * u + oz * v];
-  for (const sd of [-1, 1]) {
-    const [x, z] = Wo(u0 + sd * 0.75, 2.86), o = pane(); o.position.set(x, 0, z); o.rotation.y = yawU; scene.add(o); SD.panes.push({ o, x, y: 0, z, dx: tx * sd * 1.45, dz: tz * sd * 1.45 });
-    const [x2, z2] = I(u0 + sd * 0.75, 0.2), o2 = pane(); o2.position.set(x2, 0, z2); o2.rotation.y = yawU; shopGroup.add(o2);
+  // the back wall: one row of shelving against it, and the bakery at the far-left (north) end of it
+  const bread = mg('bread', lit({ color: 0xb9813f }, 0.4)), rack = mg('rack', lit({ color: 0x6b4a2b }, 0.3));
+  let uMax = su; for (let u = su; u < 48; u += 0.5) if (wallW(u) > 8) uMax = u;
+  const bakU = uMax - 11;                                               // bakery takes the last ~11 m of the back wall
+  for (let u = su - 12; u + 2.5 <= uMax - 0.8; u += 2.5) {
+    const w = Math.min(wallW(u + 0.3), wallW(u + 2.2)) - 0.75, [x, z] = I(u + 1.25, w); if (w < 20 || !inPoly(x, z, b.p)) continue;
+    if (u + 1.25 < bakU) { ibox(shelfMats[Math.round(u) & 3], u + 1.25, w, 2.5, 0.9, 1.9, 0.08, true); ibox(grey, u + 1.25, w, 2.52, 0.94, 0.06, 1.98); }
+    else { ibox(rack, u + 1.25, w + 0.1, 2.4, 0.6, 1.8, 0, true); for (let r = 0; r < 4; r++) ibox(bread, u + 1.25, w + 0.1, 2.2, 0.45, 0.12, 0.3 + r * 0.42);
+      ibox(wood, u + 1.25, w - 2.2, 2.4, 0.9, 0.95, 0, true); ibox(glassC, u + 1.25, w - 2.2, 2.4, 0.9, 0.4, 0.95); for (let k = 0; k < 4; k++) ibox(bread, u + 0.4 + k * 0.55, w - 2.2, 0.3, 0.35, 0.15, 0.98); }
   }
-  DOORS.push({ g: shopGroup, out: Wo(u0, 3.6), inn: I(u0, 0.9), ox, oz, rIn: 1.2, rOut: 1.0, anim: SD, light: 0.3,
-    spawn: () => I(u0, 2.6), look: () => I(u0 - 8, 12), exit: Wo(u0, 4.6) });
+  hang('Bakery', bakU + 5, wallW(bakU + 5) - 2.5, 1.8);
+  // tills along the front on the left: you come back out through these
+  for (let u = su + 9; u < 38; u += 3.1) { const w = 6.2, [x, z] = I(u, w); if (!inside(x, z, 1.6)) continue;
+    ibox(grey, u, w, 0.9, 3.4, 0.86, 0, true); ibox(black, u, w + 0.25, 0.7, 2.6, 0.03, 0.86); ibox(steel, u, w - 1.6, 0.9, 0.3, 0.06, 0.86);
+    ibox(black, u - 0.2, w - 1.3, 0.05, 0.3, 0.25, 0.92); ibox(green, u, w - 1.55, 0.06, 0.06, 0.9, 0.9); ibox(green, u, w - 1.55, 0.35, 0.05, 0.25, 1.85); ibox(black, u - 1.0, w - 0.9, 0.5, 0.5, 0.45, 0); }
+  // trolleys parked by the door
+  for (let k = 0; k < 4; k++) ibox(steel, su + 2.0, sw - 0.6 + k * 0.35, 0.6, 0.9, 0.95, 0.1, false);
+  // sliding entrance doors on the side of the entrance block: outside pair (world) and inside pair (shop only), with a green canopy over them
+  const gl = new THREE.MeshStandardMaterial({ color: 0x9fb9c4, roughness: 0.05, metalness: 0.3, transparent: true, opacity: 0.45 }), fr = new THREE.MeshStandardMaterial({ color: 0x1f5c3a, roughness: 0.4 });
+  const pw = Math.min(1.5, E.Le / 2 - 0.25), pane = () => { const g = new THREE.Group(); const a2 = new THREE.Mesh(new THREE.BoxGeometry(pw, 2.3, 0.03), gl); a2.position.y = 1.15; g.add(a2); for (const y of [0.04, 2.28]) { const r = new THREE.Mesh(new THREE.BoxGeometry(pw, 0.08, 0.06), fr); r.position.y = y; g.add(r); } for (const x of [-pw / 2 + 0.03, pw / 2 - 0.03]) { const r = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.3, 0.06), fr); r.position.set(x, 1.15, 0); g.add(r); } return g; };
+  const dyaw = Math.atan2(-E.ez, E.ex), P = (t, v) => [E.mx + E.ex * t + E.nx * v, E.mz + E.ez * t + E.nz * v];
+  { const [cx, cz] = P(0, 0.06); mg('shopGlassE', shopGlassMat).add(new THREE.BoxGeometry(E.Le - 0.2, 0.9, 0.05), mat4(cx, 2.85, cz, dyaw)); const [kx, kz] = P(0, 0.9); mg('shopCanopy', shopCanopyMat).add(new THREE.BoxGeometry(E.Le + 0.4, 0.22, 1.8), mat4(kx, 2.9, kz, dyaw));
+    mg('dark', new THREE.MeshBasicMaterial({ color: 0x3a4a50 })).add(new THREE.BoxGeometry(pw * 2, 2.3, 0.02), mat4(...(([x, z]) => [x, 1.15, z])(P(0, -0.08)), dyaw)); }
+  for (const sd of [-1, 1]) { const [x, z] = P(sd * pw / 2, 0.08), o = pane(); o.position.set(x, 0, z); o.rotation.y = dyaw; scene.add(o); SD.panes.push({ o, x, y: 0, z, dx: E.ex * sd * (pw - 0.05), dz: E.ez * sd * (pw - 0.05) });
+    const [x2, z2] = P(sd * pw / 2, -0.25), o2 = pane(); o2.position.set(x2, 0, z2); o2.rotation.y = dyaw; shopGroup.add(o2); }
+  DOORS.push({ g: shopGroup, out: P(0, 0.9), inn: P(0, -0.9), ox: E.nx, oz: E.nz, rIn: 1.2, rOut: 1.0, anim: SD, light: 0.3,
+    spawn: () => I(su, sw), look: () => I(su, sw + 10), exit: P(0, 2.2) });
 }
 // trolley shelters in the Morrisons car park, read off the aerial photo: each sits across a double row of bays, long side across the rows
 const aisleZ = (p, x) => { for (let i = 0; i < p.length - 1; i++) { const a = p[i], b = p[i + 1]; if ((x - a[0]) * (x - b[0]) <= 0 && a[0] !== b[0]) return a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]); } return null; };
@@ -1033,9 +1077,6 @@ for (const b of builds) {
       // a smaller lettering board over the parade end of the store
       { const [sx, sz] = W(L * 0.12, -0.6); mg('storeSign').add(new THREE.PlaneGeometry(5, 0.95), mat4(sx, wallH + 0.95, sz, Math.atan2(ox, oz))); }
       INTG = shopGroup; buildShopInterior(b, STORE.front, wallH); INTG = null;
-      { const u0 = L * 0.93, c = [[-3, 0], [-3, 2.8], [3, 2.8], [3, 0]].map(([du, v]) => W(u0 + du, v)); for (let k = 0; k < 3; k++) addSeg(c[k][0], c[k][1], c[k + 1][0], c[k + 1][1]); }   // lobby walls
-      // entrance lobby: glazed box with a green frame and a flat canopy
-      { const [ex, ez] = W(L * 0.93, 1.4); mg('shopGlass', shopGlassMat).add(new THREE.BoxGeometry(6, 3.0, 2.8), mat4(ex, 1.5, ez, yaw)); mg('shopCanopy', shopCanopyMat).add(new THREE.BoxGeometry(6.6, 0.25, 3.4), mat4(ex, 3.1, ez, yaw)); }
       // black bollards with yellow bands along the front walkway
       { const bG = new THREE.CylinderGeometry(0.1, 0.1, 1.0, 8), yG = new THREE.CylinderGeometry(0.105, 0.105, 0.08, 8), bm = mg('sbBlack', stdMat({ color: 0x151719, roughness: 0.5 })), ym = mg('yellow', stdMat({ color: 0xd9b230, roughness: 0.8 }), false, true);
         for (let u = 2; u < L - 1; u += 1.9) { if (Math.abs(u - L * 0.93) < 4.5 || Math.abs(u - (419 - az) / tz) < 4.5) continue; const [px, pz] = W(u, 4.2); bm.add(bG, mat4(px, 0.5, pz)); ym.add(yG, mat4(px, 0.86, pz)); addCircle(px, pz, 0.15); } }
@@ -2195,6 +2236,7 @@ function frame(now) {
   hudT -= dt;
   if (hudT <= 0) { hudT = 0.05; $('spd').textContent = Math.round((W.on ? Math.hypot(W.vx, W.vz) : spdNow) * 2.237); $('g').textContent = gearNow; $('rpmf').style.width = (rpmNow * 100) + '%'; drawMinimap(); $('coords').textContent = 'x ' + follow().x.toFixed(0) + '  z ' + follow().z.toFixed(0) + '  h ' + (((-follow().h * 180 / Math.PI) % 360 + 360) % 360).toFixed(0) + '\u00b0'; }
   if (FD.leaves.length) { FD.t += (FD.want - FD.t) * Math.min(1, dt * 6); for (const l of FD.leaves) l.o.rotation.y = l.yaw + l.open * FD.t; }
+  if (SHOPGATE.g && INSIDE === shopGroup) { const near = Math.hypot(W.x - SHOPGATE.at[0], W.z - SHOPGATE.at[1]) < 3 ? 1 : 0, g = SHOPGATE.g; g.t += (near - g.t) * Math.min(1, dt * 5); for (const l of g.leaves) l.g.rotation.y = SHOPGATE.yaw + l.sd * g.t * 1.45; }
   if (SD.panes.length) { SD.t += (SD.want - SD.t) * Math.min(1, dt * 5); for (const q of SD.panes) q.o.position.set(q.x + q.dx * SD.t, q.y, q.z + q.dz * SD.t); }
   for (const gt of gates) {                                              // retractable bollards sink into the road as you approach, and rise again behind you
     const want = Math.hypot(follow().x - gt.x, follow().z - gt.z) < 7 ? 1 : 0; gt.t += (want - gt.t) * Math.min(1, dt * 5);
