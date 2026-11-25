@@ -777,7 +777,8 @@ function buildLInterior(b, door, wallH) {
         const nm = Math.max(1, Math.round(L / 1.2)); for (let k = 0; k <= nm; k++) { const t = k / nm; blackLeg.add(new THREE.BoxGeometry(0.05, CE, 0.06), mat4(p[0] + (q[0] - p[0]) * t, CE / 2, p[1] + (q[1] - p[1]) * t, yaw)); }
       } else plaster.add(new THREE.BoxGeometry(L, CE, 0.12), mat4((p[0] + q[0]) / 2, CE / 2, (p[1] + q[1]) / 2, yaw));
       addSeg(p[0], p[1], q[0], q[1]); }
-    for (const [g0, g1] of gaps) { const p = at(g0), q = at(g1), L = Math.hypot(q[0] - p[0], q[1] - p[1]), yaw = Math.atan2(-(q[1] - p[1]), q[0] - p[0]), nx = -(q[1] - p[1]) / L, nz = (q[0] - p[0]) / L;
+    for (const [g0, g1] of gaps) { const p = at(g0), q = at(g1), L = Math.hypot(q[0] - p[0], q[1] - p[1]), yaw = Math.atan2(-(q[1] - p[1]), q[0] - p[0]); let nx = -(q[1] - p[1]) / L, nz = (q[0] - p[0]) / L;
+      if (o.into) { const gm = (g0 + g1) / 2, m0 = hor ? PG(gm, py0) : PG(px0, gm), m1 = hor ? PG(gm + o.into[0], py0 + o.into[1]) : PG(px0 + o.into[0], gm + o.into[1]); if ((m1[0] - m0[0]) * nx + (m1[1] - m0[1]) * nz < 0) { nx = -nx; nz = -nz; } }   // door leaves swing into the room
       (o.glass ? glassM : plaster).add(new THREE.BoxGeometry(L, CE - DH, o.glass ? 0.02 : 0.12), mat4((p[0] + q[0]) / 2, DH + (CE - DH) / 2, (p[1] + q[1]) / 2, yaw));   // panel over the opening
       const fr = o.glass ? blackLeg : frameM; fr.add(new THREE.BoxGeometry(L + 0.1, 0.06, 0.16), mat4((p[0] + q[0]) / 2, DH, (p[1] + q[1]) / 2, yaw));
       for (const e of [p, q]) fr.add(new THREE.BoxGeometry(0.06, DH, 0.16), mat4(e[0], DH / 2, e[1], yaw));
@@ -795,7 +796,7 @@ function buildLInterior(b, door, wallH) {
   wall(363, 39, 363, 155, [[47, 66], [120, 146]], { noLeaf: [120] });
   wall(288, 155, 363, 155); wall(288, 113, 363, 113); wall(288, 84, 363, 84, [[320, 333], [345, 358]], { noLeaf: [320, 345] }); wall(340, 84, 340, 113); wall(325, 39, 325, 62);
   // board rooms and the entrance lobby along the road side
-  wall(478, 39, 478, 225, [[88, 106], [128, 152]], { glass: true }); wall(478, 225, 478, 275, [[232, 253]]); wall(478, 118, 533, 118); wall(478, 225, 533, 225);
+  wall(478, 39, 478, 225, [[88, 106], [128, 152]], { glass: true, into: [1, 0] }); wall(478, 225, 478, 275, [[232, 253]], { noLeaf: [232] }); wall(478, 118, 533, 118); wall(478, 225, 533, 225);
   // stairs: a flight rising towards the outside wall
   for (let k = 0; k < 12; k++) pbox(mg('stairBlue', lit({ color: 0x3f5d7a }, 0.3)), 299, 82 - k * 3.6, 22, 3.6, 0.2 * (k + 1) - 0.035, 0, false);
   pbox(steel, 311, 60, 1.2, 46, 0.9, 0.2 * 6, false); pbox(white, 299, 60, 22, 44, 0.02, 2.45, true);
