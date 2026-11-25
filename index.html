@@ -2090,6 +2090,8 @@ function toggleFoot() {
     const rx = Math.cos(player.h), rz = -Math.sin(player.h);
     Object.assign(W, { on: true, x: player.x + rx * 1.5, z: player.z + rz * 1.5, y: player.y, h: player.h, vx: 0, vz: 0 }); W.g.visible = false;
   } else {
+    if (W.fly) return;
+    if (player.wrecked) { toast('Your car is burnt out. Press reset for a new one.'); return; }
     if (Math.hypot(W.x - player.x, W.z - player.z) > 4.5) { $('ctag').textContent = 'Walk to your car'; $('cpts').textContent = ''; $('cmult').textContent = ''; showCombo(true); comboTimer = 1.5; return; }
     W.on = false; W.g.visible = false;
   }
@@ -2324,6 +2326,7 @@ function updateTills(dt) {
 }
 function jump() { if (!W.on || W.seated || W.busy || W.jh > 0.001) return; W.jv = 4.4; }   // first person jump (about 0.8 m)
 function stepWalker(dt) {
+  if (stepFly(dt)) return;
   W.jh = W.jh || 0; if (W.jh > 0 || W.jv > 0) { W.jv = (W.jv || 0) - 13 * dt; W.jh = Math.max(0, W.jh + W.jv * dt); if (W.jh === 0) W.jv = 0; }
   if (W.busy) return;
   if (W.seated) { W.vx = W.vz = 0; return; }
@@ -2458,7 +2461,8 @@ function start() {
   if (actx && actx.state === 'suspended') actx.resume(); state = 'play'; showMoney(); setTimeout(() => { $('hint').style.opacity = 0; }, 14000);
 }
 function resetCar() {
-  if (player.damaged) { scene.remove(player.car.grp); player.car = carModel ? createCar2(paintChoices[paintIdx]) : createCar(paintChoices[paintIdx]); scene.add(player.car.grp); player.damaged = false; } window.__lockMouse && window.__lockMouse(false); if (W.seated) standUp(); if (INSIDE) setInside(null); document.body.classList.remove('foot'); if (W.on) { W.on = false; W.g.visible = false; $('tOut').textContent = 'OUT'; } Object.assign(player, { x: spawn.x, z: spawn.z, y: 0, h: spawn.h, vx: 0, vz: 0, steer: 0 }); drift.pts = 0; drift.on = false; drift.t = 0; showCombo(false); }
+  if (W.fly) { W.fly = null; W.busy = false; W.g.rotation.set(0, 0, 0); }
+  if (player.damaged || player.wrecked) { player.wrecked = false; scene.remove(player.car.grp); player.car = carModel ? createCar2(paintChoices[paintIdx]) : createCar(paintChoices[paintIdx]); scene.add(player.car.grp); player.damaged = false; } window.__lockMouse && window.__lockMouse(false); if (W.seated) standUp(); if (INSIDE) setInside(null); document.body.classList.remove('foot'); if (W.on) { W.on = false; W.g.visible = false; $('tOut').textContent = 'OUT'; } Object.assign(player, { x: spawn.x, z: spawn.z, y: 0, h: spawn.h, vx: 0, vz: 0, steer: 0 }); drift.pts = 0; drift.on = false; drift.t = 0; showCombo(false); }
 
 /* ================= driving ================= */
 function surfaceAt(x, z) {                                             // 0 = road / pavement, 1 = grass
@@ -2533,8 +2537,56 @@ function stepDebris(dt) {
     if (d.vy !== 0 || d.m.position.y > 0.04) { d.vy -= 9.8 * dt; d.m.position.x += d.vx * dt; d.m.position.y += d.vy * dt; d.m.position.z += d.vz * dt; d.m.rotation.x += d.wx * dt; d.m.rotation.z += d.wz * dt;
       if (d.m.position.y < 0.04) { d.m.position.y = 0.04; if (Math.abs(d.vy) < 1.2) { d.vy = 0; d.vx = d.vz = 0; d.m.rotation.x = 0; d.m.rotation.z = 0; } else { d.vy *= -0.3; d.vx *= 0.5; d.vz *= 0.5; d.wx *= 0.5; d.wz *= 0.5; } } } }
 }
+// ===== big crash: you are thrown out through the windscreen and the car explodes =====
+const FX = [], charMat = new THREE.MeshStandardMaterial({ color: 0x0b0a09, roughness: 1, metalness: 0, envMapIntensity: 0.15 });
+function boom() { if (!actx) return; const n = actx.sampleRate * 1.6, buf = actx.createBuffer(1, n, actx.sampleRate), d = buf.getChannelData(0); for (let k = 0; k < n; k++) d[k] = (Math.random() * 2 - 1) * Math.pow(1 - k / n, 2.2);
+  const src = actx.createBufferSource(), lp = actx.createBiquadFilter(), g = actx.createGain(); lp.type = 'lowpass'; lp.frequency.value = 520; g.gain.value = 0.9; src.buffer = buf; src.connect(lp); lp.connect(g); g.connect(actx.destination); src.start(); thud(45, 0.5); }
+function bigCrash(P, dx, dz, speed) {                                  // d = direction of travel into the obstacle
+  if (P.wrecked || W.on || state !== 'play') return; P.wrecked = true; shake = 1;
+  const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L; const fx = -Math.sin(P.h), fz = -Math.cos(P.h);
+  // out through the windscreen: launched forward and up, tumbling
+  Object.assign(W, { on: true, x: P.x + fx * 1.6, z: P.z + fz * 1.6, y: P.y, h: P.h, vx: 0, vz: 0, pitch: 0, jh: 0, busy: true });
+  W.fly = { vx: dx * speed * 0.55 + fx * 3, vz: dz * speed * 0.55 + fz * 3, vy: 6 + speed * 0.12, h: 1.2, t: 0, sx: 8 + Math.random() * 5, sz: (Math.random() - 0.5) * 6, landed: 0 };
+  W.g.visible = true; document.body.classList.add('foot'); $('tOut').textContent = 'IN';
+  for (const m of P.car.grp.children[0].children) if (m.isMesh && m.userData.glass) { m.visible = false; }      // windscreen gone
+  spray(P.x + fx * 1.8, 1.1, P.z + fz * 1.8, dx, dz, 20, shardMat, true); toast('💥 You went through the windscreen!');
+  setTimeout(() => explodeCar(P), 900);
+}
+function explodeCar(P) {
+  const c = P.car, pos = new THREE.Vector3(P.x, 0.8 + P.y, P.z); boom(); shake = 1;
+  c.grp.traverse(m => { if (m.isMesh) { if (m.userData.glass) m.visible = false; else m.material = charMat; } });   // burnt shell
+  spray(pos.x, 1, pos.z, 0, 0, 26, charMat, true); spray(pos.x, 1, pos.z, 0, 0, 20, c.paint, false);
+  for (const wh of c.wheels) wh.pivot.rotation.z = (Math.random() - 0.5) * 0.5;
+  const light = new THREE.PointLight(0xffa040, 9, 40, 2); light.position.copy(pos).setY(2); scene.add(light);
+  const fireMat = () => new THREE.MeshBasicMaterial({ color: 0xffa23a, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending });
+  const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 2), fireMat()); ball.position.copy(pos); scene.add(ball);
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.7, 2), new THREE.MeshBasicMaterial({ color: 0xfff1b0, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending })); core.position.copy(pos); scene.add(core);
+  const smoke = [], smat = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 1, transparent: true, opacity: 0.75, depthWrite: false });
+  const flames = []; for (let k = 0; k < 7; k++) { const f = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.9, 6), fireMat()); f.position.set(pos.x + (Math.random() - 0.5) * 1.6, 1.1, pos.z + (Math.random() - 0.5) * 2.6); scene.add(f); flames.push(f); }
+  let t = 0, puff = 0;
+  FX.push(dt => { t += dt;
+    const k = Math.min(1, t / 0.7); ball.scale.setScalar(0.6 + k * 4.2); ball.material.opacity = 0.95 * (1 - k); ball.material.color.setHSL(0.08 - k * 0.06, 1, 0.55 - k * 0.25); core.scale.setScalar(0.5 + k * 2.4); core.material.opacity = 1 - Math.min(1, t / 0.35);
+    light.intensity = t < 0.5 ? 9 : 2.2 + Math.sin(t * 23) * 0.6 + Math.sin(t * 9) * 0.5; if (t > 14) light.intensity *= Math.max(0, 1 - (t - 14) / 3);
+    for (const f of flames) { f.scale.set(1, 0.7 + Math.abs(Math.sin(t * 11 + f.position.x * 7)) * 0.9, 1); f.material.opacity = t > 14 ? Math.max(0, 0.9 - (t - 14) / 3) : 0.85; }
+    puff -= dt; if (t < 16 && puff <= 0) { puff = 0.12; const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 1), smat.clone()); m.position.set(pos.x + (Math.random() - 0.5) * 1.2, 1.4, pos.z + (Math.random() - 0.5) * 1.8); scene.add(m); smoke.push({ m, life: 0 }); }
+    for (let i = smoke.length - 1; i >= 0; i--) { const s2 = smoke[i]; s2.life += dt; s2.m.position.y += dt * (1.6 + s2.life * 0.3); s2.m.position.x += dt * 0.6; s2.m.scale.setScalar(1 + s2.life * 1.3); s2.m.material.opacity = Math.max(0, 0.7 - s2.life / 6); if (s2.life > 4.2) { scene.remove(s2.m); s2.m.material.dispose(); smoke.splice(i, 1); } }
+    if (k >= 1 && ball.parent) { scene.remove(ball, core); }
+    if (t > 17 && !smoke.length) { scene.remove(light); for (const f of flames) scene.remove(f); return true; }
+    return false; });
+}
+function stepFX(dt) { for (let i = FX.length - 1; i >= 0; i--) if (FX[i](dt)) FX.splice(i, 1); }
+// flying through the air, landing, lying there, then getting up
+function stepFly(dt) {
+  const F = W.fly; if (!F) return false; F.t += dt;
+  if (!F.landed) { F.vy -= 9.8 * dt; W.x += F.vx * dt; W.z += F.vz * dt; F.h += F.vy * dt; W.g.rotation.set(F.t * F.sx, W.h, F.t * F.sz);
+    if (F.h <= 0.18 && F.vy < 0) { F.h = 0.18; if (Math.abs(F.vy) > 3) { F.vy *= -0.3; F.vx *= 0.45; F.vz *= 0.45; thud(70, 0.3); } else { F.landed = F.t; thud(55, 0.25); } } }
+  else { F.vx *= Math.exp(-6 * dt); F.vz *= Math.exp(-6 * dt); W.x += F.vx * dt; W.z += F.vz * dt; W.g.rotation.set(-Math.PI / 2, W.h, 0); F.h = 0.15;
+    if (F.t - F.landed > 2.4) { W.fly = null; W.busy = false; W.g.visible = false; W.g.rotation.set(0, W.h, 0); W.pitch = 0; toast('Ouch. You\'re OK. Press reset for a new car.'); return false; } }
+  W.g.position.set(W.x, W.y + F.h - (F.landed ? 0 : 0.9), W.z); return true;
+}
 let damageCooldown = 0;
 function crashDamage(c, cx, cz, nx, nz, speed, P) {                    // n points from the parked car towards the player's car
+  if (speed > 19) bigCrash(P, -nx, -nz, speed);
   if (speed < 3.5 || damageCooldown > 0) return; damageCooldown = 0.15;
   const w = wreckOf(c); if (w) damageModel(w, cx, 0.62, cz, -nx, -nz, speed);
   damageModel(P.car.grp, cx, 0.62 + P.y, cz, nx, nz, speed * 0.8); P.damaged = true;
@@ -2588,7 +2640,7 @@ function stepCars(dt) {
       if (vn < 0) { const j = -(1.25) * vn / 2; impulse(A, cx, cz, -nx, -nz, j); impulse(B, cx, cz, nx, nz, j); } } }
 }
 function stepPlayer(dt) {
-  const p = player, playing = state === 'play' && !W.on;
+  const p = player, playing = state === 'play' && !W.on && !p.wrecked;
   const thr = playing ? keys.up : 0, brk = playing ? keys.down : W.on ? 0 : 1, st = playing ? clamp(keys.left - keys.right - joy.x * 1.15, -1, 1) : 0;
   const fx = -Math.sin(p.h), fz = -Math.cos(p.h), rx = Math.cos(p.h), rz = -Math.sin(p.h);
   let vf = p.vx * fx + p.vz * fz, vl = p.vx * rx + p.vz * rz;
@@ -2624,7 +2676,7 @@ function stepPlayer(dt) {
       }
       p.x += nx * ov; p.z += nz * ov;
       const vn = p.vx * nx + p.vz * nz;
-      if (vn < 0) { p.vx -= nx * vn * 1.22; p.vz -= nz * vn * 1.22; p.vx *= 0.97; p.vz *= 0.97; hit = Math.max(hit, -vn); if (-vn > 6 && damageCooldown <= 0) { damageCooldown = 0.2; damageModel(p.car.grp, px - nx * R, 0.6 + p.y, pz - nz * R, nx, nz, -vn * 0.7); p.damaged = true; spray(px - nx * R, 0.6, pz - nz * R, nx, nz, -vn * 0.6, p.car.paint, -vn > 10); } }
+      if (vn < 0) { p.vx -= nx * vn * 1.22; p.vz -= nz * vn * 1.22; p.vx *= 0.97; p.vz *= 0.97; hit = Math.max(hit, -vn); if (-vn > 19) bigCrash(p, -nx, -nz, -vn); if (-vn > 6 && damageCooldown <= 0) { damageCooldown = 0.2; damageModel(p.car.grp, px - nx * R, 0.6 + p.y, pz - nz * R, nx, nz, -vn * 0.7); p.damaged = true; spray(px - nx * R, 0.6, pz - nz * R, nx, nz, -vn * 0.6, p.car.paint, -vn > 10); } }
     }
   }
   hit = Math.max(hit, carVsCars(p, cf, cz2, cir));
@@ -2677,6 +2729,10 @@ let camA = player.h;
 camera.position.set(player.x + 6, 3, player.z + 9);
 function stepCamera(dt) {
   if (!W.on && camera.near !== 0.15) { camera.near = 0.15; camera.updateProjectionMatrix(); }
+  if (W.on && W.fly) {                                                   // thrown from the car: chase the tumbling body
+    const F = W.fly, tx2 = W.x, tz2 = W.z, ty = W.g.position.y + 0.6, back = F.landed ? 0 : 1; camera.position.lerp(new THREE.Vector3(tx2 + Math.sin(W.h) * (5 * back + 1.5), ty + (F.landed ? 3.2 : 2.2), tz2 + Math.cos(W.h) * (5 * back + 1.5)), Math.min(1, dt * 5));
+    camera.lookAt(tx2, ty - 0.4, tz2); return;
+  }
   if (W.on) {                                                            // first person: eyes of the walker, looking where they face
     const fx = -Math.sin(W.h), fz = -Math.cos(W.h), bob = Math.abs(W.vx) + Math.abs(W.vz) > 0.1 ? Math.sin(W.ph * 2) * 0.03 : 0;
     if (camera.near !== 0.05) { camera.near = 0.05; camera.updateProjectionMatrix(); }
@@ -2722,7 +2778,7 @@ let last = performance.now(), hudT = 0, skidAccInit = 0, frameN = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
-  stepPlayer(dt); if (W.on) stepWalker(dt); updateWork(dt); updateTills(dt); stepCars(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
+  stepPlayer(dt); if (W.on) stepWalker(dt); updateWork(dt); updateTills(dt); stepCars(dt); stepFX(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
   { const f = follow(); sun.position.set(f.x + SUN.x * 220, SUN.y * 220, f.z + SUN.z * 220); sun.target.position.set(f.x, 0, f.z); } sun.target.updateMatrixWorld();
   sky.position.copy(camera.position); clouds.position.set(camera.position.x, 0, camera.position.z);
   hudT -= dt;
