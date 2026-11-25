@@ -962,17 +962,19 @@ function buildShopInterior(b, F, wallH) {
   // hot food: three heated open-front units just left of the salad bar, glass shelves under warm lamps, individual boxes on each shelf
   { const hw = saladW + 0.15, unitW = 1.1, base = su + 4.65 + unitW / 2;
     const boxTex = (bg, stripe, txt, art) => mkTex(64, 64, (g, w, h) => { g.fillStyle = bg; g.fillRect(0, 0, w, h); g.fillStyle = stripe; g.fillRect(0, 0, w, 10); g.fillRect(0, h - 8, w, 8); art(g, w, h);
-      g.fillStyle = '#fff'; g.fillRect(4, 40, w - 8, 14); g.fillStyle = '#222'; g.font = 'bold 11px Arial, sans-serif'; g.textAlign = 'center'; g.fillText(txt, w / 2, 51); });
+      g.fillStyle = '#fff'; g.fillRect(4, 40, w - 8, 14); g.fillStyle = '#222'; let fs = 11; do { g.font = 'bold ' + fs + 'px Arial, sans-serif'; } while (g.measureText(txt).width > w - 8 && --fs > 6); g.textAlign = 'center'; g.fillText(txt, w / 2, 51); });
     const kinds = {
       chips: { tex: boxTex('#d2232a', '#f6c21a', 'Chips', (g) => { g.fillStyle = '#f2c94c'; for (let k = 0; k < 7; k++) g.fillRect(12 + k * 6, 13 + (k % 3) * 3, 4, 24 - (k % 3) * 3); }), size: [0.16, 0.2, 0.09] },
       nuggets: { tex: boxTex('#f2b51c', '#c0392b', 'Nuggets', (g) => { g.fillStyle = '#b8752f'; for (let k = 0; k < 5; k++) { g.beginPath(); g.ellipse(14 + (k % 3) * 18, 20 + Math.floor(k / 3) * 10, 7, 5, 0.3, 0, 7); g.fill(); } }), size: [0.18, 0.11, 0.13] },
       chicken: { tex: boxTex('#ffffff', '#c0392b', 'Chicken', (g) => { g.fillStyle = '#c0392b'; for (let x = 0; x < 64; x += 12) g.fillRect(x, 10, 6, 28); g.fillStyle = '#9a5b25'; g.beginPath(); g.ellipse(32, 24, 12, 8, 0, 0, 7); g.fill(); }), size: [0.2, 0.17, 0.16] },
-      sausages: { tex: boxTex('#7a4a2a', '#e9d8a6', 'Sausages', (g) => { g.fillStyle = '#c0703b'; for (let k = 0; k < 3; k++) { g.beginPath(); g.ellipse(32, 17 + k * 7, 20, 3, 0, 0, 7); g.fill(); } }), size: [0.22, 0.08, 0.12] } };
+      sausages: { tex: boxTex('#7a4a2a', '#e9d8a6', 'Sausages', (g) => { g.fillStyle = '#c0703b'; for (let k = 0; k < 3; k++) { g.beginPath(); g.ellipse(32, 17 + k * 7, 20, 3, 0, 0, 7); g.fill(); } }), size: [0.22, 0.08, 0.12] },
+      gammon: { tex: boxTex('#7d2630', '#e9d8a6', 'Gammon Shank', (g) => { g.fillStyle = '#d98a7a'; g.beginPath(); g.ellipse(30, 24, 15, 10, -0.3, 0, 7); g.fill(); g.fillStyle = '#f1e4d0'; g.fillRect(40, 14, 14, 5); g.beginPath(); g.arc(55, 16, 4, 0, 7); g.fill(); }), size: [0.22, 0.14, 0.18] },
+      bites: { tex: boxTex('#f2a81c', '#7a3d14', 'Honey Bacon Belly Bites', (g) => { g.fillStyle = '#a5502a'; for (let k = 0; k < 6; k++) g.fillRect(8 + (k % 3) * 17, 14 + Math.floor(k / 3) * 11, 13, 8); g.fillStyle = 'rgba(255,220,120,.6)'; g.fillRect(6, 13, 52, 3); }), size: [0.18, 0.1, 0.14] } };
     for (const k in kinds) { const K = kinds[k], side = new THREE.MeshStandardMaterial({ color: new THREE.Color(K.tex.image.getContext('2d').getImageData(2, 30, 1, 1).data.slice(0, 3).reduce((a3, v, i3) => a3 + v * [65536, 256, 1][i3], 0)), roughness: 0.6 }), front = new THREE.MeshStandardMaterial({ map: K.tex, roughness: 0.5, emissive: 0x332211, emissiveIntensity: 0.25 });
       K.geo = new THREE.BoxGeometry(...K.size); K.mats = [side, side, side, side, side, front]; }
     const shelfG = new THREE.MeshStandardMaterial({ color: 0xd8eef3, roughness: 0.05, transparent: true, opacity: 0.45 }), lamp = mg('heatLamp', new THREE.MeshBasicMaterial({ color: 0xffb35c }), false, false);
     const _p2 = new THREE.Vector3(), _q2 = new THREE.Quaternion();
-    const plan = [['chips', 'nuggets', 'chicken'], ['chicken', 'sausages', 'chips'], ['nuggets', 'sausages', 'chicken']];
+    const plan = [['chips', 'nuggets', 'chicken'], ['gammon', 'sausages', 'chips'], ['bites', 'nuggets', 'chicken']];
     for (let n = 0; n < 3; n++) {
       const u = base + n * (unitW + 0.05);
       ibox(steel, u, hw, unitW, 0.75, 0.75, 0, true);                                  // heated base cabinet
@@ -988,7 +990,7 @@ function buildShopInterior(b, F, wallH) {
         for (let c = 0; c < per; c++) for (let d = 0; d < 2; d++) {
           const du = -((per - 1) / 2) * (K.size[0] + 0.04) + c * (K.size[0] + 0.04), [bx, bz] = I(u + du, hw - 0.17 + d * 0.24);
           if (!K.T) { const gp = K.geo.groups; K.geo.clearGroups(); K.geo.addGroup(gp[0].start, gp[4].start, 0); K.geo.addGroup(gp[4].start, gp[4].count, 5); K.geo.addGroup(gp[5].start, gp[5].count, 0);
-            K.T = { name: 'Hot ' + kind[0].toUpperCase() + kind.slice(1), price: { chips: 1.5, nuggets: 2.5, chicken: 3.5, sausages: 2 }[kind], geo: K.geo, mats: K.mats, w: K.size[0], h: K.size[1], d: K.size[2] }; PTYPES.push(K.T); }
+            K.T = { name: { chips: 'Hot Chips', nuggets: 'Hot Nuggets', chicken: 'Hot Chicken', sausages: 'Hot Sausages', gammon: 'Gammon Shank', bites: 'Honey Bacon Belly Bites' }[kind], price: { chips: 1.5, nuggets: 2.5, chicken: 3.5, sausages: 2, gammon: 4.5, bites: 3 }[kind], geo: K.geo, mats: K.mats, w: K.size[0], h: K.size[1], d: K.size[2] }; PTYPES.push(K.T); }
           _p2.set(bx, y + 0.011 + K.size[1] / 2, bz); _q2.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yawU); addStock(K.T, _p2, _q2);
         }
       });
@@ -2223,6 +2225,7 @@ function doAction() {
   if (aimT.kind === 'kb') { pressKeyboard(); return; }
   if (aimT.kind === 'belt') { const T = aimT.T, it = basket.shift(); if (!it) return; const m = it.makeMesh(); m.position.copy(T.start); m.rotation.y = T.yaw; T.belt.push({ it, m, t: 0 }); showBasket(); updateAim(); return; }
   if (aimT.kind === 'scan') { const T = aimT.T, e = T.belt.find(q => q.t >= 0.98) || T.belt[0]; if (!e) return; T.belt.splice(T.belt.indexOf(e), 1);
+    if (e.it.name === 'Honey Bacon Belly Bites') { staffTakes(T, e); updateAim(); return; }
     const k = T.scanned.length; e.m.position.copy(T.bag).addScaledVector(T.side, ((k % 3) - 1) * 0.25).addScaledVector(T.dir, (Math.floor(k / 3) % 2 - 0.5) * 0.25); e.m.position.y = T.bag.y + e.it.h / 2 + Math.floor(k / 6) * 0.3;
     T.scanned.push(e); T.total += e.it.price; drawCardScreen(T); beep(1800, 0.07); showBasket(T); updateAim(); return; }
   if (aimT.kind === 'card') { const T = aimT.T; if (!T.total) return;
@@ -2258,6 +2261,48 @@ const GUARD = (() => { const g = new THREE.Group(), M = c => new THREE.MeshStand
   add(new THREE.SphereGeometry(0.12, 12, 10), M(0xc68a62), 0, 1.68, 0); add(new THREE.CylinderGeometry(0.13, 0.13, 0.06, 12), M(0x1b1d22), 0, 1.79, 0);
   for (const sx of [-0.26, 0.26]) add(new THREE.CylinderGeometry(0.055, 0.05, 0.6, 8), M(0x1b1d22), sx, 1.18, 0);
   g.visible = false; shopGroup.add(g); return g; })();
+// Amina, a member of staff (green uniform, name badge, long hair)
+const STAFF = (() => { const g = new THREE.Group(), M = c => new THREE.MeshStandardMaterial({ color: c, roughness: .8 });
+  const add = (geo, m, x, y, z, p = g) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); p.add(o); return o; };
+  const top = M(0x1f6b45), skirt = M(0x1b1d22), tights = M(0x2a2420), skin = M(0x6e4128), shoe = M(0x111111);
+  const legs = []; for (const sx of [-0.085, 0.085]) { const pv = new THREE.Group(); pv.position.set(sx, 0.64, 0); g.add(pv); add(new THREE.CylinderGeometry(0.062, 0.05, 0.62, 10), tights, 0, -0.31, 0, pv); add(new THREE.BoxGeometry(0.1, 0.06, 0.21), shoe, 0, -0.61, -0.035, pv); legs.push(pv); }
+  add(new THREE.CylinderGeometry(0.17, 0.25, 0.5, 16), skirt, 0, 0.8, 0).scale.set(1, 1, 0.78);
+  { const geo = new THREE.CylinderGeometry(0.168, 0.15, 0.5, 28, 16), pa = geo.attributes.position;
+    for (let k = 0; k < pa.count; k++) { let x = pa.getX(k), y = pa.getY(k), z = pa.getZ(k); const r = Math.hypot(x, z) || 1, waist = 1 - 0.13 * Math.exp(-Math.pow((y + 0.12) / 0.09, 2)); x *= waist; z *= waist;
+      const front = Math.max(0, -z / r), lobes = Math.exp(-Math.pow((x - 0.068) / 0.062, 2)) + Math.exp(-Math.pow((x + 0.068) / 0.062, 2)); z -= 0.065 * Math.exp(-Math.pow((y - 0.055) / 0.075, 2)) * Math.pow(front, 1.6) * Math.min(1, lobes); pa.setXYZ(k, x, y, z); }
+    geo.computeVertexNormals(); add(geo, top, 0, 1.27, 0).scale.set(1, 1, 0.72); }
+  add(new THREE.CylinderGeometry(0.155, 0.17, 0.08, 14), M(0x15553a), 0, 1.03, 0).scale.set(1, 1, 0.75);
+  add(new THREE.BoxGeometry(0.13, 0.04, 0.04), M(0xf5c400), 0, 1.51, -0.1);
+  for (const sx of [-1, 1]) { const p0 = new THREE.Vector3(sx * 0.05, 1.5, -0.124), p1 = new THREE.Vector3(sx * 0.018, 1.335, -0.151), d = p1.clone().sub(p0), L = d.length();
+    const l = add(new THREE.BoxGeometry(0.012, L, 0.006), M(0xf5c400), (p0.x + p1.x) / 2, (p0.y + p1.y) / 2, (p0.z + p1.z) / 2); l.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); }
+  add(new THREE.BoxGeometry(0.08, 0.05, 0.008), new THREE.MeshStandardMaterial({ map: mkTex(64, 40, (bg) => { bg.fillStyle = '#fff'; bg.fillRect(0, 0, 64, 40); bg.fillStyle = '#1f6b45'; bg.fillRect(0, 0, 64, 12); bg.fillStyle = '#222'; bg.font = 'bold 12px sans-serif'; bg.textAlign = 'center'; bg.fillText('AMINA', 32, 30); }) }), 0, 1.305, -0.153);
+  const arms = []; for (const sx of [-1, 1]) { const pv = new THREE.Group(); pv.position.set(sx * 0.21, 1.48, 0); g.add(pv); add(new THREE.CylinderGeometry(0.048, 0.04, 0.56, 10), top, 0, -0.28, 0, pv); add(new THREE.SphereGeometry(0.042, 10, 8), skin, 0, -0.6, 0, pv); pv.rotation.z = sx * 0.1; arms.push(pv); }
+  add(new THREE.CylinderGeometry(0.05, 0.058, 0.08, 10), skin, 0, 1.56, 0); add(new THREE.SphereGeometry(0.115, 16, 14), skin, 0, 1.68, 0).scale.set(1, 1.1, 1);
+  { const hm = new THREE.MeshStandardMaterial({ color: 0x1a110b, roughness: .55, side: THREE.DoubleSide }), Y = 1.68;
+    const prof = [[0.0, 0.142], [0.06, 0.137], [0.104, 0.115], [0.128, 0.072], [0.134, 0.02], [0.131, -0.04], [0.124, -0.09], [0.135, -0.135], [0.172, -0.17], [0.195, -0.21], [0.2, -0.28], [0.197, -0.36], [0.19, -0.41], [0.172, -0.435]].map(([r, y]) => new THREE.Vector2(r, y));
+    const shell = new THREE.Mesh(new THREE.LatheGeometry(prof, 30, -Math.PI * 0.6, Math.PI * 1.2), hm); shell.position.set(0, Y, 0.006); shell.scale.set(1, 1, 0.8); g.add(shell);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.128, 24, 14, 0, Math.PI * 2, 0, Math.PI * 0.36), hm); cap.position.set(0, Y + 0.004, -0.002); cap.scale.set(1.02, 1.12, 1.02); g.add(cap);
+    const fr = new THREE.Mesh(new THREE.SphereGeometry(0.131, 20, 8, Math.PI * 0.62, Math.PI * 0.62, Math.PI * 0.3, Math.PI * 0.14), hm); fr.position.set(0, Y, 0); fr.scale.set(1.0, 1.1, 1.0); fr.rotation.z = 0.12; g.add(fr); }
+  for (const sx of [-0.04, 0.04]) add(new THREE.SphereGeometry(0.013, 8, 6), M(0x1a1a1a), sx, 1.7, -0.107);
+  add(new THREE.BoxGeometry(0.04, 0.012, 0.01), M(0x5a2a24), 0, 1.63, -0.108);
+  g.userData = { legs, arms }; g.visible = false; shopGroup.add(g); return g; })();
+// she won't sell the Honey Bacon Belly Bites: walks over to the till and takes them off you
+let staffBusy = false;
+function staffTakes(T, e) {
+  if (staffBusy) return; staffBusy = true; T.belt.splice(T.belt.indexOf(e), 1);
+  const start = T.end.clone().addScaledVector(T.side, -2.6).addScaledVector(T.dir, -1.5), stop = T.end.clone().addScaledVector(T.side, -0.75).addScaledVector(T.dir, 0.1); start.y = stop.y = 0.06;
+  STAFF.position.copy(start); STAFF.visible = true; const t0 = performance.now(), { legs, arms } = STAFF.userData;
+  const face = (p) => { STAFF.lookAt(p.x, STAFF.position.y, p.z); STAFF.rotateY(Math.PI); };   // her front is -z
+  const anim = () => { const t = (performance.now() - t0) / 1000;
+    if (t < 1.6) { STAFF.position.lerpVectors(start, stop, t / 1.6); face(stop); const sw = Math.sin(t * 9) * 0.45; legs[0].rotation.x = sw; legs[1].rotation.x = -sw; arms[0].rotation.x = -sw * 0.6; arms[1].rotation.x = sw * 0.6; }
+    else if (t < 2.4) { legs[0].rotation.x = legs[1].rotation.x = 0; face(e.m.position); arms[1].rotation.x = -1.1 * Math.min(1, (t - 1.6) / 0.4);
+      if (!e.taken && t > 2.0) { e.taken = true; e.it.restore(); toast('Amina: "Nha, these are too much Haram is it! Yha!"'); beep(330, 0.15); showBasket(T); } }
+    else if (t < 4.6) { arms[1].rotation.x = 0; face(new THREE.Vector3(W.x, 0, W.z)); }
+    else if (t < 6.2) { const k = (t - 4.6) / 1.6; STAFF.position.lerpVectors(stop, start, k); face(start); const sw = Math.sin(t * 9) * 0.45; legs[0].rotation.x = sw; legs[1].rotation.x = -sw; }
+    else { STAFF.visible = false; staffBusy = false; return; }
+    requestAnimationFrame(anim); };
+  requestAnimationFrame(anim);
+}
 function caughtShoplifting(d) {
   W.busy = true; const f = -Math.sin(W.h), fz = -Math.cos(W.h); GUARD.position.set(W.x + f * 6, W.y, W.z + fz * 6); GUARD.visible = true; toast('🛑 Security! You haven\'t paid for those items.');
   const t0 = performance.now(), walk = () => { const t = (performance.now() - t0) / 1000, k = Math.min(1, t / 1.4); GUARD.position.set(W.x + f * (6 - 5 * k), W.y, W.z + fz * (6 - 5 * k)); GUARD.lookAt(W.x, W.y, W.z); GUARD.rotation.x = 0; GUARD.rotation.z = 0;
