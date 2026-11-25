@@ -53,6 +53,7 @@
   #lookPad{position:fixed;right:0;top:0;width:55%;height:100%;touch-action:none;z-index:1;display:none} body.foot #lookPad{display:block}
   body.foot #tGas, body.foot #tBrake, body.foot #tHand{display:none}
   #tAct{display:none;width:calc(var(--b)*1.25);height:calc(var(--b)*1.25);right:calc(20px + env(safe-area-inset-right));bottom:calc(30px + env(safe-area-inset-bottom));background:rgba(31,92,58,.7);font-size:13px;z-index:5} #tAct.show{display:flex}
+  #tJump{display:none;right:calc(30px + var(--b)*1.25 + env(safe-area-inset-right));bottom:calc(20px + env(safe-area-inset-bottom))} body.foot #tJump{display:flex}
   #xhair{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:#fff;box-shadow:0 0 0 1.5px rgba(0,0,0,.55);pointer-events:none;z-index:6;display:none} body.foot #xhair{display:block} #xhair.on{background:#ffd23a;width:10px;height:10px;margin:-5px 0 0 -5px}
   #money{position:fixed;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top));font:800 20px/1.2 'Segoe UI',system-ui,Arial,sans-serif;color:#7dffa0;background:rgba(0,0,0,.55);padding:4px 14px;border-radius:10px;display:none;z-index:7;letter-spacing:.5px} body.touch #money{top:calc(62px + env(safe-area-inset-top))} #money.show{display:block}
   #bpanel{position:fixed;left:10px;top:calc(210px + env(safe-area-inset-top));min-width:250px;max-height:55vh;overflow:auto;font:600 13px/1.4 system-ui,sans-serif;color:#fff;background:rgba(10,20,16,.88);padding:10px;border-radius:10px;display:none;z-index:9} #bpanel.show{display:block}
@@ -97,7 +98,7 @@
 </div>
 <div class="hud" id="hint">
   <kbd>W</kbd><kbd>S</kbd> gas / brake &nbsp; <kbd>A</kbd><kbd>D</kbd> steer<br>
-  <kbd>SPACE</kbd> handbrake to start a drift &nbsp; <kbd>C</kbd> car colour &nbsp; <kbd>B</kbd> change car &nbsp; <kbd>F</kbd> get out / in &nbsp; <kbd>V</kbd> camera &nbsp; <kbd>R</kbd> reset
+  <kbd>SPACE</kbd> handbrake to start a drift &nbsp; <kbd>C</kbd> car colour &nbsp; <kbd>B</kbd> change car &nbsp; <kbd>F</kbd> get out / in &nbsp; on foot: <kbd>SPACE</kbd> jump <kbd>SHIFT</kbd> run &nbsp; <kbd>V</kbd> camera &nbsp; <kbd>R</kbd> reset
 </div>
 
 <div id="overlay">
@@ -120,6 +121,7 @@
   <div id="lookPad"></div>
   <div id="joy"><div id="joyKnob"></div></div>
   <div class="tb" id="tAct" data-key="act">GET IN</div>
+  <div class="tb" id="tJump" data-key="jump">JUMP</div>
   <div class="tb" id="tBrake" data-key="down">BRAKE</div>
   <div class="tb" id="tGas" data-key="up">GAS</div>
   <div class="tb" id="tHand" data-key="hand">DRIFT</div>
@@ -2318,11 +2320,13 @@ function updateTills(dt) {
   for (const T of TILLS) { let limit = 1; const L = T.start.distanceTo(T.end); for (const e of T.belt) { e.t = Math.min(limit, e.t + dt * 0.35 / L);
       e.m.position.lerpVectors(T.start, T.end, e.t); e.m.position.y = 0.89 + e.it.h / 2; limit = Math.max(0, e.t - ((e.it.d || 0.15) + 0.06) / L); } }
 }
+function jump() { if (!W.on || W.seated || W.busy || W.jh > 0.001) return; W.jv = 4.4; }   // first person jump (about 0.8 m)
 function stepWalker(dt) {
+  W.jh = W.jh || 0; if (W.jh > 0 || W.jv > 0) { W.jv = (W.jv || 0) - 13 * dt; W.jh = Math.max(0, W.jh + W.jv * dt); if (W.jh === 0) W.jv = 0; }
   if (W.busy) return;
   if (W.seated) { W.vx = W.vz = 0; return; }
   let mf = keys.up - keys.down - joy.y, ms = joy.x + keys.right - keys.left; const mag = Math.min(1, Math.hypot(mf, ms));   // A/D and arrows strafe; the mouse turns
-  const run = keys.hand || mag > 0.85, vmax = run ? 7.0 : 2.8 * Math.min(1, mag / 0.85 + 0.15), nmag = mag > 0.08 ? mag : 0;   // push further for faster; right to the edge to run
+  const run = keys.run || mag > 0.85, vmax = run ? 7.0 : 2.8 * Math.min(1, mag / 0.85 + 0.15), nmag = mag > 0.08 ? mag : 0;   // push further for faster; right to the edge to run
   const fx = -Math.sin(W.h), fz = -Math.cos(W.h), rx = Math.cos(W.h), rz = -Math.sin(W.h), dl = Math.hypot(mf, ms) || 1;
   const sp = nmag ? vmax : 0; W.vx = (fx * mf + rx * ms) / dl * sp; W.vz = (fz * mf + rz * ms) / dl * sp;
   W.x += W.vx * dt; W.z += W.vz * dt;
@@ -2380,7 +2384,7 @@ function updateParts(dt) {
 
 /* ================= input / audio ================= */
 let state = 'menu', camMode = 0;
-const keys = { up: 0, down: 0, left: 0, right: 0, hand: 0 };
+const keys = { up: 0, down: 0, left: 0, right: 0, hand: 0, run: 0 };
 addEventListener('DOMContentLoaded', () => {});
 setTimeout(() => {
   $('basket').addEventListener('pointerdown', e => { e.stopPropagation(); const P = $('bpanel'); P.classList.toggle('show'); if (P.classList.contains('show')) { drawBasketPanel(); if (document.pointerLockElement) document.exitPointerLock(); } });
@@ -2406,18 +2410,18 @@ const joy = { x: 0, y: 0, id: null }, look = { id: null, lx: 0, ly: 0 }; W.pitch
   renderer.domElement.addEventListener('mousedown', e => { if (e.button !== 0 || !lockOK()) return; if (!document.pointerLockElement) { window.__lockMouse(true); return; } if (aimT) doAction(); });   // point and click
   addEventListener('mousemove', e => { if (!W.on || isTouch) return; if (document.pointerLockElement || e.buttons === 1) { W.h -= e.movementX * 0.0028; W.pitch = clamp(W.pitch - e.movementY * 0.0028, -1.2, 1.2); } });
 }
-const keyMap = { KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', Space: 'hand' };
+const keyMap = { KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', Space: 'hand', ShiftLeft: 'run', ShiftRight: 'run' };
 function cycleColor() { paintIdx = (paintIdx + 1) % paintChoices.length; player.car.paint.color.setHex(paintChoices[paintIdx]); }
 addEventListener('keydown', e => {
   if (keyMap[e.code]) { keys[keyMap[e.code]] = 1; e.preventDefault(); }
   if (e.code === 'Enter' && state === 'menu') start();
-  if (state === 'play') { if (e.code === 'KeyR') resetCar(); if (e.code === 'KeyC') cycleColor(); if (e.code === 'KeyB') switchCar(); if (e.code === 'KeyF') toggleFoot(); if (e.code === 'KeyE') doAction(); if (e.code === 'KeyV') camMode = (camMode + 1) % 2; }
+  if (state === 'play') { if (e.code === 'KeyR') resetCar(); if (e.code === 'KeyC') cycleColor(); if (e.code === 'KeyB') switchCar(); if (e.code === 'KeyF') toggleFoot(); if (e.code === 'KeyE') doAction(); if (e.code === 'Space' && W.on && !e.repeat) jump(); if (e.code === 'KeyV') camMode = (camMode + 1) % 2; }
 });
 addEventListener('keyup', e => { if (keyMap[e.code]) keys[keyMap[e.code]] = 0; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = 0; });
 document.querySelectorAll('.tb').forEach(b => {
   const k = b.dataset.key;
-  const down = e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (_) {} b.classList.add('on'); if (k === 'reset') resetCar(); else if (k === 'color') cycleColor(); else if (k === 'car') switchCar(); else if (k === 'out') toggleFoot(); else if (k === 'act') doAction(); else if (k === 'cam') camMode = (camMode + 1) % 2; else keys[k] = 1; };
+  const down = e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (_) {} b.classList.add('on'); if (k === 'reset') resetCar(); else if (k === 'color') cycleColor(); else if (k === 'car') switchCar(); else if (k === 'out') toggleFoot(); else if (k === 'act') doAction(); else if (k === 'jump') jump(); else if (k === 'cam') camMode = (camMode + 1) % 2; else keys[k] = 1; };
   const up = e => { e.preventDefault(); b.classList.remove('on'); if (keys[k] !== undefined) keys[k] = 0; };
   b.addEventListener('pointerdown', down); b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
   b.addEventListener('contextmenu', e => e.preventDefault());
@@ -2570,7 +2574,7 @@ function stepCamera(dt) {
   if (W.on) {                                                            // first person: eyes of the walker, looking where they face
     const fx = -Math.sin(W.h), fz = -Math.cos(W.h), bob = Math.abs(W.vx) + Math.abs(W.vz) > 0.1 ? Math.sin(W.ph * 2) * 0.03 : 0;
     if (camera.near !== 0.05) { camera.near = 0.05; camera.updateProjectionMatrix(); }
-    const eh = W.seated ? 1.22 : 1.62; camera.position.set(W.x, W.y + eh + bob, W.z); const cp = Math.cos(W.pitch); camera.lookAt(W.x + fx * 6 * cp, W.y + eh + bob + Math.sin(W.pitch) * 6, W.z + fz * 6 * cp); camA = W.h;
+    const eh = (W.seated ? 1.22 : 1.62) + (W.jh || 0); camera.position.set(W.x, W.y + eh + bob, W.z); const cp = Math.cos(W.pitch); camera.lookAt(W.x + fx * 6 * cp, W.y + eh + bob + Math.sin(W.pitch) * 6, W.z + fz * 6 * cp); camA = W.h;
     if (Math.abs(camera.fov - 66) > 0.05) { camera.fov += (66 - camera.fov) * Math.min(1, dt * 4); camera.updateProjectionMatrix(); }
     return;
   }
