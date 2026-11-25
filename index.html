@@ -2350,7 +2350,7 @@ function updateArms(dt) {
   const wl = (typing ? kL.clone().setY(0.81 + Math.abs(Math.sin(t * 9)) * 0.015) : kL.clone()).addScaledVector(f, -0.13), wr = (typing ? kR.clone().setY(0.81 + Math.abs(Math.sin(t * 9 + 1.3)) * 0.015) : ms.clone()).addScaledVector(f, -0.12);
   placeArm(ARMS.L, shL, wl, f, typing, t); placeArm(ARMS.R, shR, wr, f, typing, t);
 }
-function sitAt(d) { W.seated = d; W.x = d.chair.x + d.n.x * 0.28; W.z = d.chair.z + d.n.z * 0.28; W.h = Math.atan2(d.n.x, d.n.z); W.pitch = -0.2; WORK.st = 0; WORK.applied = 0; screensOn(d); redrawScreens(); $('tOut').textContent = 'STAND'; showMoney(); }
+function sitAt(d) { W.seated = d; W.x = d.chair.x + d.n.x * 0.04; W.z = d.chair.z + d.n.z * 0.04; W.h = Math.atan2(d.n.x, d.n.z); W.pitch = -0.2; WORK.st = 0; WORK.applied = 0; screensOn(d); redrawScreens(); $('tOut').textContent = 'STAND'; showMoney(); }
 function standUp() { const d = W.seated; if (!d) return; screensOff(); W.seated = null; ARMS.g.visible = false; W.x = d.chair.x + d.n.x * 0.7; W.z = d.chair.z + d.n.z * 0.7; W.pitch = 0; $('tOut').textContent = 'IN'; WORK.st = 0; showMoney(); }
 function pressKeyboard() {
   WORK.clickT = 0.3;
