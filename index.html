@@ -768,11 +768,27 @@ function buildLInterior(b, door, wallH) {
   pbox(white, 322, 118.5, 64, 9, 0.9, 0, true); pbox(wood, 322, 118.5, 64, 9, 0.04, 0.9, false); pbox(steel, 340, 118.5, 9, 6, 0.02, 0.94, false);
   pbox(steel, 294, 119, 9, 10, 1.85, 0, true); pbox(wood, 320, 140, 18, 14, 0.04, 0.74, true); for (const [ox2, oy2] of [[-12, 0], [12, 0]]) pbox(dark, 320 + ox2, 140 + oy2, 6, 7, 0.45, 0, false);
   // desks (orange on the plan): white tops on legs, a monitor, and a chair on the side the plan leaves open
+  const pine = mg('pine', lit({ map: mkTex(64, 32, (g, w, h) => { g.fillStyle = '#d8b57e'; g.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 2) { g.fillStyle = `rgba(150,100,50,${0.05 + Math.random() * 0.12})`; g.fillRect(0, y, w, 1); } g.fillStyle = 'rgba(120,75,35,.35)'; g.beginPath(); g.ellipse(40, 16, 4, 2, 0, 0, 7); g.fill(); }) }, 0.4));
+  const blackLeg = mg('deskLeg', lit({ color: 0x111214 }, 0.25)), screenM = mg('screen', new THREE.MeshBasicMaterial({ color: 0x2b4a6a }), false, false), kb = mg('keyboard', lit({ color: 0x1a1b1d }, 0.3));
+  const mU = 1 / SU, mV = 1 / SV;                                       // metres -> plan pixels along plan x / plan y
+  // desk: pine worktop on black legs, two monitors at the back, keyboard and mouse at the front, chair on the open side
   const desk = (px0, py0, px1, py1, cdx, cdy) => {
     const pxc = (px0 + px1) / 2, pyc = (py0 + py1) / 2, w = px1 - px0 - 1, h = py1 - py0 - 1;
-    pbox(white, pxc, pyc, w, h, 0.04, 0.72, true); for (const [a, b2] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) pbox(dark, pxc + a * (w / 2 - 1), pyc + b2 * (h / 2 - 1), 0.8, 0.9, 0.72, 0, false);
-    const mx2 = pxc - cdx * (w / 2 - 3), my2 = pyc - cdy * (h / 2 - 3); pbox(dark, mx2, my2, cdx ? 0.9 : Math.min(w * 0.6, 8), cdy ? 0.9 : Math.min(h * 0.6, 8), 0.34, 0.8, false);
-    const cx2 = pxc + cdx * (w / 2 + 6), cy2 = pyc + cdy * (h / 2 + 7); pbox(dark, cx2, cy2, 7, 8, 0.08, 0.46, false); pbox(dark, cx2 + cdx * 3, cy2 + cdy * 3.5, cdx ? 1 : 7, cdy ? 1 : 8, 0.5, 0.5, false); pbox(steel, cx2, cy2, 1, 1, 0.46, 0, false);
+    pbox(pine, pxc, pyc, w, h, 0.035, 0.72, true);
+    for (const [a, b2] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) pbox(blackLeg, pxc + a * (w / 2 - 0.05 * mU), pyc + b2 * (h / 2 - 0.05 * mV), 0.05 * mU, 0.05 * mV, 0.72, 0, false);
+    const ax = cdy ? 1 : 0, ay = cdx ? 1 : 0, long = ax ? w * SU : h * SV;   // the long side runs across the chair direction
+    const back = (d) => [pxc - cdx * (w / 2 - d * mU), pyc - cdy * (h / 2 - d * mV)], front = (d) => [pxc + cdx * (w / 2 - d * mU), pyc + cdy * (h / 2 - d * mV)];
+    for (const sd of [-1, 1]) {                                          // two monitors side by side
+      const [bx, by] = back(0.14), off = sd * Math.min(0.3, long * 0.2), mx2 = bx + ax * off * mU, my2 = by + ay * off * mV;
+      pbox(blackLeg, mx2, my2, cdx ? 0.18 * mU : 0.22 * mU, cdy ? 0.18 * mV : 0.22 * mV, 0.015, 0.755, false);
+      pbox(blackLeg, mx2, my2, 0.04 * mU, 0.04 * mV, 0.2, 0.755, false);
+      pbox(blackLeg, mx2, my2, cdx ? 0.03 * mU : 0.54 * mU, cdy ? 0.03 * mV : 0.54 * mV, 0.33, 0.93, false);
+      const [sx2, sy2] = [mx2 + cdx * 0.018 * mU, my2 + cdy * 0.018 * mV]; pbox(screenM, sx2, sy2, cdx ? 0.005 * mU : 0.5 * mU, cdy ? 0.005 * mV : 0.5 * mV, 0.29, 0.95, false);
+    }
+    const [kx, ky] = front(0.22); pbox(kb, kx, ky, cdx ? 0.15 * mU : 0.44 * mU, cdy ? 0.15 * mV : 0.44 * mV, 0.025, 0.755, false);
+    pbox(kb, kx + ax * 0.34 * mU, ky + ay * 0.34 * mV, 0.07 * mU, 0.07 * mV, 0.03, 0.755, false);   // mouse
+    const cx2 = pxc + cdx * (w / 2 + 0.42 * mU), cy2 = pyc + cdy * (h / 2 + 0.42 * mV); pbox(dark, cx2, cy2, 0.48 * mU, 0.48 * mV, 0.08, 0.46, false);
+    pbox(dark, cx2 + cdx * 0.22 * mU, cy2 + cdy * 0.22 * mV, cdx ? 0.06 * mU : 0.46 * mU, cdy ? 0.06 * mV : 0.46 * mV, 0.55, 0.52, false); pbox(steel, cx2, cy2, 0.05 * mU, 0.05 * mV, 0.46, 0, false);
   };
   for (const [ya, yb] of [[177, 208], [212, 243], [246, 274]]) { desk(310, ya, 326, yb, -1, 0); desk(327, ya, 342, yb, 1, 0); }
   for (const xs of [[365, 380, 381, 395], [419, 434, 435, 449]]) for (const [ya, yb] of [[199, 233], [236, 272]]) { desk(xs[0], ya, xs[1], yb, -1, 0); desk(xs[2], ya, xs[3], yb, 1, 0); }
@@ -780,12 +796,28 @@ function buildLInterior(b, door, wallH) {
   for (const [ya, yb] of [[41, 61], [64, 90]]) { desk(436, ya, 447, yb, -1, 0); desk(450, ya, 462, yb, 1, 0); }
   desk(384, 41, 395, 65, -1, 0); desk(395, 52, 414, 65, 0, 1);                      // the L-shaped desk
   // board rooms: long table with chairs round it
-  for (const [pyc, len] of [[78, 44], [172, 66]]) { pbox(wood, 507, pyc, 22, len, 0.05, 0.74, true); pbox(dark, 507, pyc, 6, len * 0.6, 0.7, 0, false);
-    for (let k = 0; k < Math.floor(len / 12); k++) { const y2 = pyc - len / 2 + 6 + k * 12; for (const sd of [-1, 1]) pbox(dark, 507 + sd * 17, y2, 7, 7, 0.5, 0, false); } }
-  // entrance lobby: mat, plant and a small bench
-  pbox(dark, 506, 262, 20, 16, 0.015, 0.072, false);
-  { const [px2, pz2] = PG(526, 232); pot.add(new THREE.CylinderGeometry(0.25, 0.2, 0.5, 10), mat4(px2, 0.3, pz2)); green.add(new THREE.IcosahedronGeometry(0.5, 1), mat4(px2, 1.0, pz2, 0, 1, 1.4, 1)); addCircle(px2, pz2, 0.35); }
-  pbox(wood, 527, 252, 8, 18, 0.45, 0, true);
+  const chairAt = (pxc, pyc, fx, fy) => {                              // office chair facing (fx, fy) in plan directions
+    pbox(dark, pxc, pyc, 0.48 * mU, 0.48 * mV, 0.08, 0.46, false); pbox(steel, pxc, pyc, 0.05 * mU, 0.05 * mV, 0.46, 0, false);
+    pbox(dark, pxc - fx * 0.22 * mU, pyc - fy * 0.22 * mV, fx ? 0.06 * mU : 0.46 * mU, fy ? 0.06 * mV : 0.46 * mV, 0.55, 0.52, false);
+  };
+  // board room 2: table with chairs round it
+  { const pyc = 78, len = 44; pbox(wood, 507, pyc, 22, len, 0.05, 0.74, true); pbox(blackLeg, 507, pyc, 6, len * 0.6, 0.7, 0, false);
+    for (let k = 0; k < 3; k++) { const y2 = pyc - len / 2 + 7 + k * 15; chairAt(507 - 17, y2, 1, 0); chairAt(507 + 17, y2, -1, 0); } }
+  // board room 1: long meeting table, three chairs each side, ceiling projector aimed at a screen on the end wall
+  { const pyc = 176, len = 78; pbox(wood, 506, pyc, 1.2 * mU, len, 0.05, 0.74, true); for (const e of [-1, 1]) pbox(blackLeg, 506, pyc + e * (len / 2 - 6), 0.9 * mU, 0.08 * mV, 0.7, 0, false);
+    for (let k = -1; k <= 1; k++) { const y2 = pyc + k * 22; chairAt(506 - 0.95 * mU, y2, 1, 0); chairAt(506 + 0.95 * mU, y2, -1, 0); }
+    pbox(white, 506, 121, 1.9 * mU, 0.03 * mV, 1.2, 1.4, false); pbox(blackLeg, 506, 121, 2.0 * mU, 0.05 * mV, 0.06, 2.6, false);     // projection screen on the wall
+    pbox(blackLeg, 506, pyc + 6, 0.05 * mU, 0.05 * mV, 0.5, CE - 0.5, false); pbox(white, 506, pyc + 6, 0.34 * mU, 0.3 * mV, 0.12, CE - 0.62, false); pbox(blackLeg, 506, pyc + 6 - 0.16 * mV, 0.09 * mU, 0.02 * mV, 0.09, CE - 0.6, false);   // projector
+  }
+  // entrance lobby: doormat, two armchairs with a small table between, facing the front door
+  pbox(dark, 506, 266, 20, 14, 0.015, 0.072, false);
+  const armchair = (pxc, pyc) => {                                       // faces +plan-y (towards the door)
+    const fab = mg('armchair', lit({ color: 0x3d5a73 }, 0.3)); pbox(fab, pxc, pyc, 0.7 * mU, 0.7 * mV, 0.42, 0.04, true);
+    pbox(fab, pxc, pyc - 0.3 * mV, 0.7 * mU, 0.12 * mV, 0.55, 0.42, false); for (const sd of [-1, 1]) pbox(fab, pxc + sd * 0.3 * mU, pyc, 0.12 * mU, 0.7 * mV, 0.22, 0.42, false);
+  };
+  armchair(493, 238); armchair(521, 238);
+  pbox(pine, 507, 238, 0.5 * mU, 0.5 * mV, 0.03, 0.48, true); pbox(blackLeg, 507, 238, 0.06 * mU, 0.06 * mV, 0.48, 0, false); pbox(blackLeg, 507, 238, 0.36 * mU, 0.36 * mV, 0.02, 0, false);
+  { const [px2, pz2] = PG(528, 268); pot.add(new THREE.CylinderGeometry(0.22, 0.18, 0.45, 10), mat4(px2, 0.27, pz2)); green.add(new THREE.IcosahedronGeometry(0.42, 1), mat4(px2, 0.9, pz2, 0, 1, 1.4, 1)); addCircle(px2, pz2, 0.3); }
   // main room: a couple of plants and a printer by the core
   for (const [ppx, ppy] of [[370, 160], [470, 190], [295, 165]]) { const [px2, pz2] = PG(ppx, ppy); pot.add(new THREE.CylinderGeometry(0.25, 0.2, 0.5, 10), mat4(px2, 0.3, pz2)); green.add(new THREE.IcosahedronGeometry(0.5, 1), mat4(px2, 1.0, pz2, 0, 1, 1.4, 1)); addCircle(px2, pz2, 0.35); }
   pbox(white, 372, 100, 9, 11, 1.0, 0, true);
