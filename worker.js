@@ -12,8 +12,8 @@ export class Room {
     this.state.acceptWebSocket(server);
     server.serializeAttachment({ id, last: null });
     const players = socks.map(w => { try { return w.deserializeAttachment(); } catch (_) { return null; } }).filter(a => a && a.last).map(a => a.last);
-    const world = [...(await this.state.storage.list({ prefix: 'w:' })).values()], npc = await this.state.storage.get('npc');
-    server.send(JSON.stringify({ t: 'hi', id, players, world, npc }));
+    const world = [...(await this.state.storage.list({ prefix: 'w:' })).values()], npc = await this.state.storage.get('npc'), wc = [...(await this.state.storage.list({ prefix: 'wc:' })).values()];
+    server.send(JSON.stringify({ t: 'hi', id, players, world, npc, wc }));
     return new Response(null, { status: 101, webSocket: client });
   }
   others(ws, out) { for (const w of this.state.getWebSockets()) if (w !== ws) { try { w.send(out); } catch (_) {} } }
@@ -29,7 +29,11 @@ export class Room {
     } else if (d.t === 'ev') {                          // world events: parked-car dents/poses, hits on other players
       d.id = a.id; this.others(ws, JSON.stringify(d));
       const st = this.state.storage;
-      if (d.e === 'npc') {                              // the office colleague's shoes: who has them / where they are
+      if (d.e === 'wc' && Number.isInteger(d.i) && d.i >= 0 && d.i < 8) {          // toilets: yellow water / poos stay until someone flushes
+        const key = 'wc:' + d.i, s = (await st.get(key)) || { i: d.i, y: 0, p: 0 };
+        if (d.a === 'wee') s.y = 1; else if (d.a === 'poo') s.p = Math.min(6, s.p + 1); else if (d.a === 'flush') { s.y = 0; s.p = 0; }
+        if (s.y || s.p) await st.put(key, s); else await st.delete(key);
+      } else if (d.e === 'npc') {                              // the office colleague's shoes: who has them / where they are
         if (d.a === 'take') await st.put('npc', { s: 'carried', by: a.id });
         else if (d.a === 'put') await st.put('npc', { s: 'down', x: d.x, z: d.z, h: d.h });
         else if (d.a === 'on') await st.delete('npc');
