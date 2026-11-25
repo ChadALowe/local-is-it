@@ -842,7 +842,7 @@ function buildLInterior(b, door, wallH) {
   pbox(white, 372, 100, 9, 11, 1.0, 0, true);
 }
 const STORE = {};
-const SD = { t: 0, want: 0, panes: [] }, SHOPGATE = {};                               // Morrisons sliding entrance doors
+const SD = { t: 0, want: 0, panes: [] }, SHOPGATE = {}, SHOP_ITEMS = [];   // SHOP_ITEMS: individual products that can be picked up later                               // Morrisons sliding entrance doors
 function buildShopInterior(b, F, wallH) {
   const { ax, az, tx, tz, ox, oz } = F, CE = Math.min(3.6, wallH - 0.1), yawU = Math.atan2(-tz, tx);
   const I = (u, w) => [ax + tx * u - ox * w, az + tz * u - oz * w];     // u: along the shop front (north), w: into the shop (east)
@@ -892,6 +892,40 @@ function buildShopInterior(b, F, wallH) {
   row(su, crate); row(su - 4.2, crate); row(su + 4.2, veg);
   hang('Fruit', su - 2.1, gw + 6); hang('Vegetables', su + 4.2, gw + 9, 2.2);
   { const w = saladW; ibox(steel, su - 1, w, 11, 1.1, 0.9, 0, true); ibox(mg('salad', lit({ color: 0x86c440 }, 0.45)), su - 1, w, 10.5, 0.8, 0.08, 0.9); ibox(glassC, su - 1, w - 0.45, 10.6, 0.03, 0.5, 1.05); hang('Salad Bar', su - 1, w, 2.0); }
+  // hot food: three heated open-front units just left of the salad bar, glass shelves under warm lamps, individual boxes on each shelf
+  { const hw = saladW + 0.15, unitW = 1.1, base = su + 4.65 + unitW / 2;
+    const boxTex = (bg, stripe, txt, art) => mkTex(64, 64, (g, w, h) => { g.fillStyle = bg; g.fillRect(0, 0, w, h); g.fillStyle = stripe; g.fillRect(0, 0, w, 10); g.fillRect(0, h - 8, w, 8); art(g, w, h);
+      g.fillStyle = '#fff'; g.fillRect(4, 40, w - 8, 14); g.fillStyle = '#222'; g.font = 'bold 11px Arial, sans-serif'; g.textAlign = 'center'; g.fillText(txt, w / 2, 51); });
+    const kinds = {
+      chips: { tex: boxTex('#d2232a', '#f6c21a', 'Chips', (g) => { g.fillStyle = '#f2c94c'; for (let k = 0; k < 7; k++) g.fillRect(12 + k * 6, 13 + (k % 3) * 3, 4, 24 - (k % 3) * 3); }), size: [0.16, 0.2, 0.09] },
+      nuggets: { tex: boxTex('#f2b51c', '#c0392b', 'Nuggets', (g) => { g.fillStyle = '#b8752f'; for (let k = 0; k < 5; k++) { g.beginPath(); g.ellipse(14 + (k % 3) * 18, 20 + Math.floor(k / 3) * 10, 7, 5, 0.3, 0, 7); g.fill(); } }), size: [0.18, 0.11, 0.13] },
+      chicken: { tex: boxTex('#ffffff', '#c0392b', 'Chicken', (g) => { g.fillStyle = '#c0392b'; for (let x = 0; x < 64; x += 12) g.fillRect(x, 10, 6, 28); g.fillStyle = '#9a5b25'; g.beginPath(); g.ellipse(32, 24, 12, 8, 0, 0, 7); g.fill(); }), size: [0.2, 0.17, 0.16] },
+      sausages: { tex: boxTex('#7a4a2a', '#e9d8a6', 'Sausages', (g) => { g.fillStyle = '#c0703b'; for (let k = 0; k < 3; k++) { g.beginPath(); g.ellipse(32, 17 + k * 7, 20, 3, 0, 0, 7); g.fill(); } }), size: [0.22, 0.08, 0.12] } };
+    for (const k in kinds) { const K = kinds[k], side = new THREE.MeshStandardMaterial({ color: new THREE.Color(K.tex.image.getContext('2d').getImageData(2, 30, 1, 1).data.slice(0, 3).reduce((a3, v, i3) => a3 + v * [65536, 256, 1][i3], 0)), roughness: 0.6 }), front = new THREE.MeshStandardMaterial({ map: K.tex, roughness: 0.5, emissive: 0x332211, emissiveIntensity: 0.25 });
+      K.geo = new THREE.BoxGeometry(...K.size); K.mats = [side, side, side, side, side, front]; }
+    const shelfG = new THREE.MeshStandardMaterial({ color: 0xd8eef3, roughness: 0.05, transparent: true, opacity: 0.45 }), lamp = mg('heatLamp', new THREE.MeshBasicMaterial({ color: 0xffb35c }), false, false);
+    const plan = [['chips', 'nuggets', 'chicken'], ['chicken', 'sausages', 'chips'], ['nuggets', 'sausages', 'chicken']];
+    for (let n = 0; n < 3; n++) {
+      const u = base + n * (unitW + 0.05);
+      ibox(steel, u, hw, unitW, 0.75, 0.75, 0, true);                                  // heated base cabinet
+      ibox(mg('hotBack', lit({ color: 0x2b2d30 }, 0.25)), u, hw + 0.33, unitW, 0.05, 1.25, 0.75);   // dark back panel
+      for (const sd of [-1, 1]) ibox(glassC, u + sd * (unitW / 2 - 0.02), hw, 0.03, 0.7, 1.15, 0.75);   // glass sides
+      ibox(steel, u, hw, unitW, 0.72, 0.08, 2.0); ibox(lamp, u, hw - 0.05, unitW - 0.1, 0.5, 0.02, 1.99);   // canopy with heat lamps
+      ibox(mg('hotSign', lit({ color: 0xc0392b }, 0.5)), u, hw - 0.37, unitW, 0.03, 0.14, 1.86);
+      plan[n].forEach((kind, r) => {
+        const y = 0.78 + r * 0.38, K = kinds[kind], [sx, sz] = I(u, hw);
+        const sh = new THREE.Mesh(new THREE.BoxGeometry(unitW - 0.06, 0.02, 0.62), shelfG); sh.position.set(sx, y, sz); sh.rotation.y = yawU; shopGroup.add(sh);
+        if (r) ibox(lamp, u, hw + 0.05, unitW - 0.15, 0.3, 0.015, y + 0.33);                     // lamp strip under the shelf above
+        const per = Math.max(2, Math.floor((unitW - 0.1) / (K.size[0] + 0.04)));
+        for (let c = 0; c < per; c++) for (let d = 0; d < 2; d++) {
+          const du = -((per - 1) / 2) * (K.size[0] + 0.04) + c * (K.size[0] + 0.04), [bx, bz] = I(u + du, hw - 0.17 + d * 0.24);
+          const m = new THREE.Mesh(K.geo, K.mats); m.position.set(bx, y + 0.011 + K.size[1] / 2, bz); m.rotation.y = yawU; m.userData = { item: kind, price: { chips: 1.5, nuggets: 2.5, chicken: 3.5, sausages: 2 }[kind] };
+          shopGroup.add(m); SHOP_ITEMS.push(m);
+        }
+      });
+    }
+    hang('Hot Food', base + unitW + 0.05, hw - 0.6, 1.6);
+  }
   // grocery aisles to the left, running from the front towards the back, each a run of 2.5 m shelf modules
   const prodMat = col => lit({ map: mkTex(128, 64, (g, w, h) => { g.fillStyle = '#e2e2dc'; g.fillRect(0, 0, w, h);
     for (let r = 0; r < 4; r++) { const y0 = r * 16; g.fillStyle = '#9aa0a4'; g.fillRect(0, y0 + 14, w, 2); for (let x = 1; x < w;) { const bw = 4 + Math.random() * 7; g.fillStyle = col[(Math.random() * col.length) | 0]; g.fillRect(x, y0 + 3 + Math.random() * 3, bw - 1, 11 - Math.random() * 3); x += bw; } } }) }, 0.45);
