@@ -325,6 +325,14 @@ const officeEndTex = mkTex(128, 128, (g, w, h) => {                  // end wall
   g.fillStyle = '#d9c49a'; g.fillRect(8, 0, 12, h); g.fillRect(w - 20, 0, 12, h); g.fillRect(0, h - 8, w, 8); g.fillRect(0, 0, w, 3);
   g.fillStyle = '#2f3438'; g.fillRect(52, 22, 24, 86); const gr = g.createLinearGradient(0, 26, 0, 104); gr.addColorStop(0, '#5f7078'); gr.addColorStop(1, '#222d33'); g.fillStyle = gr; g.fillRect(56, 26, 16, 78);
 });
+const linTexOf = (w0, h0, wins) => mkTex(w0, h0, (g, w, h) => {      // interior plaster with bright window openings where the outside texture has glass
+  g.fillStyle = '#ece6d8'; g.fillRect(0, 0, w, h); g.fillStyle = '#cfc6b3'; g.fillRect(0, h - 6, w, 6);
+  for (const [x, y, ww, hh] of wins) { g.fillStyle = '#e8e2d2'; g.fillRect(x - 3, y - 3, ww + 6, hh + 6); const gr = g.createLinearGradient(0, y, 0, y + hh); gr.addColorStop(0, '#cfe3f1'); gr.addColorStop(1, '#a9c4d6'); g.fillStyle = gr; g.fillRect(x, y, ww, hh); g.fillStyle = '#3a3f44'; g.fillRect(x + ww / 2 - 1, y, 2, hh); }
+});
+const linOfficeTex = linTexOf(256, 128, [0, 64, 128, 192].map(x => [x + 15, 37, 36, 46]));
+const linEndTex = linTexOf(128, 128, [[56, 26, 16, 78]]);
+const lit = (o, k = 0.55) => new THREE.MeshStandardMaterial(Object.assign({ roughness: 0.85, side: THREE.DoubleSide }, o, { emissive: o.color != null ? new THREE.Color(o.color).multiplyScalar(k) : 0xffffff, emissiveIntensity: 1, emissiveMap: o.map || null }));
+const linOfficeMat = lit({ map: linOfficeTex, color: 0xffffff }, 0.32), linEndMat = lit({ map: linEndTex, color: 0xffffff }, 0.32);
 const archTex = mkTex(96, 192, (g, w, h) => {                        // flush entrance with a buff arch over the door
   g.fillStyle = '#a4513a'; g.fillRect(0, 0, w, h);
   g.strokeStyle = 'rgba(0,0,0,.2)'; g.lineWidth = 1;
@@ -535,13 +543,34 @@ for (const r of roads) for (let i = 0; i < r.p.length - 1; i++) {
   const [x0, z0] = r.p[i], [x1, z1] = r.p[i + 1], pad = r.w / 2 + 3;
   rgrid.ins({ id: r.id, c: r.c, w: r.w, x0, z0, x1, z1 }, Math.min(x0, x1) - pad, Math.max(x0, x1) + pad, Math.min(z0, z1) - pad, Math.max(z0, z1) + pad);
 }
+// the L-shaped office you can walk into: find its entrance (the wall a service road dead-ends at)
+const isLB = b => b.cx > -485 && b.cx < -440 && b.cz > -290 && b.cz < -240 && Math.abs(b.area) > 250;
+let LD = null, LB = null; const DW = 0.82, DH = 2.35;
+function findLDoor(b) {
+  const n = b.p.length, sg = b.area >= 0 ? 1 : -1; let best = null;
+  for (let i = 0; i < n; i++) {
+    const a = b.p[i], c = b.p[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 9) continue;
+    const ox = sg * (c[1] - a[1]) / L, oz = -sg * (c[0] - a[0]) / L, tx = (c[0] - a[0]) / L, tz = (c[1] - a[1]) / L;
+    for (const r of roads) { if (r.c || r.k !== 8) continue; for (const e of [r.p[0], r.p[r.p.length - 1]]) {
+      const u = (e[0] - a[0]) * tx + (e[1] - a[1]) * tz, dn = (e[0] - a[0]) * ox + (e[1] - a[1]) * oz;
+      if (u > 0.5 && u < L - 0.5 && dn > -1 && dn < 16 && (!best || dn < best.d)) { const uc = Math.max(2.6, Math.min(L - 2.6, u)); best = { i, a, c, L, tx, tz, ox, oz, uc, mx: a[0] + tx * uc, mz: a[1] + tz * uc, d: dn }; } } }
+  }
+  return best;
+}
 // buildings: index + colliders
 for (const b of builds) {
   let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
   for (const [x, z] of b.p) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
   b.x0 = x0; b.x1 = x1; b.z0 = z0; b.z1 = z1; b.cx = (x0 + x1) / 2; b.cz = (z0 + z1) / 2; b.area = polyArea(b.p);
   bgrid.ins(b, x0, x1, z0, z1);
-  for (let i = 0; i < b.p.length; i++) { const a = b.p[i], c = b.p[(i + 1) % b.p.length]; addSeg(a[0], a[1], c[0], c[1]); }
+  if (isLB(b) && !LD) { LD = findLDoor(b); LB = b; }
+  for (let i = 0; i < b.p.length; i++) { const a = b.p[i], c = b.p[(i + 1) % b.p.length];
+    if (LD && isLB(b) && i === LD.i) {                                  // doorway gap in the wall, plus the porch walls with their own gap
+      const { tx, tz, ox, oz, uc, L } = LD, P = (u, v) => [a[0] + tx * u + ox * v, a[1] + tz * u + oz * v], seg = (p, q) => addSeg(p[0], p[1], q[0], q[1]);
+      seg(P(0, 0), P(uc - DW, 0)); seg(P(uc + DW, 0), P(L, 0));
+      for (const sd of [-1, 1]) seg(P(uc + sd * 1.7, 0), P(uc + sd * 1.7, 0.7));
+      seg(P(uc - 1.7, 0.7), P(uc - DW, 0.7)); seg(P(uc + DW, 0.7), P(uc + 1.7, 0.7));
+    } else addSeg(a[0], a[1], c[0], c[1]); }
 }
 function triangulate(p) { return THREE.ShapeUtils.triangulateShape(p.map(q => new THREE.Vector2(q[0], q[1])), []); }
 const UP = [0, 1, 0];
@@ -680,6 +709,34 @@ function insetRoof(b, wallH, o) {
   for (const [i, j, k] of triangulate(q)) { const a = [q[i][0], y1, q[i][1]], c = [q[j][0], y1, q[j][1]], e = [q[k][0], y1, q[k][1]]; rm.tri(a, c, e, uv(a), uv(c), uv(e), UP); }
   return true;
 }
+function buildLInterior(b, door, wallH) {
+  const CE = 4.6, tri = triangulate(b.p), carpet = mg('carpet', lit({ map: mkTex(64, 64, (g, w, h) => { g.fillStyle = '#5d6671'; g.fillRect(0, 0, w, h); for (let i = 0; i < 700; i++) { g.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,.12)' : 'rgba(255,255,255,.06)'; g.fillRect(Math.random() * w, Math.random() * h, 1, 1); } g.strokeStyle = 'rgba(0,0,0,.18)'; g.strokeRect(0, 0, w, h); }), color: 0xffffff }, 0.42), false, true);
+  const ceil = mg('ceilTiles', lit({ map: mkTex(64, 64, (g, w, h) => { g.fillStyle = '#f1efe9'; g.fillRect(0, 0, w, h); g.fillStyle = '#c9c6bd'; g.fillRect(0, 0, w, 2); g.fillRect(0, 0, 2, h); }), color: 0xffffff }, 0.4), false, false);
+  for (const [i, j, k] of tri) { const A = b.p[i], B = b.p[j], C = b.p[k];
+    carpet.tri([A[0], 0.07, A[1]], [B[0], 0.07, B[1]], [C[0], 0.07, C[1]], [A[0] / 2.4, A[1] / 2.4], [B[0] / 2.4, B[1] / 2.4], [C[0] / 2.4, C[1] / 2.4], UP);
+    ceil.tri([A[0], CE, A[1]], [C[0], CE, C[1]], [B[0], CE, B[1]], [A[0] / 1.2, A[1] / 1.2], [C[0] / 1.2, C[1] / 1.2], [B[0] / 1.2, B[1] / 1.2], [0, -1, 0]); }
+  const { tx, tz, ox, oz, mx, mz } = door, inn = (u, v) => [mx + tx * u - ox * v, mz + tz * u - oz * v], Lm = mg('ceilLight', new THREE.MeshBasicMaterial({ color: 0xfffbea }), false, false);
+  const inside = (x, z, m = 0.9) => inPoly(x, z, b.p) && !nearWall(x, z, m);
+  // ceiling light panels on a grid
+  let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const [x, z] of b.p) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+  for (let x = x0 + 2; x < x1 - 1; x += 3.6) for (let z = z0 + 2; z < z1 - 1; z += 3.6) if (inside(x, z, 0.5)) Lm.add(new THREE.BoxGeometry(1.2, 0.03, 0.6), mat4(x, CE - 0.02, z));
+  const wood = mg('deskWood', lit({ color: 0xb08a5c }, 0.35)), white = mg('deskWhite', lit({ color: 0xe9e9e4 }, 0.45)), dark = mg('chair', lit({ color: 0x2b2f36 }, 0.3)), green = mg('plant', lit({ color: 0x3d7a3a }, 0.35), true, false), pot = mg('pot', lit({ color: 0x7b5b45 }, 0.3));
+  const yaw = Math.atan2(-tz, tx);
+  // reception: curved-front desk facing the doors, a logo-free feature wall behind, sofas and plants by the entrance
+  { const [rx, rz] = inn(0, 3.6); wood.add(new THREE.BoxGeometry(3.0, 1.1, 0.7), mat4(rx, 0.55, rz, yaw)); white.add(new THREE.BoxGeometry(3.1, 0.05, 0.8), mat4(rx, 1.12, rz, yaw));
+    dark.add(new THREE.BoxGeometry(0.5, 0.5, 0.5), mat4(...(([x, z]) => [x, 0.45, z])(inn(-0.5, 4.4)), yaw)); for (let k = -1; k <= 1; k += 2) addCircle(...inn(k * 1.0, 3.6), 0.55); addCircle(...inn(0, 3.6), 0.55);
+    const [fx, fz] = inn(0, 5.6); if (inside(fx, fz, 0.3)) { mg('featureWall', lit({ color: 0x2f5a7a }, 0.35)).add(new THREE.BoxGeometry(4.2, 2.8, 0.12), mat4(fx, 1.45, fz, yaw)); addCircle(fx, fz, 0.4); addCircle(...inn(-1.5, 5.6), 0.4); addCircle(...inn(1.5, 5.6), 0.4); }
+    for (const sd of [-1, 1]) { const [px, pz] = inn(sd * 2.6, 1.1); if (inside(px, pz, 0.5)) { pot.add(new THREE.CylinderGeometry(0.25, 0.2, 0.5, 10), mat4(px, 0.3, pz)); green.add(new THREE.IcosahedronGeometry(0.5, 1), mat4(px, 1.0, pz, 0, 1, 1.3, 1)); addCircle(px, pz, 0.35); } }
+    for (const sd of [-1, 1]) { const [sx, sz] = inn(sd * 3.4, 3.2); if (inside(sx, sz, 0.8)) { dark.add(new THREE.BoxGeometry(0.9, 0.45, 1.8), mat4(sx, 0.3, sz, yaw + Math.PI / 2)); dark.add(new THREE.BoxGeometry(0.2, 0.5, 1.8), mat4(sx + tx * sd * 0.35, 0.65, sz + tz * sd * 0.35, yaw + Math.PI / 2)); addCircle(sx, sz, 0.8); } }
+  }
+  // open-plan office: desk pods with monitors and chairs wherever there is room
+  for (let x = x0 + 3; x < x1 - 2; x += 4.2) for (let z = z0 + 3; z < z1 - 2; z += 3.6) {
+    if (!inside(x, z, 2.2) || Math.hypot(x - mx, z - mz) < 8) continue;
+    white.add(new THREE.BoxGeometry(2.8, 0.05, 1.6), mat4(x, 0.74, z)); for (const [lx, lz] of [[-1.3, -0.7], [1.3, -0.7], [-1.3, 0.7], [1.3, 0.7]]) dark.add(new THREE.BoxGeometry(0.05, 0.72, 0.05), mat4(x + lx, 0.37, z + lz));
+    for (const sd of [-1, 1]) for (const lx of [-0.7, 0.7]) { dark.add(new THREE.BoxGeometry(0.5, 0.3, 0.03), mat4(x + lx, 1.0, z + sd * 0.15)); dark.add(new THREE.BoxGeometry(0.5, 0.08, 0.5), mat4(x + lx, 0.48, z + sd * 1.1)); dark.add(new THREE.BoxGeometry(0.5, 0.45, 0.06), mat4(x + lx, 0.75, z + sd * 1.35)); }
+    addCircle(x - 0.8, z, 0.85); addCircle(x + 0.8, z, 0.85);
+  }
+}
 const STORE = {};
 // trolley shelters in the Morrisons car park, read off the aerial photo: each sits across a double row of bays, long side across the rows
 const aisleZ = (p, x) => { for (let i = 0; i < p.length - 1; i++) { const a = p[i], b = p[i + 1]; if ((x - a[0]) * (x - b[0]) <= 0 && a[0] !== b[0]) return a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]); } return null; };
@@ -729,7 +786,17 @@ for (const b of builds) {
     const a = b.p[i], c = b.p[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 0.05) continue;
     const nx = (c[1] - a[1]) / L, nz = -(c[0] - a[0]) / L, u0 = s / 8 + uo, u1 = (s + L) / 8 + uo;
     const endW = parkB && L < 13, wq = endW ? we : wm, k2 = endW ? 2 : 1;
-    wq.quad([a[0], 0, a[1]], [c[0], 0, c[1]], [c[0], wallH, c[1]], [a[0], wallH, a[1]], [u0 * k2, 0], [u1 * k2, 0], [u1 * k2, floors], [u0 * k2, floors], [nx, 0, nz]); s += L;
+    const piece = (p, q, y0, y1, M = wq, kk = k2, U0 = u0, U1 = u1, F = floors, off = 0, nn = [nx, 0, nz]) => { const A = [a[0] + (c[0] - a[0]) * p / L, a[1] + (c[1] - a[1]) * p / L], C2 = [a[0] + (c[0] - a[0]) * q / L, a[1] + (c[1] - a[1]) * q / L], ua = (U0 + (U1 - U0) * p / L) * kk, ub = (U0 + (U1 - U0) * q / L) * kk, ix = off * (b.area >= 0 ? -nx : nx), iz = off * (b.area >= 0 ? -nz : nz);
+      M.quad([A[0] + ix, y0, A[1] + iz], [C2[0] + ix, y0, C2[1] + iz], [C2[0] + ix, y1, C2[1] + iz], [A[0] + ix, y1, A[1] + iz], [ua, y0 / wallH * F], [ub, y0 / wallH * F], [ub, y1 / wallH * F], [ua, y1 / wallH * F], nn); };
+    const lDoorEdge = isLB(b) && LD && i === LD.i;
+    if (lDoorEdge) { piece(0, LD.uc - DW, 0, wallH); piece(LD.uc + DW, L, 0, wallH); piece(LD.uc - DW, LD.uc + DW, DH, wallH); }
+    else piece(0, L, 0, wallH);
+    if (isLB(b)) {                                                      // interior lining (plaster with the same window openings), a little inside the outer wall
+      const lm = mg(endW ? 'linEnd' : 'linOffice', endW ? linEndMat : linOfficeMat, false, true), CE = 4.6;
+      if (lDoorEdge) { piece(0, LD.uc - 1.75, 0, CE, lm, k2, u0, u1, floors, 0.12); piece(LD.uc + 1.75, L, 0, CE, lm, k2, u0, u1, floors, 0.12); piece(LD.uc - 1.75, LD.uc + 1.75, DH, CE, lm, k2, u0, u1, floors, 0.12); }
+      else piece(0, L, 0, CE, lm, k2, u0, u1, floors, 0.12);
+    }
+    s += L;
   }
   if (parkB) {                                                          // brick entrance bay with a pointed gable, on the wall that faces the nearest road
     const sg = b.area >= 0 ? 1 : -1; let best = null;
@@ -760,6 +827,23 @@ for (const b of builds) {
         mg('arch', archMat).quad(Pq(-W, 0), Pq(W, 0), Pq(W, H), Pq(-W, H), [0, 0], [1, 0], [1, 1], [0, 1], [ox, 0, oz]);
       } else {
       const P = (u, y, v) => [mx + tx * u + ox * v, y, mz + tz * u + oz * v], pm2 = mg('porch', porchMat), rf = mg('slate', slateMat);
+      if (isL) {                                                       // open doorway in the porch front, glass doors swung open, lit reveals
+        const UV = (u, y) => [(u + W) / (2 * W), y / H], fq = (u0, u1, y0, y1) => pm2.quad(P(u0, y0, D), P(u1, y0, D), P(u1, y1, D), P(u0, y1, D), UV(u0, y0), UV(u1, y0), UV(u1, y1), UV(u0, y1), [ox, 0, oz]);
+        fq(-W, -DW, 0, H); fq(DW, W, 0, H); fq(-DW, DW, DH, H);
+        const rv = mg('revealLit', lit({ color: 0xe9e3d4 }, 0.45), false, true), fl = mg('lobbyFloor', lit({ color: 0x8e8a83 }, 0.35), false, true);
+        rv.quad(P(-DW, DH, D), P(DW, DH, D), P(DW, DH, 0), P(-DW, DH, 0), [0, 0], [1, 0], [1, 1], [0, 1], [0, -1, 0]);
+        for (const sd of [-1, 1]) rv.quad(P(sd * DW, 0, D), P(sd * DW, 0, 0), P(sd * DW, DH, 0), P(sd * DW, DH, D), [0, 0], [1, 0], [1, 1], [0, 1], [-tx * sd, 0, -tz * sd]);
+        fl.quad(P(-W, 0.065, D), P(W, 0.065, D), P(W, 0.065, -0.2), P(-W, 0.065, -0.2), [0, 0], [1, 0], [1, 1], [0, 1], UP);
+        const frame = mg('doorFrame', stdMat({ color: 0x2f3438, roughness: 0.4, metalness: 0.5 })), gl = mg('doorGlass', stdMat({ color: 0x9fb8c8, roughness: 0.05, metalness: 0.6, transparent: true, opacity: 0.35 }), false, false);
+        const yaw0 = Math.atan2(-tz, tx);
+        for (const sd of [-1, 1]) {                                     // each leaf hinged at the side of the opening, swung out ~80 degrees
+          const hx = P(sd * DW, 0, D + 0.02), ang = yaw0 + sd * 1.4, cx = hx[0] + Math.cos(ang) * -sd * DW / 2, cz = hx[2] - Math.sin(ang) * -sd * DW / 2;
+          gl.add(new THREE.BoxGeometry(DW - 0.08, DH - 0.12, 0.03), mat4(cx, DH / 2, cz, ang));
+          for (const [w2, h2, oxx, oy] of [[DW, 0.06, 0, DH - 0.03], [DW, 0.1, 0, 0.05], [0.06, DH, -DW / 2 + 0.03, DH / 2], [0.06, DH, DW / 2 - 0.03, DH / 2]]) frame.add(new THREE.BoxGeometry(w2, h2, 0.05), mat4(cx + Math.cos(ang) * oxx, oy, cz - Math.sin(ang) * oxx, ang));
+          addCircle(hx[0] + Math.cos(ang) * -sd * DW * 0.75, hx[2] - Math.sin(ang) * -sd * DW * 0.75, 0.12);
+        }
+        buildLInterior(b, { ...best, tx, tz }, wallH);
+      } else
       pm2.quad(P(-W, 0, D), P(W, 0, D), P(W, H, D), P(-W, H, D), [0, 0], [1, 0], [1, 1], [0, 1], [ox, 0, oz]);
       for (const sd of [-1, 1]) pm2.quad(P(sd * W, 0, 0), P(sd * W, 0, D), P(sd * W, H, D), P(sd * W, H, 0), [0, 0], [0.2, 0], [0.2, 1], [0, 1], [tx * sd, 0, tz * sd]);
       pm2.tri(P(-W, H, D), P(W, H, D), P(0, H + G, D), [0.04, 0.9], [0.96, 0.9], [0.5, 1], [ox, 0, oz]);
@@ -1852,6 +1936,12 @@ function stepCamera(dt) {
   const dist = W.on ? (camMode ? 6 : 3.6) : camMode ? 11 + spd * 0.03 : 7.3 + spd * 0.025, hgt = W.on ? (camMode ? 3.0 : 2.1) : camMode ? 3.8 : 2.5 + spd * 0.006, fx = -Math.sin(camA), fz = -Math.cos(camA);
   camera.position.x += (p.x - fx * dist - camera.position.x) * Math.min(1, dt * 8); camera.position.z += (p.z - fz * dist - camera.position.z) * Math.min(1, dt * 8);
   camera.position.y += (hgt + p.y - camera.position.y) * Math.min(1, dt * 4);
+  if (W.on) {                                                          // march from the walker to the camera and stop short of the first wall
+    const sx = camera.position.x - p.x, sz = camera.position.z - p.z, L = Math.hypot(sx, sz) || 1; let k = 0.4;
+    for (; k < L; k += 0.2) { const qx = p.x + sx * k / L, qz = p.z + sz * k / L, list = cgrid.at(qx, qz); if (list && list.some(c => c.t === 2 && (!c.lv || (c.lv === 2) === (p.y > -1)) && distSeg(qx, qz, c.x0, c.z0, c.x1, c.z1) < 0.25)) break; }
+    if (k < L) { camera.position.x = p.x + sx * (k - 0.2) / L; camera.position.z = p.z + sz * (k - 0.2) / L; }
+    if (LB && inPoly(p.x, p.z, LB.p)) camera.position.y = Math.min(camera.position.y, 3.9);
+  }
   if (p.y < -1) { const l = TR.loc(camera.position.x, camera.position.z); if (Math.abs(l.q) < TR.band + 0.5 && Math.abs(l.t) < TR.Ld + 0.6) camera.position.y = Math.min(camera.position.y, -1.25); else if (!TR.foot(camera.position.x, camera.position.z)) camera.position.y = Math.max(camera.position.y, 0.6); }
   shake = Math.max(0, shake - dt * 2.4); const sh = shake * 0.3 + spd * 0.0003; camera.position.x += rand(-sh, sh); camera.position.y += rand(-sh, sh) * 0.6;
   camera.lookAt(p.x + fx * 6, 1.25 + p.y, p.z + fz * 6);
