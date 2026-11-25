@@ -670,14 +670,28 @@ function insetRoof(b, wallH, o) {
   return true;
 }
 const STORE = {};
-function trolleyShelter(x, z, yaw) {                                   // curved grey roof, green poster ends, trolleys inside
+// trolley shelters in the Morrisons car park, read off the aerial photo: each sits across a double row of bays, long side across the rows
+const aisleZ = (p, x) => { for (let i = 0; i < p.length - 1; i++) { const a = p[i], b = p[i + 1]; if ((x - a[0]) * (x - b[0]) <= 0 && a[0] !== b[0]) return a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]); } return null; };
+const SHELTERS = (() => {
+  const north = [[-81, 385], [-40, 390]], A = id => roads[id] ? roads[id].p : null, out = [];
+  for (const [x, ra, rb] of [[-64.7, north, A(166)], [-62.2, A(166), A(165)], [-93.8, A(165), A(164)], [-66.4, A(164), A(138)]]) {
+    if (!ra || !rb) continue; const z1 = aisleZ(ra, x), z2 = aisleZ(rb, x); if (z1 == null || z2 == null) continue;
+    const sl = (aisleZ(rb, x + 1) - z2), yaw = Math.atan2(-sl, 1) + Math.PI / 2;   // long axis across the aisles
+    out.push({ x, z: (z1 + z2) / 2, yaw, len: Math.min(9, Math.abs(z2 - z1) - 6.5) });
+  }
+  out.push({ x: -52.6, z: 476.8, yaw: Math.PI / 2, len: 7 });
+  return out;
+})();
+const inShelter = (x, z, m = 0) => SHELTERS.some(s => { const c = Math.cos(s.yaw), sn = Math.sin(s.yaw), dx = x - s.x, dz = z - s.z, u = dx * c - dz * sn, v = dx * sn + dz * c; return Math.abs(u) < s.len / 2 + 2.6 + m && Math.abs(v) < 1.6 + m; });
+function trolleyShelter(x, z, yaw, len = 7) {
+  const k = len / 7;                                   // curved grey roof, green poster ends, trolleys inside
   const rf = mg('shelterRoof', stdMat({ color: 0xb9bdbf, roughness: 0.5, metalness: 0.3, side: DS })), gp = mg('shelterEnd', stdMat({ color: 0x2c6b40, roughness: 0.6 })), tr = mg('trolley', stdMat({ color: 0x9aa0a4, roughness: 0.4, metalness: 0.6 }));
   const c = Math.cos(yaw), sn = Math.sin(yaw);
-  rf.add(new THREE.CylinderGeometry(1.3, 1.3, 7, 10, 1, true, 0, Math.PI), mat4(x, 2.0, z, yaw).multiply(new THREE.Matrix4().makeScale(1, 0.45, 1)).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2)));
-  for (const e of [-3.45, 3.45]) gp.add(new THREE.BoxGeometry(0.08, 2.0, 2.4), mat4(x + c * e, 1.0, z - sn * e, yaw));
-  mg('shelterBack', stdMat({ color: 0xcfd6d8, roughness: 0.2, metalness: 0.2, transparent: true, opacity: 0.45, side: DS }), false, false).add(new THREE.BoxGeometry(6.9, 1.9, 0.04), mat4(x + sn * 1.2, 1.0, z + c * 1.2, yaw));
-  tr.add(new THREE.BoxGeometry(6.0, 0.9, 0.7), mat4(x - sn * 0.1, 0.55, z - c * 0.1, yaw));
-  for (const e of [-3.2, 0, 3.2]) addCircle(x + c * e, z - sn * e, 0.9);
+  rf.add(new THREE.CylinderGeometry(1.3, 1.3, len, 10, 1, true, 0, Math.PI), mat4(x, 2.0, z, yaw).multiply(new THREE.Matrix4().makeScale(1, 0.45, 1)).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2)));
+  for (const e of [-3.45 * k, 3.45 * k]) gp.add(new THREE.BoxGeometry(0.08, 2.0, 2.4), mat4(x + c * e, 1.0, z - sn * e, yaw));
+  mg('shelterBack', stdMat({ color: 0xcfd6d8, roughness: 0.2, metalness: 0.2, transparent: true, opacity: 0.45, side: DS }), false, false).add(new THREE.BoxGeometry(len - 0.1, 1.9, 0.04), mat4(x + sn * 1.2, 1.0, z + c * 1.2, yaw));
+  tr.add(new THREE.BoxGeometry(len - 1, 0.9, 0.7), mat4(x - sn * 0.1, 0.55, z - c * 0.1, yaw));
+  for (const e of [-3.2 * k, 0, 3.2 * k]) addCircle(x + c * e, z - sn * e, 0.9);
 }
 for (const b of builds) {
   const hsh = hashN(b.cx, b.cz), n = b.p.length;
@@ -757,18 +771,18 @@ for (const b of builds) {
       // a smaller lettering board over the parade end of the store
       { const [sx, sz] = W(L * 0.12, -0.6); mg('storeSign').add(new THREE.PlaneGeometry(5, 0.95), mat4(sx, wallH + 0.95, sz, Math.atan2(ox, oz))); }
       // entrance lobby: glazed box with a green frame and a flat canopy
-      { const [ex, ez] = W(L * 0.4, 1.4); mg('shopGlass', shopGlassMat).add(new THREE.BoxGeometry(6, 3.0, 2.8), mat4(ex, 1.5, ez, yaw)); mg('shopCanopy', shopCanopyMat).add(new THREE.BoxGeometry(6.6, 0.25, 3.4), mat4(ex, 3.1, ez, yaw)); }
+      { const [ex, ez] = W(L * 0.93, 1.4); mg('shopGlass', shopGlassMat).add(new THREE.BoxGeometry(6, 3.0, 2.8), mat4(ex, 1.5, ez, yaw)); mg('shopCanopy', shopCanopyMat).add(new THREE.BoxGeometry(6.6, 0.25, 3.4), mat4(ex, 3.1, ez, yaw)); }
       // black bollards with yellow bands along the front walkway
       { const bG = new THREE.CylinderGeometry(0.1, 0.1, 1.0, 8), yG = new THREE.CylinderGeometry(0.105, 0.105, 0.08, 8), bm = mg('sbBlack', stdMat({ color: 0x151719, roughness: 0.5 })), ym = mg('yellow');
-        for (let u = 2; u < L - 1; u += 1.9) { if (Math.abs(u - L * 0.4) < 4.5) continue; const [px, pz] = W(u, 4.2); bm.add(bG, mat4(px, 0.5, pz)); ym.add(yG, mat4(px, 0.86, pz)); addCircle(px, pz, 0.15); } }
+        for (let u = 2; u < L - 1; u += 1.9) { if (Math.abs(u - L * 0.93) < 4.5 || Math.abs(u - (419 - az) / tz) < 4.5) continue; const [px, pz] = W(u, 4.2); bm.add(bG, mat4(px, 0.5, pz)); ym.add(yG, mat4(px, 0.86, pz)); addCircle(px, pz, 0.15); } }
       // front walkway (pale slabs) and zebra crossings from the car park
       { const st = mg('stoneSlab', stdMat({ color: 0xc9c4b8, roughness: 0.95 }), false, true), [p0x, p0z] = W(0, 0), [p1x, p1z] = W(L, 0), [p2x, p2z] = W(L, 4.6), [p3x, p3z] = W(0, 4.6);
         st.quad([p0x, 0.05, p0z], [p1x, 0.05, p1z], [p2x, 0.05, p2z], [p3x, 0.05, p3z], [0, 0], [1, 0], [1, 1], [0, 1], UP);
         const zm = mg('dash', dashMat, false, true);
-        for (const uc of [L * 0.4, L * 0.78]) for (let k = 0; k < 6; k++) { const u0 = uc - 2.5 + k * 0.9, A = W(u0, 4.8), B = W(u0 + 0.5, 4.8), C = W(u0 + 0.5, 10.5), D = W(u0, 10.5); zm.quad([A[0], 0.07, A[1]], [B[0], 0.07, B[1]], [C[0], 0.07, C[1]], [D[0], 0.07, D[1]], [0, 0], [1, 0], [1, 1], [0, 1], UP); } }
+        for (const uc of []) for (let k = 0; k < 6; k++) { const u0 = uc - 2.5 + k * 0.9, A = W(u0, 4.8), B = W(u0 + 0.5, 4.8), C = W(u0 + 0.5, 10.5), D = W(u0, 10.5); zm.quad([A[0], 0.07, A[1]], [B[0], 0.07, B[1]], [C[0], 0.07, C[1]], [D[0], 0.07, D[1]], [0, 0], [1, 0], [1, 1], [0, 1], UP); } }
       // purple click-and-collect disc on a post
       { const [px, pz] = W(L * 0.55, 5.2); mg('pole', poleMat).add(new THREE.CylinderGeometry(0.05, 0.05, 2.6, 6), mat4(px, 1.3, pz)); mg('ccSign', stdMat({ color: 0x7a3c8c, roughness: 0.6 })).add(new THREE.CylinderGeometry(0.4, 0.4, 0.05, 16), mat4(px, 2.7, pz, Math.atan2(ox, oz)).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2))); }
-      for (const [u, v] of [[L * 0.22, 7.5], [L * 0.62, 7.5]]) { const [sx2, sz2] = W(u, v); trolleyShelter(sx2, sz2, yaw + Math.PI / 2); }
+
     }
   }
   if (!((shopB && insetRoof(b, wallH, { d: 10, rise: 4.4 })) || ((rowB || pubB) && insetRoof(b, wallH, { d: pubB ? 6 : 4, rise: pubB ? 5 : 2.6 })) || (parkB && insetRoof(b, wallH)) || (pitched && pitchedRoof(b, wallH, fi < 0 ? 0 : fi, hsh)))) {
@@ -849,6 +863,7 @@ for (const r of roads) {
       for (const sd of [-1, 1]) {
         const nx = tz * sd, nz = -tx * sd, d0 = r.w / 2 + 0.1, cx = x + nx * (d0 + depth / 2), cz = z + nz * (d0 + depth / 2), fx = x + nx * (d0 + depth), fz = z + nz * (d0 + depth);
         const shopBay = inShop(cx, cz);
+        if (shopBay && inShelter(cx, cz)) continue;
         if (r.id === ENTRY_RD || (r.id === 42 && z < -325)) continue;          // entrance road is verge and birches, not parking
         if (!shopBay && roads.indexOf(r) !== 314 && Math.hypot(cx + 436, cz + 290) < 40) continue;     // the entrance approach is open verge and hedges, no bays (as in the real park)
         if (!shopBay && (cx > -335 || !inPark(cx, cz)) || inBuilding(cx, cz) || inBuilding(fx, fz) || inBuilding(x + nx * d0, z + nz * d0) || nearWall(cx, cz, 1.0)) continue;
@@ -856,7 +871,8 @@ for (const r of roads) {
         if (!shopBay) hedges.push([x + nx * (d0 + depth + 0.45), z + nz * (d0 + depth + 0.45), Math.atan2(-tz, tx), cx, cz]);
         const hx = tx * bayW / 2, hz = tz * bayW / 2, ax = x + nx * d0, az = z + nz * d0, bx = x + nx * (d0 + depth), bz = z + nz * (d0 + depth), y = 0.046;
         bayPts.push([cx, cz]);
-        if (shopBay) pm.quad([ax - hx, y, az - hz], [ax + hx, y, az + hz], [bx + hx, y, bz + hz], [bx - hx, y, bz - hz], [0, 0], [1, 0], [1, 1], [0, 1], UP);
+        if (shopBay) { const col = (cx > -78 && cx < -50 && cz > 423 && cz < 433) ? 'bayBlue' : (cx > -52 && cz < 389) ? 'bayTeal' : null;
+          (col ? mg(col, stdMat({ color: col === 'bayBlue' ? 0x2f68b0 : 0x3aa596, roughness: 0.85 }), false, true) : pm).quad([ax - hx, y, az - hz], [ax + hx, y, az + hz], [bx + hx, y, bz + hz], [bx - hx, y, bz - hz], [0, 0], [1, 0], [1, 1], [0, 1], UP); }
         else pv.quad([ax - hx, y, az - hz], [ax + hx, y, az + hz], [bx + hx, y, bz + hz], [bx - hx, y, bz - hz], [0, 0], [bayW, 0], [bayW, depth], [0, depth], UP);
         const lx = tx * 0.035, lz = tz * 0.035, ex = x + hx, ez = z + hz;                                   // bay line on the far side of the bay
         lm.quad([ex + nx * d0 - lx, 0.056, ez + nz * d0 - lz], [ex + nx * d0 + lx, 0.056, ez + nz * d0 + lz], [ex + nx * (d0 + depth - 0.4) + lx, 0.056, ez + nz * (d0 + depth - 0.4) + lz], [ex + nx * (d0 + depth - 0.4) - lx, 0.056, ez + nz * (d0 + depth - 0.4) - lz], [0, 0], [1, 0], [1, 1], [0, 1], UP);
@@ -1141,8 +1157,8 @@ for (const r of roads) {
   const textDecal = (txt, x, z, ang, w2, h2) => mg('decal_' + txt, stdMat({ map: mkTex(256, 64, (g, w, h) => { g.clearRect(0, 0, w, h); g.fillStyle = '#eceade'; g.font = 'bold 54px Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, w / 2, h / 2); }), transparent: true, alphaTest: 0.4, polygonOffset: true, polygonOffsetFactor: -2 }), false, true).add(new THREE.PlaneGeometry(w2, h2), mat4(x, y + 0.01, z, ang).multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2)));
   const arrow = (x, z, tx, tz) => { quadAt(dm, x - tx * 2, z - tz * 2, tx, tz, 3, 0.25); const hx = x + tx, hz = z + tz; for (const sd of [-1, 1]) dm.quad([hx - tz * sd * 0.05, y, hx + tx * sd * 0.05], [hx + tx * 1.2, y, hz + tz * 1.2], [hx + tx * 1.0, y, hz + tz * 1.0], [hx - tz * sd * 0.7 - tx * 0.1, y, hz + tx * sd * 0.7 - tz * 0.1], [0, 0], [1, 0], [1, 1], [0, 1], UP); };
   // one-way flow: arrows + ONE WAY along each aisle (towards the store), double dashed give-way lines at the aisle ends
-  for (const id of [164, 165, 166]) {
-    const r = roads[id]; if (!r) continue; let [p, q] = [r.p[0], r.p[r.p.length - 1]]; if (p[0] > q[0]) [p, q] = [q, p];
+  for (const [id, east] of [[166, 1], [165, 1], [164, 0], [138, 0]]) {
+    const r = roads[id]; if (!r) continue; let [p, q] = [r.p[0], r.p[r.p.length - 1]]; if ((p[0] > q[0]) === !!east) [p, q] = [q, p];
     const L = Math.hypot(q[0] - p[0], q[1] - p[1]), tx = (q[0] - p[0]) / L, tz = (q[1] - p[1]) / L;
     for (const f of [0.3, 0.7]) arrow(p[0] + tx * L * f, p[1] + tz * L * f, tx, tz);
     textDecal('ONE WAY', p[0] + tx * L * 0.5, p[1] + tz * L * 0.5, Math.atan2(-tz, tx) + Math.PI / 2, 3.4, 0.85);
@@ -1157,7 +1173,15 @@ for (const r of roads) {
       col.add(new THREE.CylinderGeometry(0.1, 0.16, 10, 8), mat4(fx, 5, fz)); for (const sd of [-1, 1]) hd.add(new THREE.BoxGeometry(0.7, 0.25, 0.5), mat4(fx + sd * 0.5, 10.0, fz)); addCircle(fx, fz, 0.25);
     } }
   // trolley shelters out in the car park
-  for (const [x, z, a2] of [[-84, 420, 0.08], [-52, 405, 0.08], [-86, 437, 0.08]]) if (!inBuilding(x, z) && !parked.some(p => Math.hypot(p.x - x, p.z - z) < 4)) trolleyShelter(x, z, a2);
+  for (const sh of SHELTERS) trolleyShelter(sh.x, sh.z, sh.yaw, sh.len);
+  if (STORE.front) { const f = STORE.front, u = L => [f.ax + f.tx * L + f.ox * 2.2, f.az + f.tz * L + f.oz * 2.2], [sx, sz] = u(Math.max(4, Math.min(f.L - 4, (419 - f.az) / f.tz))); trolleyShelter(sx, sz, f.yaw + Math.PI / 2, 7); }
+  const zebra = (x, z, ang, w2, n = 6) => { const tx = Math.cos(ang), tz = -Math.sin(ang); for (let k = 0; k < n; k++) { const o = (k - (n - 1) / 2) * 0.95; quadAt(dm, x + tx * o - tz * w2 / 2, z + tz * o + tx * w2 / 2, tz, -tx, w2, 0.5); } };
+  const hatch = (x, z, ang, sz) => { const ym = mg('yellow'), tx = Math.cos(ang), tz = -Math.sin(ang); for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {} for (let k = -2; k <= 2; k++) for (const sg of [-1, 1]) { const ox = x + (tx * k - tz * k * sg) * sz / 5, oz = z + (tz * k + tx * k * sg) * sz / 5; quadAt(ym, ox - (tx + tz * sg) * sz / 2 * 0, oz, (tx + tz * sg) / Math.SQRT2, (tz - tx * sg) / Math.SQRT2, 0.01, 0.01); }
+    for (const sg of [-1, 1]) for (let k = -3; k <= 3; k++) { const cx = x + tx * k * sz / 7, cz = z + tz * k * sz / 7, dx = (tx * sg - tz) / Math.SQRT2, dz = (tz * sg + tx) / Math.SQRT2, L = sz * 0.9 - Math.abs(k) * sz / 7 * 1.2; if (L > 0.3) quadAt(ym, cx - dx * L / 2, cz - dz * L / 2, dx, dz, L, 0.12); }
+    for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const p = [x + (tx * a - tz * b) * sz / 2, z + (tz * a + tx * b) * sz / 2], q = [x + (tx * -b - tz * a) * sz / 2, z + (tz * -b + tx * a) * sz / 2], L = Math.hypot(q[0] - p[0], q[1] - p[1]); quadAt(ym, p[0], p[1], (q[0] - p[0]) / L, (q[1] - p[1]) / L, L, 0.12); } };
+  { const r = roads[104], xs = aisleZ ? null : null; const zc = 433, xr = -40 + (-49 + 40) * (zc - 390) / 68;   // store-front road position at the entrance
+    zebra(xr, zc, 0, 7.5); hatch(xr, zc - 4.2, 0, 3.4); hatch(xr, zc + 4.2, 0, 3.4); textDecal('NO ENTRY', xr, 447, Math.PI, 3.2, 0.8); }
+  zebra(-115.2, 425.5, 0.1, 6);
   // ash and copper-beech island by the entrance, line of Lombardy poplars behind the store
   const tree2 = (x, z, col, s2) => { if (inBuilding(x, z) || roadDist(x, z, -1) < 1.5) return; mg('trunk', trunkMat).add(trunkGeo, mat4(x, 0, z, 0, s2, s2 * 1.4, s2)); const fm = mg('fol_' + col.toString(16), stdMat({ color: col, roughness: 1, flatShading: true })); fm.add(blobA, mat4(x, 4.2 * s2, z, srand() * 6, s2 * 1.3, s2, s2 * 1.3)); fm.add(blobB, mat4(x + 0.6, 5.8 * s2, z - 0.4, srand() * 6, s2 * 1.2, s2, s2 * 1.2)); addCircle(x, z, 0.5 * s2); };
   tree2(-124, 441, 0x5c7f3c, 1.3); tree2(-119, 442.5, 0x5a2a30, 1.15); tree2(-128, 455, 0x63843f, 1.25); tree2(-121, 460, 0x5a2a30, 1.05);
