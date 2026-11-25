@@ -2218,17 +2218,20 @@ function updateAim() {
       if (hit.object.isInstancedMesh) { const it = hit.object.userData.items[hit.instanceId]; if (it && !basket.includes(it) && !it.mesh) aimT = { kind: 'item', it }; }
       break; } }
   else if (INSIDE === interiorGroup) {
-    if (W.seated) { aimRay.far = 1.6; if (aimRay.intersectObject(W.seated.hitKb, false)[0]) aimT = { kind: 'kb' }; }
-    else { const hit = aimRay.intersectObjects(OFFICE_DESKS.flatMap(d => d.hitDesk), false)[0]; if (hit) aimT = { kind: 'desk', d: hit.object.userData.desk }; } }
+    const na = W.seated ? null : NPC.aim(aimRay);
+    if (na) { if (na.kind !== 'holding') aimT = na; }
+    else if (W.seated) { aimRay.far = 1.6; if (aimRay.intersectObject(W.seated.hitKb, false)[0]) aimT = { kind: 'kb' }; }
+    else { const hit = aimRay.intersectObjects(OFFICE_DESKS.filter(d => d !== NPC.d).flatMap(d => d.hitDesk), false)[0]; if (hit) aimT = { kind: 'desk', d: hit.object.userData.desk }; } }
   else if (!INSIDE) { aimRay.far = 4.5; const hit = aimRay.intersectObject(player.car.grp, true)[0]; if (hit) aimT = { kind: 'car' }; }
   const b = $('tAct'); b.classList.toggle('show', !!aimT); $('xhair').classList.toggle('on', !!aimT);
   if (aimT && aimT.kind === 'item') { b.textContent = 'PICK UP'; $('aimLbl').textContent = aimT.it.name + '  £' + aimT.it.price.toFixed(2); } else $('aimLbl').textContent = '';
-  if (aimT && aimT.kind !== 'item') b.textContent = aimT.kind === 'card' ? 'PAY £' + aimT.T.total.toFixed(2) : { car: 'GET IN', item: 'PICK UP', desk: 'SIT', kb: 'TYPE', belt: 'PLACE ITEM', scan: 'SCAN' }[aimT.kind];
+  if (aimT && aimT.kind !== 'item') b.textContent = aimT.kind === 'card' ? 'PAY £' + aimT.T.total.toFixed(2) : { car: 'GET IN', item: 'PICK UP', desk: 'SIT', kb: 'TYPE', belt: 'PLACE ITEM', scan: 'SCAN', shoes: 'TAKE SHOES', putshoes: 'PUT SHOES DOWN' }[aimT.kind];
 }
 function doAction() {
   if (!aimT) return;
   if (aimT.kind === 'car') { toggleFoot(); return; }
   if (aimT.kind === 'desk') { sitAt(aimT.d); updateAim(); return; }
+  if (aimT.kind === 'shoes' || aimT.kind === 'putshoes') { NPC.act(aimT); updateAim(); return; }
   if (aimT.kind === 'kb') { pressKeyboard(); return; }
   if (aimT.kind === 'belt') { const T = aimT.T, it = basket.shift(); if (!it) return; const m = it.makeMesh(); m.position.copy(T.start); m.rotation.y = T.yaw; T.belt.push({ it, m, t: 0 }); showBasket(); updateAim(); return; }
   if (aimT.kind === 'scan') { const T = aimT.T, e = T.belt.find(q => q.t >= 0.98) || T.belt[0]; if (!e) return; T.belt.splice(T.belt.indexOf(e), 1);
@@ -2539,9 +2542,9 @@ function stepDebris(dt) {
       if (d.m.position.y < 0.04) { d.m.position.y = 0.04; if (Math.abs(d.vy) < 1.2) { d.vy = 0; d.vx = d.vz = 0; d.m.rotation.x = 0; d.m.rotation.z = 0; } else { d.vy *= -0.3; d.vx *= 0.5; d.vz *= 0.5; d.wx *= 0.5; d.wz *= 0.5; } } } }
 }
 // ===== ragdoll: a floppy body of joints held together by sticks (verlet), thrown out of the car =====
-function ragFigure(I, topCol = 0x2c4f7c) {        // the floppy figure's meshes, posed from joint positions I[name] = {x,y,z}
+function ragFigure(I, topCol = 0x2c4f7c, opt = {}) {        // the floppy figure's meshes, posed from joint positions I[name] = {x,y,z}
   const M = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 });
-  const skin = M(0xd9a785), top = M(topCol), legs = M(0x2d2f36), shoe = M(0x18191b), hair = M(0x3a2618), g = new THREE.Group();
+  const skin = M(opt.skin ?? 0xd9a785), top = opt.topMap ? new THREE.MeshStandardMaterial({ map: opt.topMap, roughness: 0.85 }) : M(topCol), legs = M(opt.legs ?? 0x2d2f36), shoe = M(opt.shoe ?? 0x18191b), hair = M(opt.hair ?? 0x3a2618), g = new THREE.Group();
   const cyl = (r0, r1, m) => { const geo = new THREE.CylinderGeometry(r0, r1, 1, 8); geo.translate(0, 0.5, 0); const o = new THREE.Mesh(geo, m); o.castShadow = true; g.add(o); return o; };
   const ball = (r, m) => { const o = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), m); o.castShadow = true; g.add(o); return o; };
   // meshes
@@ -2550,6 +2553,26 @@ function ragFigure(I, topCol = 0x2c4f7c) {        // the floppy figure's meshes,
   const neckM = cyl(0.07, 0.07, skin), bones = [];
   for (const s of ['L', 'R']) { bones.push([cyl(0.055, 0.05, top), I['sh' + s], I['el' + s]], [cyl(0.05, 0.045, top), I['el' + s], I['ha' + s]], [cyl(0.075, 0.07, legs), I['hi' + s], I['kn' + s]], [cyl(0.07, 0.064, legs), I['kn' + s], I['ft' + s]]); }
   const hands = [ball(0.05, skin), ball(0.05, skin)], shoes = [0, 1].map(() => { const o = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.26), shoe); o.castShadow = true; g.add(o); return o; });
+  const onHead = [];                                                     // extras fixed to the head: [mesh, x right, y up, z back]
+  if (opt.hairScale) hairM.scale.setScalar(opt.hairScale);
+  if (opt.quiff) hairM.geometry.rotateX(0.5);                            // hairline up off the forehead
+  if (opt.beard) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.129, 18, 10, Math.PI * 0.9, Math.PI * 1.2, Math.PI * 0.6, Math.PI * 0.34), hair); b.scale.set(1, 1.05, 1.03); b.castShadow = true; g.add(b); onHead.push([b, 0, -0.012, 0.004]);   // full beard from the sideburns round the jaw
+    const chin = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), hair); chin.scale.set(1.25, 0.9, 0.8); g.add(chin); onHead.push([chin, 0, -0.1, -0.075]);
+    for (const sx of [-1, 1]) { const sb = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.09, 0.05), hair); g.add(sb); onHead.push([sb, sx * 0.118, -0.02, -0.01]); }
+    const mo = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.022, 0.026), hair); g.add(mo); onHead.push([mo, 0, -0.04, -0.118]);
+    for (const sx of [-1, 1]) { const m2 = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.04, 0.02), hair); g.add(m2); onHead.push([m2, sx * 0.045, -0.06, -0.112]); } }
+  if (opt.smile) { const t = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.012), M(0xf4f1ea)); g.add(t); onHead.push([t, 0, -0.058, -0.117]); }
+  if (opt.quiff) { const hm = M(opt.hair ?? 0x3a2618);                        // thick hair swept up and back, with volume at the front and sides
+    const top = new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 10), hm); top.scale.set(1.12, 0.62, 1.12); g.add(top); onHead.push([top, 0.005, 0.095, 0.02]);
+    const fr = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), hm); fr.scale.set(1.5, 0.75, 0.9); g.add(fr); onHead.push([fr, 0.015, 0.105, -0.06]);
+    for (const sx of [-1, 1]) { const sd = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), hm); sd.scale.set(0.6, 1.1, 1.3); g.add(sd); onHead.push([sd, sx * 0.1, 0.045, 0.0]); } }
+  if (opt.ears) for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), skin); e.scale.set(0.5, 1, 0.8); g.add(e); onHead.push([e, sx * 0.122, 0.005, 0.01]); }
+  if (opt.collar) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.1, 0.06, 12, 1, true), M(opt.collar)); c.material.side = THREE.DoubleSide; g.add(c); onHead.push([c, 0, -0.16, 0.0]); }
+  if (opt.face) { const eg = new THREE.SphereGeometry(0.0105, 8, 6), em = M(0x1a1410), wm = M(0xf2efe8), br = new THREE.BoxGeometry(0.05, 0.016, 0.014);
+    for (const sx of [-1, 1]) { const w2 = new THREE.Mesh(new THREE.SphereGeometry(0.015, 8, 6), wm), e = new THREE.Mesh(eg, em), b = new THREE.Mesh(br, hair); g.add(w2, e, b); onHead.push([w2, sx * 0.042, 0.022, -0.103], [e, sx * 0.042, 0.022, -0.115], [b, sx * 0.044, 0.05, -0.112]); }
+    const ns = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.045, 6), skin); ns.rotation.x = -Math.PI / 2; const nsg = new THREE.Group(); nsg.add(ns); g.add(nsg); onHead.push([nsg, 0, -0.005, -0.12]); }
+  const socks = opt.socks ? [0, 1].map(() => { const o = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.22), M(opt.socks)); g.add(o); return o; }) : [];
+  for (const s of shoes) { const sole = new THREE.Mesh(new THREE.BoxGeometry(0.125, 0.025, 0.265), M(0xe8e6e0)); sole.position.y = -0.045; s.add(sole); }
   const up = new THREE.Vector3(0, 1, 0), v = new THREE.Vector3(), q = new THREE.Quaternion(), mx = new THREE.Matrix4(), ax = new THREE.Vector3(), ay = new THREE.Vector3(), az = new THREE.Vector3();
   const place = (o, a, b) => { v.set(b.x - a.x, b.y - a.y, b.z - a.z); const L = v.length() || 1e-3; o.position.set(a.x, a.y, a.z); o.quaternion.setFromUnitVectors(up, v.multiplyScalar(1 / L)); o.scale.set(1, L, 1); };
   g.visible = false; scene.add(g);
@@ -2557,13 +2580,15 @@ function ragFigure(I, topCol = 0x2c4f7c) {        // the floppy figure's meshes,
     const pl = I.pel, nk = I.neck; ay.set(nk.x - pl.x, nk.y - pl.y, nk.z - pl.z).normalize(); ax.set(I.shR.x - I.shL.x, I.shR.y - I.shL.y, I.shR.z - I.shL.z); ax.addScaledVector(ay, -ax.dot(ay)).normalize(); az.crossVectors(ax, ay);
     mx.makeBasis(ax, ay, az); torsoM.quaternion.setFromRotationMatrix(mx); torsoM.position.set((pl.x + nk.x) / 2 + ay.x * -0.02, (pl.y + nk.y) / 2, (pl.z + nk.z) / 2);
     place(neckM, nk, I.head); headM.position.set(I.head.x, I.head.y, I.head.z);
-    const hy = v.set(I.head.x - nk.x, I.head.y - nk.y, I.head.z - nk.z).normalize(), hx = ax.clone().addScaledVector(hy, -ax.dot(hy)).normalize(), hz = new THREE.Vector3().crossVectors(hx, hy);
+    const hy = v.set(I.head.x - nk.x, I.head.y - nk.y, I.head.z - nk.z).normalize(), hx = ax.clone().addScaledVector(hy, -ax.dot(hy)).normalize(); if (I._hyaw) hx.applyAxisAngle(hy, I._hyaw); const hz = new THREE.Vector3().crossVectors(hx, hy);
     mx.makeBasis(hx, hy, hz); hairM.quaternion.setFromRotationMatrix(mx); hairM.position.set(I.head.x + hy.x * 0.02 + hz.x * 0.01, I.head.y + hy.y * 0.02 + hz.y * 0.01, I.head.z + hy.z * 0.02 + hz.z * 0.01);
+    for (const [m, ox, oy, oz] of onHead) { m.quaternion.setFromRotationMatrix(mx); m.position.set(I.head.x + hx.x * ox + hy.x * oy + hz.x * oz, I.head.y + hx.y * ox + hy.y * oy + hz.y * oz, I.head.z + hx.z * ox + hy.z * oy + hz.z * oz); }
     for (const [m, a, b] of bones) place(m, a, b);
     hands[0].position.set(I.haL.x, I.haL.y, I.haL.z); hands[1].position.set(I.haR.x, I.haR.y, I.haR.z);
     [[shoes[0], I.knL, I.ftL], [shoes[1], I.knR, I.ftR]].forEach(([m, k, f]) => { const sy = v.set(k.x - f.x, k.y - f.y, k.z - f.z).normalize(); m.position.set(f.x - az.x * 0.05, f.y, f.z - az.z * 0.05); const sx2 = ax.clone().addScaledVector(sy, -ax.dot(sy)).normalize(); mx.makeBasis(sx2, sy, new THREE.Vector3().crossVectors(sx2, sy)); m.quaternion.setFromRotationMatrix(mx); });
   };
-  return { g, draw };
+  const draw2 = () => { draw(); socks.forEach((s, i) => { s.position.copy(shoes[i].position); s.quaternion.copy(shoes[i].quaternion); s.position.y -= 0.01; }); };
+  return { g, draw: socks.length ? draw2 : draw, shoes, socks };
 }
 const RAG = (() => {
   // joints in the standing pose (x right, y up, z back), radius for touching the ground
@@ -2839,6 +2864,136 @@ function stepPlayer(dt) {
   }
 }
 
+// ===== office colleague: works at his desk; take his shoes and he gets up to look for them =====
+const NPC = (() => {
+  const d = OFFICE_DESKS.slice().sort((a, b) => Math.hypot(a.kb.x + 467.2, a.kb.z + 265.1) - Math.hypot(b.kb.x + 467.2, b.kb.z + 265.1))[0];
+  if (!d) return { step() {}, aim() { return null; }, act() {} };
+  const plaid = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.fillStyle = '#1d2d52'; g.fillRect(0, 0, 64, 64);   // navy checked shirt
+    g.globalAlpha = 0.55; g.fillStyle = '#4f6fa8'; for (let k = 0; k < 64; k += 16) { g.fillRect(k, 0, 6, 64); g.fillRect(0, k, 64, 6); } g.globalAlpha = 0.5; g.fillStyle = '#0c1424'; for (let k = 8; k < 64; k += 16) { g.fillRect(k, 0, 2, 64); g.fillRect(0, k, 64, 2); }
+    g.globalAlpha = 0.35; g.fillStyle = '#9aa9c8'; for (let k = 3; k < 64; k += 16) { g.fillRect(k, 0, 1, 64); g.fillRect(0, k, 64, 1); }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 2); t.encoding = THREE.sRGBEncoding; return t; })();
+  const I = {}; for (const n of RAG.names) I[n] = { x: 0, y: 0, z: 0 };
+  const fig = ragFigure(I, 0, { skin: 0x87583a, hair: 0x0e0b09, topMap: plaid, legs: 0x23262c, shoe: 0x141416, beard: true, face: true, hairScale: 1.04, quiff: true, ears: true, smile: true, collar: 0x1b2a4e, socks: 0x3a3d44 });
+  scene.remove(fig.g); interiorGroup.add(fig.g); fig.g.visible = true; for (const m of fig.g.children) m.castShadow = false;
+  // the pair of shoes you carry / put down (same look as his)
+  const pair = new THREE.Group(), shoeM = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.6 }), soleM = new THREE.MeshStandardMaterial({ color: 0xe8e6e0, roughness: 0.8 });
+  for (const sx of [-1, 1]) { const s = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.26), shoeM); s.position.set(sx * 0.08, 0.065, 0); const so = new THREE.Mesh(new THREE.BoxGeometry(0.125, 0.025, 0.265), soleM); so.position.y = -0.045; s.add(so);
+    const lace = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.012, 0.08), soleM); lace.position.set(0, 0.045, -0.05); s.add(lace); pair.add(s); }
+  pair.visible = false; interiorGroup.add(pair);
+  const hitM = new THREE.MeshBasicMaterial({ visible: false }), pairHit = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.25, 0.42), hitM); pairHit.position.y = 0.1; pair.add(pairHit);
+  const feetHit = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.22, 0.42), hitM); interiorGroup.add(feetHit);
+  const seatH = Math.atan2(d.n.x, d.n.z), seat = { x: d.chair.x + d.n.x * 0.02, z: d.chair.z + d.n.z * 0.02 }, standAt = { x: d.chair.x + d.n.x * 0.75, z: d.chair.z + d.n.z * 0.75 };
+  const S = { st: 'sit', t: 0, x: seat.x, z: seat.z, h: seatH, shoes: 'on', path: null, pi: 0, ph: 0, look: 0, sitK: 1, crouch: 0, spot: null, saidT: 0 };
+  // --- grid path-finding round the desks and walls ---
+  let grid = null; const CS = 0.25;
+  const buildGrid = () => { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const q of OFFICE_DESKS) { x0 = Math.min(x0, q.chair.x); x1 = Math.max(x1, q.chair.x); z0 = Math.min(z0, q.chair.z); z1 = Math.max(z1, q.chair.z); }
+    x0 -= 6; x1 += 6; z0 -= 6; z1 += 6; const nx = Math.ceil((x1 - x0) / CS), nz = Math.ceil((z1 - z0) / CS), b = new Uint8Array(nx * nz);
+    for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) { const x = x0 + (i + 0.5) * CS, z = z0 + (j + 0.5) * CS, l = cgrid.at(x, z); if (!l) continue;
+      for (const c of l) { if (c.lv) continue; const dd = c.t === 0 ? Math.hypot(x - c.x, z - c.z) - c.r : distSeg(x, z, c.x0, c.z0, c.x1, c.z1); if (dd < 0.28) { b[i * nz + j] = 1; break; } } }
+    grid = { x0, z0, nx, nz, b }; };
+  const cell = (x, z) => [Math.floor((x - grid.x0) / CS), Math.floor((z - grid.z0) / CS)];
+  const free = (i, j) => i >= 0 && j >= 0 && i < grid.nx && j < grid.nz && !grid.b[i * grid.nz + j];
+  const nearestFree = (i, j) => { if (free(i, j)) return [i, j]; for (let r = 1; r < 8; r++) for (let a = -r; a <= r; a++) for (const [p, q] of [[i + a, j - r], [i + a, j + r], [i - r, j + a], [i + r, j + a]]) if (free(p, q)) return [p, q]; return [i, j]; };
+  const los = (ax, az, bx, bz) => { const L = Math.hypot(bx - ax, bz - az), n = Math.ceil(L / (CS * 0.5)); for (let k = 1; k < n; k++) { const [i, j] = cell(ax + (bx - ax) * k / n, az + (bz - az) * k / n); if (!free(i, j)) return false; } return true; };
+  function findPath(ax, az, bx, bz) {
+    if (!grid) buildGrid(); const [si, sj] = nearestFree(...cell(ax, az)), [ti, tj] = nearestFree(...cell(bx, bz)), N = grid.nx * grid.nz, g = new Float32Array(N).fill(1e9), from = new Int32Array(N).fill(-1), open = [[0, si * grid.nz + sj]];
+    g[si * grid.nz + sj] = 0; const tgt = ti * grid.nz + tj; let it = 0;
+    while (open.length && it++ < 20000) { let bi = 0; for (let k = 1; k < open.length; k++) if (open[k][0] < open[bi][0]) bi = k; const [, cur] = open.splice(bi, 1)[0]; if (cur === tgt) break;
+      const ci = Math.floor(cur / grid.nz), cj = cur % grid.nz;
+      for (const [di, dj, w] of [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.41], [1, -1, 1.41], [-1, 1, 1.41], [-1, -1, 1.41]]) { const ni = ci + di, nj = cj + dj; if (!free(ni, nj) || (di && dj && (!free(ci + di, cj) || !free(ci, cj + dj)))) continue;
+        const nn = ni * grid.nz + nj, ng = g[cur] + w; if (ng < g[nn]) { g[nn] = ng; from[nn] = cur; open.push([ng + Math.hypot(ni - ti, nj - tj), nn]); } } }
+    const pts = []; let c = tgt; if (from[c] < 0 && c !== si * grid.nz + sj) return [[bx, bz]];
+    while (c >= 0) { pts.push([grid.x0 + (Math.floor(c / grid.nz) + 0.5) * CS, grid.z0 + (c % grid.nz + 0.5) * CS]); c = from[c]; } pts.reverse(); if (free(...cell(bx, bz))) pts.push([bx, bz]);
+    const out = [[ax, az]]; for (let k = 1; k < pts.length; k++) { const a = out[out.length - 1]; if (k === pts.length - 1 || !los(a[0], a[1], pts[k + 1][0], pts[k + 1][1])) out.push(pts[k]); }   // string-pull
+    return out.slice(1);
+  }
+  const say = m => { if (INSIDE === interiorGroup) toast(m); };
+  // --- posing ---
+  const J = RAG.J;
+  function pose(dt) {
+    const c = Math.cos(S.h), s = Math.sin(S.h), moving = S.st === 'walk' || S.st === 'return' || S.st === 'search', sw = moving ? Math.sin(S.ph) * 0.5 : 0, k = S.sitK, cr = S.crouch, typing = S.st === 'sit' && S.shoes === 'on';
+    for (const n of RAG.names) { const j = J[n]; let lx = j[0], ly = j[1], lz = j[2]; const side = n.endsWith('L') ? 1 : -1;
+      // standing / walking
+      if (n.startsWith('kn') || n.startsWith('ft')) { const a = sw * side, dy = ly - 0.9; ly = 0.9 + dy * Math.cos(a); lz = -dy * Math.sin(a); }
+      if (n.startsWith('el') || n.startsWith('ha')) { const a = -sw * side * 0.7, dy = ly - 1.44; ly = 1.44 + dy * Math.cos(a); lz = -dy * Math.sin(a); }
+      // sitting at the desk, hands on keyboard and mouse
+      let sx2 = lx, sy = ly - 0.4, sz = lz + 0.02;
+      if (n.startsWith('kn')) { sy = 0.5; sz = -0.44; } else if (n.startsWith('ft')) { sy = 0.06; sz = -0.5; }
+      else if (n.startsWith('el')) { sy = 0.86; sz = -0.24; } else if (n.startsWith('ha')) { sy = 0.79 + (typing ? Math.max(0, Math.sin(S.t * 16 + side * 1.7)) * 0.025 : 0); sz = -0.55; sx2 = side > 0 ? -0.16 : 0.34; }
+      else if (n === 'head' || n === 'neck' || n.startsWith('sh')) { sz = -0.06; }
+      lx += (sx2 - lx) * k; ly += (sy - ly) * k; lz += (sz - lz) * k;
+      // crouching down to the shoes
+      if (cr > 0) { let cy = ly, cz = lz;
+        if (n === 'pel' || n.startsWith('hi')) { cy = ly - 0.42; cz = 0.15; } else if (n.startsWith('kn')) { cy = 0.46; cz = -0.32; } else if (n.startsWith('ft')) { cy = 0.06; cz = 0.02; }
+        else if (n === 'neck' || n.startsWith('sh')) { cy = ly - 0.6; cz = -0.3; } else if (n === 'head') { cy = ly - 0.62; cz = -0.42; } else if (n.startsWith('el')) { cy = 0.55; cz = -0.42; } else if (n.startsWith('ha')) { cy = 0.14; cz = -0.5; lx *= 0.6; }
+        ly += (cy - ly) * cr; lz += (cz - lz) * cr; }
+      const q = I[n]; q.x = S.x + lx * c + lz * s; q.y = ly; q.z = S.z - lx * s + lz * c; }
+    I._hyaw = S.look; fig.draw();
+    const on = S.shoes === 'on'; fig.shoes.forEach(m => m.visible = on);
+    feetHit.position.set((I.ftL.x + I.ftR.x) / 2, 0.1, (I.ftL.z + I.ftR.z) / 2);
+  }
+  // --- behaviour ---
+  function goTo(x, z, st) { S.path = findPath(S.x, S.z, x, z); S.pi = 0; S.st = st; }
+  function walk(dt, speed) {
+    const p = S.path && S.path[S.pi]; if (!p) return true; const dx = p[0] - S.x, dz = p[1] - S.z, L = Math.hypot(dx, dz);
+    if (L < 0.08) { S.pi++; return S.pi >= S.path.length; }
+    const want = Math.atan2(-dx, -dz); let dh = want - S.h; dh = ((dh + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; S.h += dh * Math.min(1, dt * 7);
+    const st = Math.min(L, speed * dt * (Math.abs(dh) > 1.2 ? 0.3 : 1)); S.x += dx / L * st; S.z += dz / L * st; S.ph += speed * dt * 3.4; return false;
+  }
+  let sseed = 7; const srnd = () => { sseed = (sseed * 1664525 + 1013904223) >>> 0; return sseed / 4294967296; };
+  const searchSpots = () => { const out = []; for (let k = 0; k < 2; k++) { const a = srnd() * 6.28, r = 1.5 + srnd() * 2; out.push([standAt.x + Math.cos(a) * r, standAt.z + Math.sin(a) * r]); } return out; };
+  function step(dt) {
+    S.t += dt;
+    const ease = (v, to, r) => v + (to - v) * Math.min(1, dt * r);
+    if (S.st === 'sit') { S.sitK = ease(S.sitK, 1, 4); S.look = ease(S.look, S.shoes === 'on' ? Math.sin(S.t * 0.4) * 0.15 : Math.sin(S.t * 1.6) * 0.9, 3);
+      if (S.shoes !== 'on' && S.t > 1.2) { if (S.shoes === 'carried') { if (S.t - S.saidT > 6) { S.saidT = S.t; say(['Eh? Where have my shoes gone?', 'Who has taken my shoes yaar?', 'Oi! My shoes were just here!'][Math.floor(Math.random() * 3)]); } }
+        else { S.st = 'stand'; S.t = 0; say('Oh no, Wheres my shoes'); } } }
+    else if (S.st === 'stand') { S.sitK = ease(S.sitK, 0, 3); S.x = ease(S.x, standAt.x, 3); S.z = ease(S.z, standAt.z, 3);
+      if (S.t > 1) { S.spots = searchSpots(); const sp = S.spots.shift(); goTo(sp[0], sp[1], 'search'); } }
+    else if (S.st === 'search') { S.look = Math.sin(S.t * 2.2) * 0.8;
+      if (S.shoes === 'down' && Math.hypot(S.spot.x - S.x, S.spot.z - S.z) < 5 && los(S.x, S.z, S.spot.x, S.spot.z)) { say('Found Shoe is it, Yha'); goTo(S.spot.x, S.spot.z, 'walk'); }
+      else if (walk(dt, 0.9)) { if (S.spots && S.spots.length) { const sp = S.spots.shift(); goTo(sp[0], sp[1], 'search'); } else if (S.shoes === 'down') { say('Found Shoe is it, Yha'); goTo(S.spot.x, S.spot.z, 'walk'); } else { S.spots = searchSpots(); const sp = S.spots.shift(); goTo(sp[0], sp[1], 'search'); } } }
+    else if (S.st === 'walk') { S.look = ease(S.look, 0, 3);
+      if (S.shoes !== 'down') { S.st = 'search'; S.spots = searchSpots(); const sp = S.spots.shift(); goTo(sp[0], sp[1], 'search'); }
+      else if (Math.hypot(S.spot.x - S.x, S.spot.z - S.z) < 0.45 || walk(dt, 1.2)) { S.st = 'crouch'; S.t = 0; S.h = Math.atan2(-(S.spot.x - S.x), -(S.spot.z - S.z)); } }
+    else if (S.st === 'crouch') { S.crouch = ease(S.crouch, S.t < 2.2 ? 1 : 0, 4);
+      if (S.shoes === 'carried' && S.t < 1.2) { S.crouch = 0; S.st = 'search'; S.spots = searchSpots(); const sp = S.spots.shift(); goTo(sp[0], sp[1], 'search'); }
+      else if (S.t > 1.1 && S.shoes === 'down') { S.shoes = 'on'; pair.visible = false; MP.npcEv({ a: 'on' }); }
+      if (S.t > 2.8) { S.crouch = 0; say('Right, back to work.'); goTo(standAt.x, standAt.z, 'return'); } }
+    else if (S.st === 'return') { S.look = ease(S.look, 0, 3); if (walk(dt, 1.2)) { S.st = 'sitdown'; S.t = 0; } }
+    else if (S.st === 'sitdown') { let dh = seatH - S.h; dh = ((dh + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; S.h += dh * Math.min(1, dt * 5); S.x = ease(S.x, seat.x, 3); S.z = ease(S.z, seat.z, 3); S.sitK = ease(S.sitK, 1, 3); if (S.t > 1.2) { S.st = 'sit'; S.t = 0; } }
+    if (INSIDE === interiorGroup) pose(dt);
+    if (INSIDE === interiorGroup && W.on && !W.seated) { const dx = W.x - S.x, dz = W.z - S.z, dd = Math.hypot(dx, dz); if (dd < 0.55 && dd > 1e-3 && S.st !== 'sit') { W.x = S.x + dx / dd * 0.55; W.z = S.z + dz / dd * 0.55; } }
+    pair.visible = S.shoes === 'down' || (S.shoes === 'carried' && S.by === 'me');
+    if (S.shoes === 'carried' && S.by === 'me') { const cam = camera, f = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion), u = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
+      pair.position.copy(cam.position).addScaledVector(f, 0.62).addScaledVector(u, -0.3); pair.quaternion.copy(cam.quaternion); pair.rotateX(0.5); }
+  }
+  pose(0);
+  const floorHit = new THREE.Vector3();
+  return {
+    S, d, step,
+    aim(ray) {                                                             // what the dot is on
+      if (S.shoes === 'carried' && S.by !== 'me') return null;
+      if (S.shoes === 'carried') { const r = ray.ray; if (r.direction.y < -0.05) { const t = -r.origin.y / r.direction.y; if (t < 4.2) { floorHit.copy(r.origin).addScaledVector(r.direction, t); return { kind: 'putshoes', p: floorHit.clone() }; } } return { kind: 'holding' }; }
+      if (S.shoes === 'on' && S.st === 'sit' && ray.intersectObject(feetHit, false)[0]) return { kind: 'shoes' };
+      if (S.shoes === 'down' && ray.intersectObject(pairHit, false)[0]) return { kind: 'shoes' };
+      return null;
+    },
+    take(by) { const wasOn = S.shoes === 'on'; S.shoes = 'carried'; S.by = by; if (S.st === 'sit') S.t = 0; if (wasOn) say('Hey! Those are my shoes!'); },
+    put(x, z, hh) { S.shoes = 'down'; S.by = null; pair.quaternion.identity(); pair.rotation.y = hh; pair.position.set(x, 0, z); S.spot = { x, z, h: hh }; sseed = (Math.round(x * 10) * 7919 + Math.round(z * 10)) >>> 0; if (S.st === 'sit') S.t = 0; },
+    act(a) {
+      if (a.kind === 'shoes') { this.take('me'); MP.npcEv({ a: 'take' }); return; }
+      if (a.kind === 'putshoes') { const x = Math.round(a.p.x * 100) / 100, z = Math.round(a.p.z * 100) / 100, hh = Math.round(W.h * 100) / 100; this.put(x, z, hh); MP.npcEv({ a: 'put', x, z, h: hh }); return; }
+    },
+    onNet(d, fromId) {                                                     // another player took / put down the shoes
+      if (d.a === 'take') this.take(fromId);
+      else if (d.a === 'put') this.put(d.x, d.z, d.h);
+      else if (d.a === 'state') { if (d.s === 'carried') this.take(d.by); else if (d.s === 'down') this.put(d.x, d.z, d.h); }
+    },
+    dropIfCarrier(id, x, z) { if (S.shoes === 'carried' && S.by === id) this.put(x, z, 0); },
+    makePair() { const p = pair.clone(true); p.visible = true; p.remove(p.children[p.children.length - 1]); return p; },
+  };
+})();
 // ===== multiplayer: everyone on the link shares one session (Cloudflare Durable Object room at /ws) =====
 const MP = (() => {
   const o = { ws: null, id: null, peers: new Map(), g: new THREE.Group(), tries: 0, sendT: 0, online: 1 };
@@ -2860,7 +3015,7 @@ const MP = (() => {
     P.fig = ragFigure(P.I, TOPS[hash(id) % TOPS.length]); scene.remove(P.fig.g); o.g.add(P.fig.g); P.fig.g.visible = false;
     o.peers.set(id, P); return P;
   }
-  function dropPeer(id, quiet) { const P = o.peers.get(id); if (!P) return; if (P.car) o.g.remove(P.car.grp); o.g.remove(P.fig.g); if (P.lab) o.g.remove(P.lab); o.peers.delete(id); o.online = o.peers.size + 1; hud(); if (!quiet && P.n) toast('👋 ' + P.n + ' left'); }
+  function dropPeer(id, quiet) { const P = o.peers.get(id); if (!P) return; if (P.s && P.s.f) NPC.dropIfCarrier(id, P.s.f[0], P.s.f[2]); if (P.pair) o.g.remove(P.pair); if (P.car) o.g.remove(P.car.grp); o.g.remove(P.fig.g); if (P.lab) o.g.remove(P.lab); o.peers.delete(id); o.online = o.peers.size + 1; hud(); if (!quiet && P.n) toast('👋 ' + P.n + ' left'); }
   function onState(d) {
     let P = o.peers.get(d.id); const isNew = !P; if (!P) P = makePeer(d.id);
     P.s = d; P.seen = performance.now();
@@ -2879,7 +3034,7 @@ const MP = (() => {
     o.ws = ws;
     ws.onopen = () => { o.tries = 0; hud(); };
     ws.onmessage = e => { let d; try { d = JSON.parse(e.data); } catch (_) { return; }
-      if (d.t === 'hi') { o.id = d.id; for (const id of [...o.peers.keys()]) dropPeer(id, true); for (const s of d.players) if (s.id !== o.id) onState(s); if (d.world) onWorld(d.world); hud(); }
+      if (d.t === 'hi') { o.id = d.id; for (const id of [...o.peers.keys()]) dropPeer(id, true); for (const s of d.players) if (s.id !== o.id) onState(s); if (d.world) onWorld(d.world); if (d.npc) NPC.onNet(Object.assign({ a: 'state' }, d.npc), null); hud(); }
       else if (d.t === 'ev') onEv(d);
       else if (d.t === 's' && d.id !== o.id) onState(d);
       else if (d.t === 'bye') dropPeer(d.id);
@@ -2899,12 +3054,14 @@ const MP = (() => {
     const [lx, lz] = toL(player.h, wx - player.x, wz - player.z), [dx, dz] = toL(player.h, inx, inz); myDents.push([r2(lx), r2(wy - player.y), r2(lz), r2(dx), r2(dz), r2(s)]); myDentN++; if (myDents.length > 14) myDents.shift(); };
   // parked cars: find by key (a phone has fewer parked cars than a PC, so make one if it's missing here)
   const carByKey = (k, x, z, yaw, col) => { let c = PK.get(k); if (!c && x != null) { c = { x, z, yaw, color: col ?? 0x888888, ims: [], i: -1, key: k, phantom: true }; PK.set(k, c); parked.push(c); wreckOf(c); } return c; };
+  o.npcEv = e => send(Object.assign({ t: 'ev', e: 'npc' }, e));
   o.parkedDent = (c, wx, wz, inx, inz, s) => { const [lx, lz] = toL(c.yaw, wx - c.x, wz - c.z), [dx, dz] = toL(c.yaw, inx, inz);
     send({ t: 'ev', e: 'dent', k: c.key, x: r2(c.x), z: r2(c.z), y: r2(c.yaw), col: c.color, d: [r2(lx), 0.62, r2(lz), r2(dx), r2(dz), r2(s)] }); };
   const applyParkedDent = (c, d) => { const w = wreckOf(c); if (!w) return; const [ox, oz] = toW(c.yaw, d[0], d[2]), [ix, iz] = toW(c.yaw, d[3], d[4]); damageModel(w, c.x + ox, d[1], c.z + oz, ix, iz, d[5]); };
   const posePark = (c, x, z, yaw, final) => { if (!c.dyn) wakeCar(c); c.touched = false; c.sentFinal = true; c.tx = x; c.tz = z; c.tyaw = yaw; c.rT = performance.now(); if (final) { c.x = x; c.z = z; c.yaw = yaw; c.rT = performance.now() - 1400; } };
   function onWorld(list) { for (const w of list) { const c = carByKey(w.k, w.x, w.z, w.y, w.col); if (!c) continue; if (w.p) posePark(c, w.p[0], w.p[1], w.p[2], true); if (w.d) for (const d of w.d) applyParkedDent(c, d); } }
   function onEv(d) {
+    if (d.e === 'npc') { if (d.a !== 'on') NPC.onNet(d, d.id); return; }
     if (d.e === 'dent') { const c = carByKey(d.k, d.x, d.z, d.y, d.col); if (c) { applyParkedDent(c, d.d); const [ox, oz] = toW(c.yaw, d.d[0], d.d[2]); if (camera.position.distanceTo(new THREE.Vector3(c.x + ox, 1, c.z + oz)) < 60) { spray(c.x + ox, 0.6, c.z + oz, 0, 0, d.d[5] * 0.6, c.paintMat || shardMat, d.d[5] > 7); thud(55, 0.25); } } }
     else if (d.e === 'pk') for (const q of d.l) { const c = carByKey(q[0], q[1], q[2], q[3], q[5]); if (c) posePark(c, q[1], q[2], q[3], q[4]); }
     else if (d.e === 'hitp' && d.to === o.id && !player.wrecked) {                 // someone drove into me: get shoved and dented
@@ -2956,6 +3113,11 @@ const MP = (() => {
       else if (d.m === 1 && d.f) { P.fx += (d.f[0] - P.fx) * k; P.fy += (d.f[1] - P.fy) * k; P.fz += (d.f[2] - P.fz) * k; P.fh = lerpA(P.fh, d.f[3], k); P.ph += (d.f[4] || 0) * dt * 3.2;
         walkPose(P, P.fx, P.fy, P.fz, P.fh, P.ph, (d.f[4] || 0) > 0.2, d.f[5]); fig.g.visible = sameRoom; }
       else fig.g.visible = false;
+      const carrying = NPC.S.shoes === 'carried' && NPC.S.by === P.id && fig.g.visible && d.m === 1;
+      if (carrying) { const c2 = Math.cos(P.fh), s2 = Math.sin(P.fh), fwd = (lx, ly, lz, q) => { q.x = P.fx + lx * c2 + lz * s2; q.y = P.fy + ly; q.z = P.fz - lx * s2 + lz * c2; };
+        fwd(-0.2, 1.12, -0.25, P.I.elL); fwd(0.2, 1.12, -0.25, P.I.elR); fwd(-0.12, 1.08, -0.45, P.I.haL); fwd(0.12, 1.08, -0.45, P.I.haR);
+        if (!P.pair) { P.pair = NPC.makePair(); o.g.add(P.pair); } P.pair.visible = true; P.pair.position.set(P.fx - s2 * 0.46, P.fy + 1.02, P.fz - c2 * 0.46); P.pair.rotation.set(0, P.fh, 0); }
+      else if (P.pair) P.pair.visible = false;
       if (fig.g.visible) fig.draw();
       if (P.lab) { const hd = P.I.head; if (fig.g.visible) P.lab.position.set(hd.x, hd.y + 0.45, hd.z); else P.lab.position.set(P.x, P.y + 2.1, P.z); P.lab.visible = (fig.g.visible || (c.grp.visible && d.m === 0)) && camera.position.distanceTo(P.lab.position) > 4.5; }
       // bump into other players' cars (and don't walk through them)
@@ -3033,7 +3195,7 @@ let last = performance.now(), hudT = 0, skidAccInit = 0, frameN = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
-  stepPlayer(dt); if (W.on) stepWalker(dt); MP.step(dt); updateWork(dt); updateTills(dt); stepCars(dt); stepFX(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
+  stepPlayer(dt); if (W.on) stepWalker(dt); MP.step(dt); NPC.step(dt); updateWork(dt); updateTills(dt); stepCars(dt); stepFX(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
   { const f = follow(); sun.position.set(f.x + SUN.x * 220, SUN.y * 220, f.z + SUN.z * 220); sun.target.position.set(f.x, 0, f.z); } sun.target.updateMatrixWorld();
   sky.position.copy(camera.position); clouds.position.set(camera.position.x, 0, camera.position.z);
   hudT -= dt;

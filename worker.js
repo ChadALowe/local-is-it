@@ -12,8 +12,8 @@ export class Room {
     this.state.acceptWebSocket(server);
     server.serializeAttachment({ id, last: null });
     const players = socks.map(w => { try { return w.deserializeAttachment(); } catch (_) { return null; } }).filter(a => a && a.last).map(a => a.last);
-    const world = [...(await this.state.storage.list({ prefix: 'w:' })).values()];
-    server.send(JSON.stringify({ t: 'hi', id, players, world }));
+    const world = [...(await this.state.storage.list({ prefix: 'w:' })).values()], npc = await this.state.storage.get('npc');
+    server.send(JSON.stringify({ t: 'hi', id, players, world, npc }));
     return new Response(null, { status: 101, webSocket: client });
   }
   others(ws, out) { for (const w of this.state.getWebSockets()) if (w !== ws) { try { w.send(out); } catch (_) {} } }
@@ -29,7 +29,11 @@ export class Room {
     } else if (d.t === 'ev') {                          // world events: parked-car dents/poses, hits on other players
       d.id = a.id; this.others(ws, JSON.stringify(d));
       const st = this.state.storage;
-      if (d.e === 'dent' && typeof d.k === 'string') {
+      if (d.e === 'npc') {                              // the office colleague's shoes: who has them / where they are
+        if (d.a === 'take') await st.put('npc', { s: 'carried', by: a.id });
+        else if (d.a === 'put') await st.put('npc', { s: 'down', x: d.x, z: d.z, h: d.h });
+        else if (d.a === 'on') await st.delete('npc');
+      } else if (d.e === 'dent' && typeof d.k === 'string') {
         const key = 'w:' + d.k, w = (await st.get(key)) || { k: d.k, x: d.x, z: d.z, y: d.y, col: d.col, d: [] };
         w.d.push(d.d); if (w.d.length > 12) w.d.shift(); await st.put(key, w);
       } else if (d.e === 'pk' && Array.isArray(d.l)) {
@@ -41,12 +45,14 @@ export class Room {
       for (const w of this.state.getWebSockets()) { try { w.send(out); } catch (_) {} }
     }
   }
-  bye(ws) {
+  async bye(ws) {
     const a = (() => { try { return ws.deserializeAttachment(); } catch (_) { return null; } })(); if (!a) return;
+    const n = await this.state.storage.get('npc');                  // left while carrying the shoes: they drop them where they were
+    if (n && n.s === 'carried' && n.by === a.id) { const f = a.last && a.last.f; if (f) await this.state.storage.put('npc', { s: 'down', x: f[0], z: f[2], h: 0 }); else await this.state.storage.delete('npc'); }
     this.others(ws, JSON.stringify({ t: 'bye', id: a.id }));
   }
-  webSocketClose(ws) { this.bye(ws); try { ws.close(1000, 'bye'); } catch (_) {} }
-  webSocketError(ws) { this.bye(ws); }
+  async webSocketClose(ws) { await this.bye(ws); try { ws.close(1000, 'bye'); } catch (_) {} }
+  async webSocketError(ws) { await this.bye(ws); }
 }
 export default {
   async fetch(req, env) {
