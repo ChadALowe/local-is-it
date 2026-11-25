@@ -2644,9 +2644,9 @@ function stepPlayer(dt) {
   const thr = playing ? keys.up : 0, brk = playing ? keys.down : W.on ? 0 : 1, st = playing ? clamp(keys.left - keys.right - joy.x * 1.15, -1, 1) : 0;
   const fx = -Math.sin(p.h), fz = -Math.cos(p.h), rx = Math.cos(p.h), rz = -Math.sin(p.h);
   let vf = p.vx * fx + p.vz * fz, vl = p.vx * rx + p.vz * rz;
-  const surf = surfaceAt(p.x, p.z), maxS = 58, sp0 = Math.abs(vf);
-  if (thr) vf += 27 * Math.max(0, 1 - vf / maxS) * dt * (surf ? 0.75 : 1);
-  if (brk) { if (vf > 0.5) vf -= 50 * brk * dt; else vf = Math.max(-12, vf - 14 * dt); }
+  const surf = surfaceAt(p.x, p.z), maxS = 45, sp0 = Math.abs(vf);   // ~100 mph top speed
+  if (thr) vf += 8.2 * Math.pow(Math.max(0, 1 - vf / maxS), 0.85) * dt * (surf ? 0.75 : 1);   // 0-60 mph in about 6 s, like a warm hatchback
+  if (brk) { if (vf > 0.5) vf -= 10.5 * brk * dt; else vf = Math.max(-8, vf - 5 * dt); }
   if (!thr && !brk) vf -= Math.sign(vf) * Math.min(Math.abs(vf), 3.2 * dt);
   if (W.on) vf *= Math.exp(-4 * dt);                                     // parked: handbrake on, no reversing away
   vf *= 1 - 0.04 * dt; if (surf) vf *= Math.exp(-0.22 * dt);
@@ -2714,7 +2714,7 @@ function stepPlayer(dt) {
     for (const s of [-1, 1]) if (Math.random() < Math.min(1, 0.4 + slip * 1.2)) spawnPart(p.x + rx * .71 * s - fx * 1.17, 0.35, p.z + rz * .71 * s - fz * 1.17, rand(-1, 1) - fx * 2, rand(0.6, 1.6), rand(-1, 1) - fz * 2, rand(1.4, 2.2), rand(0.8, 1.5), surf ? 0x8d7a58 : 0xe9e9e6, 0.42, 2.4);
   } else if (playing && surf && spdNow > 8 && Math.random() < 0.5) spawnPart(p.x - fx * 1.5 + rand(-.5, .5), 0.25, p.z - fz * 1.5 + rand(-.5, .5), rand(-1, 1), rand(0.4, 1.0), rand(-1, 1), rand(1, 1.6), rand(0.7, 1.1), 0x8d7a58, 0.4, 2);
 
-  const spd = Math.abs(vf), lim = [0, 18, 32, 46, 60, 100]; let g = 0; while (g < 4 && spd >= lim[g + 1]) g++;
+  const spd = Math.abs(vf), lim = [0, 8, 15, 23, 32, 60]; let g = 0; while (g < 4 && spd >= lim[g + 1]) g++;
   gearNow = vf < -0.5 ? 'R' : g + 1; rpmNow = 0.28 + 0.72 * clamp((spd - lim[g]) / (lim[g + 1] - lim[g]), 0, 1);
   if (actx) {
     const t = actx.currentTime, f = 42 + rpmNow * 105 + thr * 10;
