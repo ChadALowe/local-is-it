@@ -794,8 +794,9 @@ for (const b of builds) {
 const trunkGeo = new THREE.CylinderGeometry(0.22, 0.32, 2.4, 6); trunkGeo.translate(0, 1.2, 0);
 const blobA = new THREE.IcosahedronGeometry(1.7, 0), blobB = new THREE.IcosahedronGeometry(1.2, 0);
 let treeCount = 0;
+const pitchAreas = areas.filter(a => a.t === 3 && a.p.length === 4);
 function addTree(x, z, s = 1, collide = true) {
-  if (TR.foot(x, z, 1.5)) return;
+  if (TR.foot(x, z, 1.5) || pitchAreas.some(a => inPoly(x, z, a.p))) return;
   mg('trunk', trunkMat).add(trunkGeo, mat4(x, 0, z, 0, s, s, s));
   const ci = srand() < 0.08 ? 4 : (srand() * 4) | 0, key = 'fol' + ci, yaw = srand() * TAU;
   mg(key, foliageMats[ci]).add(blobA, mat4(x, 3.3 * s, z, yaw, s, s * 0.95, s));
@@ -1016,12 +1017,29 @@ for (const r of roads) {
         addCircle(hx, hz, 1.1);
         // occasional verge tree (ash / rowan) standing just in front of the hedge
         if (srand() < 0.07 && treeCount < maxTrees) { const vx = x + nx * (ho - 2.2), vz = z + nz * (ho - 2.2); if (clear(vx, vz, r.id)) addTree(vx, vz, sr(1.1, 1.5)); }
+        // deep belt of scrub behind the hedge: bushes in depth, with scattered trees
+        for (const o of north ? [4.2, 8.0, 11.8] : [3.8]) {
+          if (srand() < 0.3) continue; const bx = x + nx * (ho + o) + tx * sr(-1, 1), bz = z + nz * (ho + o) + tz * sr(-1, 1);
+          if (!clear(bx, bz, r.id) || roadDist(bx, bz, -1) < 2.5 || nearWall(bx, bz, 1.0)) continue;
+          if (srand() < 0.12 && treeCount < maxTrees) { addTree(bx, bz, sr(1.0, 1.5)); continue; }
+          const bh = 1.8 + sr(-0.4, 1.0); hm2.add(hedgeG, mat4(bx, bh * 0.45, bz, sr(0, 6), 3.4 + sr(-0.5, 0.8), bh * 1.1, 2.8 + sr(-0.4, 0.8)));
+        }
       }
     }, 0);
   }
   for (const r of roads) if (r.c && r.p.some(q => inHedgeRun(q[0], q[1]))) {      // white edge line on the shared cycle path
     const e2 = r.w / 2 - 0.15;
     walk(r.p, 2, (x, z, tx, tz) => { if (!inHedgeRun(x, z)) return; const lx = x + tz * e2, lz = z - tx * e2; edgeL.quad([lx - tz * 0.05, 0.05, lz + tx * 0.05], [lx + tz * 0.05, 0.05, lz - tx * 0.05], [lx + tz * 0.05 + tx * 2, 0.05, lz - tx * 0.05 + tz * 2], [lx - tz * 0.05 + tx * 2, 0.05, lz + tx * 0.05 + tz * 2], [0, 0], [1, 0], [1, 1], [0, 1], UP); }, 0);
+  }
+  for (const r of roads) if (r.c && r.p.some(q => inHedgeRun(q[0], q[1]))) {      // hedges lining both sides of the cycle path
+    walk(r.p, 2.6, (x, z, tx, tz) => {
+      if (!inHedgeRun(x, z) || Math.hypot(x - RBT.x, z - RBT.z) < 24) return;
+      for (const sd of [-1, 1]) {
+        const o = r.w / 2 + 1.3, hx = x + tz * sd * o, hz = z - tx * sd * o;
+        if (inBuilding(hx, hz) || roadDist(hx, hz, r.id) < 1.4 || roadDist(hx, hz, -1, true) < 1.6 || nearWall(hx, hz, 0.8)) continue;
+        const hh = 2.2 + sr(-0.3, 0.6); hm2.add(hedgeG, mat4(hx, hh * 0.5, hz, Math.atan2(-tz, tx) + sr(-0.2, 0.2), 3.4, hh * 1.15, 1.9 + sr(-0.2, 0.3))); addCircle(hx, hz, 0.9);
+      }
+    }, 0);
   }
   for (let a2 = 0; a2 < Math.PI * 2; a2 += 0.09) {                   // hedges ringing the roundabout, broken where the arms leave
     const hx = RBT.x + Math.cos(a2) * 29, hz = RBT.z + Math.sin(a2) * 29, hh = 2.6 + sr(-0.3, 0.5);
@@ -1265,6 +1283,37 @@ for (const r of roads) {
   { const a = pt(-Ld, -band), b = pt(-Ld, band), c = pt(Ld, band), d = pt(Ld, -band);
     under.quad([a[0], -0.9, a[1]], [b[0], -0.9, b[1]], [c[0], -0.9, c[1]], [d[0], -0.9, d[1]], [0, 0], [1, 0], [1, 1], [0, 1], [0, -1, 0]);
     const m = pt(0, 0); mg('bridgeLamp', stdMat({ color: 0xfff3c4, emissive: 0xffe9a0, emissiveIntensity: 0.8 }), false, false).add(new THREE.BoxGeometry(0.6, 0.06, 0.25), mat4(m[0], -0.95, m[1])); }
+}
+// ===== football pitches south of Wobaston Road (OSM pitch areas): line markings, goals, a few floodlights =====
+{
+  const lm = mg('pitchLine', stdMat({ color: 0xf4f4ee, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2 }), false, true), gm = mg('goalPost', stdMat({ color: 0xf6f6f2, roughness: 0.5 })), net = mg('goalNet', stdMat({ color: 0xffffff, transparent: true, opacity: 0.25, side: DS }), false, false);
+  const y = 0.032;
+  const seg = (a, b, w = 0.12) => { const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1, nx = -dz / L * w / 2, nz = dx / L * w / 2; lm.quad([a[0] - nx, y, a[1] - nz], [a[0] + nx, y, a[1] + nz], [b[0] + nx, y, b[1] + nz], [b[0] - nx, y, b[1] - nz], [0, 0], [1, 0], [1, 1], [0, 1], UP); };
+  const pitch = (cx, cz, ux, uz, L, W) => {                            // u = long axis
+    const vx = -uz, vz = ux, P = (a, b) => [cx + ux * a + vx * b, cz + uz * a + vz * b], hl = L / 2, hw = W / 2;
+    const rect = (a0, a1, b0, b1) => { seg(P(a0, b0), P(a1, b0)); seg(P(a1, b0), P(a1, b1)); seg(P(a1, b1), P(a0, b1)); seg(P(a0, b1), P(a0, b0)); };
+    rect(-hl, hl, -hw, hw); seg(P(0, -hw), P(0, hw));
+    const r = Math.min(9.15, W * 0.13); for (let k = 0; k < 20; k++) seg(P(Math.cos(k / 20 * 6.283) * r, Math.sin(k / 20 * 6.283) * r), P(Math.cos((k + 1) / 20 * 6.283) * r, Math.sin((k + 1) / 20 * 6.283) * r));
+    const pd = Math.min(16.5, L * 0.16), pw = Math.min(40, W * 0.6), gd = Math.min(5.5, L * 0.055), gw = Math.min(18, W * 0.28), gwid = Math.min(7.3, W * 0.17), gh = W > 40 ? 2.44 : 1.9;
+    for (const sd of [-1, 1]) {
+      rect(sd > 0 ? hl - pd : -hl, sd > 0 ? hl : -hl + pd, -pw / 2, pw / 2); rect(sd > 0 ? hl - gd : -hl, sd > 0 ? hl : -hl + gd, -gw / 2, gw / 2);
+      const g0 = P(sd * hl, -gwid / 2), g1 = P(sd * hl, gwid / 2), yaw = Math.atan2(-vz, vx);
+      for (const g of [g0, g1]) { gm.add(new THREE.BoxGeometry(0.12, gh, 0.12), mat4(g[0], gh / 2, g[1])); addCircle(g[0], g[1], 0.15); }
+      gm.add(new THREE.BoxGeometry(gwid, 0.12, 0.12), mat4((g0[0] + g1[0]) / 2, gh, (g0[1] + g1[1]) / 2, yaw));
+      const nb = P(sd * (hl + 1.4), 0); net.add(new THREE.BoxGeometry(gwid, gh, 1.4), mat4(nb[0] - ux * sd * 0 + (P(sd * (hl + 0.7), 0)[0] - nb[0]), gh / 2, nb[1] + (P(sd * (hl + 0.7), 0)[1] - nb[1]), yaw));
+    }
+  };
+  for (const id of [22, 23, 24, 25, 26]) {
+    const a = areas[id]; if (!a || a.p.length < 4 || a.t !== 3) continue; const p = a.p;
+    const e1 = [p[1][0] - p[0][0], p[1][1] - p[0][1]], e2 = [p[2][0] - p[1][0], p[2][1] - p[1][1]], l1 = Math.hypot(...e1), l2 = Math.hypot(...e2);
+    const cx = p.reduce((s2, q) => s2 + q[0], 0) / p.length, cz = p.reduce((s2, q) => s2 + q[1], 0) / p.length, m = 2.5;
+    if (l1 > 100 || l2 > 100) {                                         // the big area holds two full-size pitches side by side
+      const [U, Lu, Lv] = l1 >= l2 ? [e1, l1, l2] : [e2, l2, l1], ux = U[0] / Lu, uz = U[1] / Lu;
+      for (const sd of [-1, 1]) pitch(cx + ux * sd * Lu / 4, cz + uz * sd * Lu / 4, -uz, ux, Lv - m * 2, Lu / 2 - m * 2);
+      for (const [a2, b2] of [[-1, -1], [-1, 1], [-0.02, -1], [-0.02, 1]]) { const fx = cx + ux * a2 * Lu / 2 + (-uz) * b2 * (Lv / 2 + 1), fz = cz + uz * a2 * Lu / 2 + ux * b2 * (Lv / 2 + 1);
+        if (inBuilding(fx, fz) || roadDist(fx, fz, -1) < 2) continue; mg('pole', poleMat).add(new THREE.CylinderGeometry(0.12, 0.2, 14, 8), mat4(fx, 7, fz)); mg('floodHead', stdMat({ color: 0x3a3f42, roughness: 0.5 })).add(new THREE.BoxGeometry(1.4, 0.6, 0.4), mat4(fx, 14, fz)); addCircle(fx, fz, 0.3); }
+    } else { const [U, Lu, Lv] = l1 >= l2 ? [e1, l1, l2] : [e2, l2, l1]; pitch(cx, cz, U[0] / Lu, U[1] / Lu, Lu - m * 2, Lv - m * 2); }
+  }
 }
 // globe lamps (three-globe heads) along the business-park aisles
 {
