@@ -3241,7 +3241,9 @@ const WC = (() => {
   return {
     step, drawStream, makeStream, get me() { return ME; },
     aim(ray) { if (ME.act) return null; const hits = ray.intersectObjects(WCS.flatMap(T => [T.flushHit, T.bowlHit]), false); const h = hits[0]; if (!h || h.distance > 2.4) return null;
-      const T = WCS.find(q => q.flushHit === h.object || q.bowlHit === h.object); if (h.object === T.flushHit) return { kind: 'flush', T };
+      const T = WCS.find(q => q.flushHit === h.object || q.bowlHit === h.object);
+      const lc = T.g.worldToLocal(camera.position.clone()); if (lc.z < 0.3 || Math.abs(lc.x) > 2) return null;   // only from inside the WC, in front of the toilet (not through the wall)
+      if (h.object === T.flushHit) return { kind: 'flush', T };
       return { kind: 'wee', T, alt: { kind: 'poo', T } }; },
     act(a) { if (a.kind === 'wee') startWee(a.T); else if (a.kind === 'poo') startPoo(a.T); else if (a.kind === 'flush') { flush(a.T); a.T.seatUp = 0; MP.wcEv({ i: a.T.i, a: 'flush' }); } },
     onNet(d) { const T = WCS[d.i]; if (!T) return; if (d.a === 'wee') { T.seatUp = 1; setTimeout(() => addWee(T), 400); } else if (d.a === 'poo') addPoo(T); else if (d.a === 'flush') { flush(T); T.seatUp = 0; } },
