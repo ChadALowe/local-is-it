@@ -3538,7 +3538,7 @@ const PUB = (() => {
   // ---- the barman behind the counter
   const bI = {}; for (const n of RAG.names) bI[n] = { x: 0, y: 0, z: 0 };
   const barman = ragFigure(bI, 0x111111, { skin: 0x8a5a3c, hair: 0x111111, beard: true, face: true, quiff: true, ears: true, collar: 0x111111 }); scene.remove(barman.g); pubGroup.add(barman.g); barman.g.visible = true;
-  const bPos = V(12.5, 17.3, 0), bYaw = yaw + Math.PI;    // facing the customers
+  const bPos = V(12.5, 17.3, 0), bYaw = yaw;    // facing the customers across the counter
   function poseBarman(t, serving) { const c = Math.cos(bYaw), s = Math.sin(bYaw); for (const n of RAG.names) { const j = RAG.J[n]; let lx = j[0], ly = j[1], lz = j[2]; if (n.startsWith('ha') || n.startsWith('el')) { const k = n.startsWith('ha') ? 1 : 0.5; ly = j[1] + (serving ? 0.25 : 0.12) * k; lz = -(serving ? 0.45 : 0.28) * k + (n.endsWith('R') ? Math.sin(t * 3) * 0.04 * k : 0); } if (n === 'head') lx += Math.sin(t * 0.7) * 0.02;
     const q = bI[n]; q.x = bPos.x + lx * c + lz * s; q.y = ly; q.z = bPos.z - lx * s + lz * c; } bI._hyaw = Math.sin(t * 0.4) * 0.4; barman.draw(); }
   // ---- hit targets
@@ -3657,7 +3657,7 @@ const PUB = (() => {
       if (h.object === barHit) return S.order ? { kind: 'pubwait' } : { kind: 'pubbar' }; if (h.object === dartHit) return { kind: 'pubdarts' }; return { kind: 'pubtv' }; },
     label(a) { return { pubseat: 'SIT', pubbar: 'ORDER', pubwait: 'COMING…', pubdarts: Dg.over != null ? 'NEW GAME' : 'PLAY DARTS', pubtv: 'BET' }[a.kind]; },
     act(a) { if (a.kind === 'pubseat') sitDown(a.st); else if (a.kind === 'pubbar') openMenu(); else if (a.kind === 'pubtv') openBets(); else if (a.kind === 'pubdarts') dJoin(); },
-    buttons() { const b = $('tAct'); $('xhair').classList.add('on'); $('aimLbl').textContent = ''; if (myDartTurn()) { b.textContent = DL.stage ? 'POWER!' : 'STEADY'; b.classList.add('show'); } else if (Dg.over != null) { b.textContent = 'NEW GAME'; b.classList.add('show'); } else b.classList.remove('show'); },
+    buttons() { const b = $('tAct'); $('xhair').classList.remove('on'); $('aimLbl').textContent = ''; if (myDartTurn()) { b.textContent = DL.stage ? 'POWER!' : 'STEADY'; b.classList.add('show'); } else if (Dg.over != null) { b.textContent = 'NEW GAME'; b.classList.add('show'); } else b.classList.remove('show'); },
     press() { if (Dg.over != null) { dJoin(); return; } throwDart(); },
     leave: dLeave, standUp: standUp2,
     onNet(d) { if (d.a === 'order') { if (inPub()) toast('🧾 ' + d.n + ' ordered ' + d.what); } else if (d.a === 'bet') { if (inPub()) toast('🎟️ ' + d.n + ' put £' + d.stake + ' on ' + d.horse); } else if (d.a === 'won') toast('🏇 ' + d.n + ' won £' + (+d.w).toFixed(2) + ' on ' + d.horse + '!');
@@ -3677,6 +3677,7 @@ const PUB = (() => {
           if (h.charge <= 0) { pubGroup.remove(h.m); S.held = null; if (h.kind === 'pint') { S.drunk = Math.min(6, S.drunk + 1); S.drunkT = 0; toast(['🍺 Lovely pint.', '🍺 Feeling merry!', '🍺 Hic! Everything’s a bit wobbly…', '🍺 You’re proper bladdered. Maybe a cola next?'][Math.min(3, S.drunk - 1)]); } else toast(h.kind === 'soft' ? '🥤 All gone.' : '😋 That was gorgeous!'); } } } }
       if (DL.flying) { const fd = DL.flying; fd.t += dt / 0.32; if (!fd.m) { fd.m = dartGeo.clone(); pubGroup.add(fd.m); } const to = new THREE.Vector3(fd.lx, fd.ly, 0.005).applyMatrix4(D.board.matrixWorld), p = fd.from.clone().lerp(to, Math.min(1, fd.t)); p.y += Math.sin(Math.min(1, fd.t) * Math.PI) * 0.08; fd.m.position.copy(p); fd.m.quaternion.copy(D.board.quaternion);
         if (fd.t >= 1) { pubGroup.remove(fd.m); DL.flying = null; landDart(fd.lx, fd.ly); } }
+      { const want = DL.mode ? 28 : (DL.fov0 || camera.fov); if (DL.mode && !DL.fov0) DL.fov0 = camera.fov; if (Math.abs(camera.fov - want) > 0.05) { camera.fov += (want - camera.fov) * Math.min(1, dt * 6); camera.updateProjectionMatrix(); } else if (!DL.mode && DL.fov0) { camera.fov = DL.fov0; camera.updateProjectionMatrix(); DL.fov0 = 0; } }
       if (DL.mode) { W.x = D.oche.x; W.z = D.oche.z; DL.sway += dt * (1 + S.drunk * 0.3);
         const mine = myDartTurn() && !DL.flying; if (mine && DL.stage === 0) { const a = aimLocal(); if (a) { const w = wobble(); reticle.position.set(a[0] + w[0], a[1] + w[1], 0.01).applyMatrix4(D.board.matrixWorld); reticle.quaternion.copy(D.board.quaternion); reticle.visible = true; } else reticle.visible = false; }
         else if (mine && DL.stage === 1) { reticle.position.set(DL.lockX, DL.lockY, 0.01).applyMatrix4(D.board.matrixWorld); reticle.visible = true; } else reticle.visible = false;
