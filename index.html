@@ -55,7 +55,9 @@
   #tAct{display:none;width:calc(var(--b)*1.25);height:calc(var(--b)*1.25);right:calc(20px + env(safe-area-inset-right));bottom:calc(30px + env(safe-area-inset-bottom));background:rgba(31,92,58,.7);font-size:13px;z-index:5} #tAct.show{display:flex}
   #xhair{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:#fff;box-shadow:0 0 0 1.5px rgba(0,0,0,.55);pointer-events:none;z-index:6;display:none} body.foot #xhair{display:block} #xhair.on{background:#ffd23a;width:10px;height:10px;margin:-5px 0 0 -5px}
   #money{position:fixed;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top));font:800 20px/1.2 'Segoe UI',system-ui,Arial,sans-serif;color:#7dffa0;background:rgba(0,0,0,.55);padding:4px 14px;border-radius:10px;display:none;z-index:7;letter-spacing:.5px} body.touch #money{top:calc(62px + env(safe-area-inset-top))} #money.show{display:block}
-  #basket{position:fixed;left:10px;top:calc(185px + env(safe-area-inset-top));font:600 12px/1.3 monospace;color:#fff;background:rgba(0,0,0,.45);padding:3px 7px;border-radius:6px;display:none} #basket.show{display:block}
+  #bpanel{position:fixed;left:10px;top:calc(210px + env(safe-area-inset-top));min-width:250px;max-height:55vh;overflow:auto;font:600 13px/1.4 system-ui,sans-serif;color:#fff;background:rgba(10,20,16,.88);padding:10px;border-radius:10px;display:none;z-index:9} #bpanel.show{display:block}
+  #bpanel .brow{display:flex;gap:8px;align-items:center;justify-content:space-between;margin:4px 0} #bpanel button{background:#1f5c3a;color:#fff;border:0;border-radius:6px;padding:5px 9px;font:700 12px system-ui}
+  #basket{position:fixed;cursor:pointer;pointer-events:auto;z-index:8;left:10px;top:calc(185px + env(safe-area-inset-top));font:600 12px/1.3 monospace;color:#fff;background:rgba(0,0,0,.45);padding:3px 7px;border-radius:6px;display:none} #basket.show{display:block}
   #tGas{width:calc(var(--b)*1.25);height:calc(var(--b)*1.25);right:calc(14px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom))}
   #tBrake{right:calc(22px + var(--b)*1.25 + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom))}
   #tHand{right:calc(14px + env(safe-area-inset-right));bottom:calc(30px + var(--b)*1.25 + env(safe-area-inset-bottom))}
@@ -84,7 +86,7 @@
 </div>
 <div class="hud" id="combo"><div class="tag" id="ctag">Drift</div><span class="pts" id="cpts">0</span><span class="mult" id="cmult"></span></div>
 <canvas class="hud" id="mm" width="150" height="150"></canvas>
-<div id="xhair"></div><div class="hud" id="money"></div><div class="hud" id="basket"></div>
+<div id="xhair"></div><div id="aimLbl" style="position:fixed;left:50%;top:calc(50% + 14px);transform:translateX(-50%);font:700 13px system-ui,sans-serif;color:#fff;text-shadow:0 1px 3px #000;pointer-events:none;z-index:6"></div><div id="bpanel"></div><div id="toast" style="position:fixed;left:50%;top:38%;transform:translateX(-50%);max-width:80%;text-align:center;font:700 15px/1.3 'Segoe UI',system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.6);padding:8px 14px;border-radius:10px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:8"></div><div class="hud" id="money"></div><div class="hud" id="basket"></div>
 <div id="fade" style="position:fixed;inset:0;background:#000;opacity:0;transition:opacity .25s;pointer-events:none;z-index:50"></div>
 <div class="hud" id="coords" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 150px);left:10px;font:600 12px/1.3 monospace;color:#fff;background:rgba(0,0,0,.45);padding:3px 7px;border-radius:6px;pointer-events:none;z-index:5">x 0 z 0</div>
 <div class="hud" id="mmcap">PENDEFORD<br>WOLVERHAMPTON<small>Map data &copy; OpenStreetMap contributors</small></div>
@@ -872,7 +874,39 @@ function buildLInterior(b, door, wallH) {
   pbox(white, 372, 100, 9, 11, 1.0, 0, true);
 }
 const STORE = {};
-const SD = { t: 0, want: 0, panes: [] }, SHOPGATE = {}, SHOP_ITEMS = [];   // SHOP_ITEMS: individual products that can be picked up later                               // Morrisons sliding entrance doors
+const SD = { t: 0, want: 0, panes: [] }, SHOPGATE = {}, SHOP_ITEMS = [], TILLS = [];
+function drawCardScreen(T, msg) { const g = T.ctx; g.fillStyle = '#0d2a1a'; g.fillRect(0, 0, 64, 40); g.fillStyle = '#9dffb8'; g.font = 'bold 11px monospace'; g.textAlign = 'center'; g.fillText(msg || (T.total ? '£' + T.total.toFixed(2) : 'READY'), 32, 17); g.font = '8px monospace'; g.fillText(msg ? '' : T.total ? 'TAP CARD' : '', 32, 32); T.tex.needsUpdate = true; }   // SHOP_ITEMS: individual products that can be picked up later                               // Morrisons sliding entrance doors
+// ===== shop products: a catalogue of items, stocked on the shelves as instanced meshes; every one can be picked up and bought =====
+const PRODUCT_GROUPS = [
+  { sign: 'Cereal', items: [['Cornflakes', 1.95, 'box', [0.19, 0.29, 0.07], '#f2c500', '#c8102e'], ['Choco Hoops', 2.40, 'box', [0.19, 0.29, 0.07], '#5b2a86', '#f2c500'], ['Porridge Oats', 1.50, 'box', [0.16, 0.22, 0.1], '#e9d8a6', '#7a4e2d'], ['Muesli', 2.75, 'box', [0.17, 0.26, 0.07], '#2f8f3a', '#ffffff']] },
+  { sign: 'Pasta & Rice', items: [['Spaghetti', 0.95, 'box', [0.08, 0.28, 0.05], '#1d3f8a', '#f2c500'], ['Penne', 0.90, 'box', [0.16, 0.2, 0.07], '#2a6db0', '#ffffff'], ['Basmati Rice', 1.60, 'box', [0.15, 0.22, 0.08], '#e86a10', '#ffffff'], ['Noodles', 0.70, 'box', [0.14, 0.1, 0.14], '#c8102e', '#f2c500']] },
+  { sign: 'Tins', items: [['Baked Beans', 0.75, 'tin', [0.075, 0.11], '#2a6db0', '#ffffff'], ['Tomato Soup', 0.90, 'tin', [0.075, 0.11], '#c8102e', '#ffffff'], ['Chopped Tomatoes', 0.55, 'tin', [0.075, 0.11], '#d23a2a', '#2f8f3a'], ['Sweetcorn', 0.80, 'tin', [0.065, 0.08], '#f2c500', '#2f8f3a']] },
+  { sign: 'Crisps & Snacks', items: [['Ready Salted', 1.25, 'bag', [0.2, 0.27, 0.07], '#c8102e', '#f2c500'], ['Cheese & Onion', 1.25, 'bag', [0.2, 0.27, 0.07], '#2f8f3a', '#ffffff'], ['Salt & Vinegar', 1.25, 'bag', [0.2, 0.27, 0.07], '#2a6db0', '#ffffff'], ['Popcorn', 1.10, 'bag', [0.18, 0.24, 0.08], '#f2c500', '#c8102e']] },
+  { sign: 'Biscuits', items: [['Digestives', 1.10, 'box', [0.07, 0.07, 0.2], '#9c5a2c', '#e8e0c8'], ['Chocolate Bar', 0.85, 'box', [0.18, 0.04, 0.08], '#5b2a86', '#ffffff'], ['Custard Creams', 0.65, 'box', [0.07, 0.07, 0.18], '#e9d8a6', '#c8102e'], ['Cookies', 1.50, 'box', [0.16, 0.06, 0.12], '#7a4e2d', '#f2c500']] },
+  { sign: 'Drinks', items: [['Cola 2L', 1.85, 'bottle', [0.055, 0.32], '#b2121e', '#ffffff'], ['Lemonade 2L', 1.20, 'bottle', [0.055, 0.32], '#86c440', '#ffffff'], ['Still Water', 0.65, 'bottle', [0.045, 0.26], '#2fb6c8', '#ffffff'], ['Orange Juice', 1.60, 'box', [0.1, 0.24, 0.07], '#f08a1c', '#ffffff']] },
+  { sign: 'Tea & Coffee', items: [['Tea Bags', 2.10, 'box', [0.13, 0.12, 0.13], '#c8102e', '#e8e0c8'], ['Instant Coffee', 3.80, 'tin', [0.06, 0.15], '#3a2414', '#e9b53a'], ['Hot Chocolate', 2.50, 'tin', [0.06, 0.14], '#7a4e2d', '#ffffff'], ['Sugar', 1.05, 'box', [0.14, 0.18, 0.09], '#ffffff', '#1d3f8a']] },
+  { sign: 'Household', items: [['Toilet Roll 9pk', 4.50, 'box', [0.33, 0.34, 0.22], '#e8f1f8', '#2a6db0'], ['Kitchen Roll', 2.20, 'box', [0.24, 0.24, 0.12], '#ffffff', '#2f8f3a'], ['Washing Up Liquid', 1.20, 'bottle', [0.04, 0.24], '#86c440', '#ffffff'], ['Bleach', 0.95, 'bottle', [0.05, 0.27], '#2a6db0', '#f2c500']] },
+  { sign: 'Health & Beauty', items: [['Shampoo', 2.40, 'bottle', [0.035, 0.22], '#5b2a86', '#ffffff'], ['Shower Gel', 1.90, 'bottle', [0.035, 0.2], '#2fb6c8', '#ffffff'], ['Toothpaste', 1.60, 'box', [0.2, 0.05, 0.05], '#ffffff', '#c8102e'], ['Deodorant', 2.80, 'tin', [0.025, 0.15], '#1d3f8a', '#ffffff']] },
+  { sign: 'Pet Food', items: [['Dog Food', 0.90, 'tin', [0.05, 0.08], '#9c5a2c', '#ffffff'], ['Cat Food', 0.85, 'tin', [0.045, 0.06], '#e43d8b', '#ffffff'], ['Dog Biscuits', 3.20, 'bag', [0.25, 0.35, 0.1], '#7a4e2d', '#f2c500'], ['Cat Litter', 4.00, 'bag', [0.3, 0.38, 0.14], '#9aa0a4', '#ffffff']] }];
+const PTYPES = []; const ZERO_M = new THREE.Matrix4().makeScale(0, 0, 0);
+function productType(name, price, shape, size, bg, fg) {
+  const lab = mkTex(64, 64, (g, w, h) => { g.fillStyle = bg; g.fillRect(0, 0, w, h); g.fillStyle = fg; g.fillRect(0, h * 0.32, w, h * 0.36); g.fillStyle = bg; g.font = 'bold 10px Arial, sans-serif'; g.textAlign = 'center';
+    const words = name.split(' '); words.forEach((wd, i2) => g.fillText(wd, w / 2, h / 2 + 3 + (i2 - (words.length - 1) / 2) * 11)); g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(0, 0, w, 6); });
+  const side = new THREE.MeshStandardMaterial({ color: new THREE.Color(bg), roughness: 0.6 }), front = new THREE.MeshStandardMaterial({ map: lab, roughness: 0.5, emissive: 0x111111 }), top = new THREE.MeshStandardMaterial({ color: shape === 'tin' ? 0xb8bcc0 : new THREE.Color(bg), roughness: 0.4, metalness: shape === 'tin' ? 0.6 : 0 });
+  let geo, mats, w, h, d;
+  if (shape === 'tin' || shape === 'bottle') { const r = size[0]; h = size[1]; w = d = r * 2; geo = new THREE.CylinderGeometry(r * (shape === 'bottle' ? 0.95 : 1), r, h, 6); mats = [front, top, top]; }
+  else { [w, h, d] = size; if (shape === 'bag') { geo = new THREE.BoxGeometry(w, h, d, 1, 2, 1); const pa = geo.attributes.position; for (let k = 0; k < pa.count; k++) { const yy = pa.getY(k) / (h / 2); pa.setZ(k, pa.getZ(k) * (1 - 0.55 * yy * yy)); } geo.computeVertexNormals(); } else geo = new THREE.BoxGeometry(w, h, d); mats = [side, side, top, top, front, side]; }
+  if (geo.groups.length === 6) { const gp = geo.groups; geo.clearGroups(); geo.addGroup(gp[0].start, gp[0].count + gp[1].count, 0); geo.addGroup(gp[2].start, gp[2].count + gp[3].count, 2); geo.addGroup(gp[4].start, gp[4].count, 4); geo.addGroup(gp[5].start, gp[5].count, 5); }   // fewer draw calls
+  const T = { name, price, shape, geo, mats, w, h, d }; PTYPES.push(T); return T;
+}
+// shopping items: one interface for shelf stock (instances) and the hot food boxes (meshes)
+function instItem(T, im, i, mat) { return { name: T.name, price: T.price, h: T.h, d: T.d, T, im, i, home: mat.clone(), mesh: null,
+  hide() { this.im.setMatrixAt(this.i, ZERO_M); this.im.instanceMatrix.needsUpdate = true; },
+  restore() { this.im.setMatrixAt(this.i, this.home); this.im.instanceMatrix.needsUpdate = true; if (this.mesh) { shopGroup.remove(this.mesh); this.mesh = null; } },
+  makeMesh() { if (!this.mesh) { this.mesh = new THREE.Mesh(this.T.geo, this.T.mats); shopGroup.add(this.mesh); } this.mesh.visible = true; return this.mesh; } }; }
+function meshItem(m) { const it = { name: m.userData.item, price: m.userData.price, h: m.geometry.parameters.height, d: m.geometry.parameters.depth, m, home: m.position.clone(), yaw: m.rotation.y,
+  hide() { m.visible = false; }, restore() { m.position.copy(this.home); m.rotation.y = this.yaw; m.visible = true; m.userData.state = null; }, makeMesh() { m.visible = true; return m; } }; m.userData.itemObj = it; return it; }
+const SHOP_STOCK = [];                                                 // instanced meshes of shelf stock, for aiming
 function buildShopInterior(b, F, wallH) {
   const { ax, az, tx, tz, ox, oz } = F, CE = Math.min(3.6, wallH - 0.1), yawU = Math.atan2(-tz, tx);
   const I = (u, w) => [ax + tx * u - ox * w, az + tz * u - oz * w];     // u: along the shop front (north), w: into the shop (east)
@@ -922,6 +956,9 @@ function buildShopInterior(b, F, wallH) {
   row(su, crate); row(su - 4.2, crate); row(su + 4.2, veg);
   hang('Fruit', su - 2.1, gw + 6); hang('Vegetables', su + 4.2, gw + 9, 2.2);
   { const w = saladW; ibox(steel, su - 1, w, 11, 1.1, 0.9, 0, true); ibox(mg('salad', lit({ color: 0x86c440 }, 0.45)), su - 1, w, 10.5, 0.8, 0.08, 0.9); ibox(glassC, su - 1, w - 0.45, 10.6, 0.03, 0.5, 1.05); hang('Salad Bar', su - 1, w, 2.0); }
+  const pending = new Map();                                            // type + 8 m cell -> matrices (each cell is its own mesh so far-away stock can be switched off)
+  const addStock = (T, p, q) => { const key = PTYPES.indexOf(T) + '|' + Math.floor(p.x / 13) + ',' + Math.floor(p.z / 13); let e = pending.get(key); if (!e) pending.set(key, e = { T, list: [], cx: 0, cz: 0 }); e.list.push(new THREE.Matrix4().compose(p, q, _s)); e.cx += p.x; e.cz += p.z; };
+  const _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
   // hot food: three heated open-front units just left of the salad bar, glass shelves under warm lamps, individual boxes on each shelf
   { const hw = saladW + 0.15, unitW = 1.1, base = su + 4.65 + unitW / 2;
     const boxTex = (bg, stripe, txt, art) => mkTex(64, 64, (g, w, h) => { g.fillStyle = bg; g.fillRect(0, 0, w, h); g.fillStyle = stripe; g.fillRect(0, 0, w, 10); g.fillRect(0, h - 8, w, 8); art(g, w, h);
@@ -934,6 +971,7 @@ function buildShopInterior(b, F, wallH) {
     for (const k in kinds) { const K = kinds[k], side = new THREE.MeshStandardMaterial({ color: new THREE.Color(K.tex.image.getContext('2d').getImageData(2, 30, 1, 1).data.slice(0, 3).reduce((a3, v, i3) => a3 + v * [65536, 256, 1][i3], 0)), roughness: 0.6 }), front = new THREE.MeshStandardMaterial({ map: K.tex, roughness: 0.5, emissive: 0x332211, emissiveIntensity: 0.25 });
       K.geo = new THREE.BoxGeometry(...K.size); K.mats = [side, side, side, side, side, front]; }
     const shelfG = new THREE.MeshStandardMaterial({ color: 0xd8eef3, roughness: 0.05, transparent: true, opacity: 0.45 }), lamp = mg('heatLamp', new THREE.MeshBasicMaterial({ color: 0xffb35c }), false, false);
+    const _p2 = new THREE.Vector3(), _q2 = new THREE.Quaternion();
     const plan = [['chips', 'nuggets', 'chicken'], ['chicken', 'sausages', 'chips'], ['nuggets', 'sausages', 'chicken']];
     for (let n = 0; n < 3; n++) {
       const u = base + n * (unitW + 0.05);
@@ -949,8 +987,9 @@ function buildShopInterior(b, F, wallH) {
         const per = Math.max(2, Math.floor((unitW - 0.1) / (K.size[0] + 0.04)));
         for (let c = 0; c < per; c++) for (let d = 0; d < 2; d++) {
           const du = -((per - 1) / 2) * (K.size[0] + 0.04) + c * (K.size[0] + 0.04), [bx, bz] = I(u + du, hw - 0.17 + d * 0.24);
-          const m = new THREE.Mesh(K.geo, K.mats); m.position.set(bx, y + 0.011 + K.size[1] / 2, bz); m.rotation.y = yawU; m.userData = { item: kind, price: { chips: 1.5, nuggets: 2.5, chicken: 3.5, sausages: 2 }[kind] };
-          shopGroup.add(m); SHOP_ITEMS.push(m);
+          if (!K.T) { const gp = K.geo.groups; K.geo.clearGroups(); K.geo.addGroup(gp[0].start, gp[4].start, 0); K.geo.addGroup(gp[4].start, gp[4].count, 5); K.geo.addGroup(gp[5].start, gp[5].count, 0);
+            K.T = { name: 'Hot ' + kind[0].toUpperCase() + kind.slice(1), price: { chips: 1.5, nuggets: 2.5, chicken: 3.5, sausages: 2 }[kind], geo: K.geo, mats: K.mats, w: K.size[0], h: K.size[1], d: K.size[2] }; PTYPES.push(K.T); }
+          _p2.set(bx, y + 0.011 + K.size[1] / 2, bz); _q2.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yawU); addStock(K.T, _p2, _q2);
         }
       });
     }
@@ -961,6 +1000,18 @@ function buildShopInterior(b, F, wallH) {
     for (let r = 0; r < 4; r++) { const y0 = r * 16; g.fillStyle = '#9aa0a4'; g.fillRect(0, y0 + 14, w, 2); for (let x = 1; x < w;) { const bw = 4 + Math.random() * 7; g.fillStyle = col[(Math.random() * col.length) | 0]; g.fillRect(x, y0 + 3 + Math.random() * 3, bw - 1, 11 - Math.random() * 3); x += bw; } } }) }, 0.45);
   const shelfMats = [['#c8102e', '#f2c500', '#2a6db0', '#ffffff', '#e86a10'], ['#2f8f3a', '#86c440', '#e9d8a6', '#7a4e2d', '#ffffff'], ['#5b2a86', '#e43d8b', '#2fb6c8', '#f4f4f4', '#1d3f8a'], ['#d9a21b', '#9c5a2c', '#e8e0c8', '#b2382d', '#2c2c2c']].map((c, k) => mg('shelf' + k, prodMat(c)));
   const tillW = 9.5, aw0 = 13, aw1 = 36; let aisle = 1;
+  const groupTypes = PRODUCT_GROUPS.map(gp => gp.items.map(a2 => productType(...a2)));
+  // stock a shelf line: from A to B (world [x,z]), products face direction ang (radians, world yaw of the product front), cycling through the group's types in blocks
+  const stockLine = (A, B, ang, y, types, depth, seed) => { const L = Math.hypot(B[0] - A[0], B[1] - A[1]), ex = (B[0] - A[0]) / L, ez = (B[1] - A[1]) / L, fx = Math.sin(ang), fz = Math.cos(ang);
+    let s2 = 0.05, blk = 0; _q.setFromAxisAngle(_up, ang);
+    while (s2 < L - 0.05) { const T = types[(seed + Math.floor(blk)) % types.length], gap = 0.015, wdt = T.w + gap; if (s2 + T.w > L - 0.05) break;
+      const nb = Math.max(1, Math.floor(0.5 / wdt)); for (let k = 0; k < nb && s2 + T.w <= L - 0.05; k++) {
+        { const inset = T.d / 2 + 0.02; _p.set(A[0] + ex * (s2 + T.w / 2) - fx * inset, y + T.h / 2, A[1] + ez * (s2 + T.w / 2) - fz * inset); addStock(T, _p, _q); }
+        s2 += wdt; }
+      blk++; s2 += 0.02; } };
+  const shelfFrame = mg('shelfFrame', lit({ color: 0xd7dadc }, 0.35)), plank = mg('plank', lit({ color: 0xeef0f1 }, 0.4)), pTag = mg('priceRail', lit({ color: 0xf5c400 }, 0.45));
+  const LEVELS = [0.14, 0.56, 0.98, 1.4];
+  const _up = new THREE.Vector3(0, 1, 0);
   // one continuous box along w (into the shop), with its texture repeated every 2.5 m so the shelves read as an unbroken run
   const runBox = (m, u, w0, w1, du, h, y0, collide) => { const Lr = w1 - w0, [x, z] = I(u, (w0 + w1) / 2), g = new THREE.BoxGeometry(du, h, Lr), uv = g.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setX(k, uv.getX(k) * Lr / 2.5); m.add(g, mat4(x, y0 + h / 2, z, yawU));
     if (collide) { const c = [[-1, w0], [1, w0], [1, w1], [-1, w1]].map(([a, w]) => I(u + a * du / 2, w)); for (let k = 0; k < 4; k++) addSeg(c[k][0], c[k][1], c[(k + 1) % 4][0], c[(k + 1) % 4][1]); } };
@@ -976,7 +1027,12 @@ function buildShopInterior(b, F, wallH) {
     let ext = extent(u, aw0, Math.min(wallW(u), wallW(u + 1)) - 4.2); if (!ext) continue;
     let w1 = ext[1]; while (w1 > ext[0] + 3 && (northU(w1) == null || northU(w1) - u < 4.2)) w1 -= 0.25;   // keep a walkway in front of the wall freezers
     const w0 = ext[0]; if (w1 - w0 < 3 || (northU(w0) != null && northU(w0) - u < 4.2)) continue;
-    runBox(shelfMats[aisle % 4], u, w0, w1, 1.0, 1.75, 0.08, true); runBox(grey, u, w0 - 0.01, w1 + 0.01, 1.04, 0.06, 1.83, false); runBox(grey, u, w0 - 0.01, w1 + 0.01, 1.06, 0.12, 0, false);
+    // gondola: central backboard, a plank at each level on both faces with a yellow price rail, all stocked
+    runBox(shelfFrame, u, w0, w1, 0.1, 1.82, 0.08, false); runBox(grey, u, w0 - 0.01, w1 + 0.01, 1.04, 0.06, 1.83, false); runBox(grey, u, w0 - 0.01, w1 + 0.01, 1.06, 0.12, 0, false);
+    { const c = [[-0.52, w0], [0.52, w0], [0.52, w1], [-0.52, w1]].map(([a2, ww]) => I(u + a2, ww)); for (let k = 0; k < 4; k++) addSeg(c[k][0], c[k][1], c[(k + 1) % 4][0], c[(k + 1) % 4][1]); }
+    const gi = (aisle - 1) % groupTypes.length; hang(PRODUCT_GROUPS[gi].sign, u + 1.7, (w0 + w1) / 2, 2.2);
+    for (const sd of [-1, 1]) for (const y of LEVELS) { runBox(plank, u + sd * 0.27, w0, w1, 0.44, 0.025, y - 0.025, false); runBox(pTag, u + sd * 0.495, w0, w1, 0.012, 0.035, y - 0.04, false);
+      stockLine(I(u + sd * 0.49, w0), I(u + sd * 0.49, w1), Math.atan2(tx * sd, tz * sd), y, groupTypes[gi], 0.44, (aisle * 3 + Math.round(y * 10) + (sd > 0 ? 1 : 0)) & 7); }
     for (const e of [w0, w1]) ibox(mg('shelfEnd', lit({ color: 0x1f5c3a }, 0.35)), u, e, 1.06, 0.06, 1.9, 0);   // green end caps
     hang(String(aisle), u + 1.7, w0 + 3, 0.9); aisle++; }
   { const fw1 = wallW(uTopAll - 1) - 12.5;                              // freezers with full-height glass doors lining the north wall, front to bakery
@@ -992,7 +1048,10 @@ function buildShopInterior(b, F, wallH) {
   const bakU = uMax - 11;                                               // bakery takes the last ~11 m of the back wall
   for (let u = su - 12; u + 2.5 <= uMax - 0.8; u += 2.5) {
     const w = Math.min(wallW(u + 0.3), wallW(u + 2.2)) - 0.75, [x, z] = I(u + 1.25, w); if (w < 20 || !inPoly(x, z, b.p)) continue;
-    if (u + 1.25 < bakU) { ibox(shelfMats[Math.round(u) & 3], u + 1.25, w, 2.5, 0.9, 1.9, 0.08, true); ibox(grey, u + 1.25, w, 2.52, 0.94, 0.06, 1.98); }
+    if (u + 1.25 < bakU) { ibox(shelfFrame, u + 1.25, w + 0.38, 2.5, 0.12, 1.95, 0.0, true); ibox(grey, u + 1.25, w, 2.52, 0.94, 0.06, 1.98); ibox(grey, u + 1.25, w, 2.52, 0.9, 0.12, 0);
+      { const c = [[0, -0.45], [2.5, -0.45], [2.5, 0.45], [0, 0.45]].map(([a2, ww]) => I(u + a2, w + ww)); for (let k = 0; k < 4; k++) addSeg(c[k][0], c[k][1], c[(k + 1) % 4][0], c[(k + 1) % 4][1]); }
+      const gi = (Math.floor(u / 7.5) + 5 + groupTypes.length * 4) % groupTypes.length;
+      for (const y of LEVELS) { ibox(plank, u + 1.25, w, 2.5, 0.8, 0.025, y - 0.025); ibox(pTag, u + 1.25, w - 0.41, 2.5, 0.012, 0.035, y - 0.04); stockLine(I(u, w - 0.4), I(u + 2.5, w - 0.4), Math.atan2(ox, oz), y, groupTypes[gi], 0.8, Math.round(u + y * 10) & 7); } }
     else { ibox(rack, u + 1.25, w + 0.1, 2.4, 0.6, 1.8, 0, true); for (let r = 0; r < 4; r++) ibox(bread, u + 1.25, w + 0.1, 2.2, 0.45, 0.12, 0.3 + r * 0.42);
       ibox(wood, u + 1.25, w - 2.2, 2.4, 0.9, 0.95, 0, true); ibox(glassC, u + 1.25, w - 2.2, 2.4, 0.9, 0.4, 0.95); for (let k = 0; k < 4; k++) ibox(bread, u + 0.4 + k * 0.55, w - 2.2, 0.3, 0.35, 0.15, 0.98); }
   }
@@ -1000,7 +1059,18 @@ function buildShopInterior(b, F, wallH) {
   // tills along the front on the left: you come back out through these
   for (let u = su + 9; u < 38; u += 3.1) { const w = 6.2, [x, z] = I(u, w); if (!inside(x, z, 1.6)) continue;
     ibox(grey, u, w, 0.9, 3.4, 0.86, 0, true); ibox(black, u, w + 0.25, 0.7, 2.6, 0.03, 0.86); ibox(steel, u, w - 1.6, 0.9, 0.3, 0.06, 0.86);
-    ibox(black, u - 0.2, w - 1.3, 0.05, 0.3, 0.25, 0.92); ibox(green, u, w - 1.55, 0.06, 0.06, 0.9, 0.9); ibox(green, u, w - 1.55, 0.35, 0.05, 0.25, 1.85); ibox(black, u - 1.0, w - 0.9, 0.5, 0.5, 0.45, 0); }
+    ibox(black, u - 0.2, w - 1.3, 0.05, 0.3, 0.25, 0.92); ibox(green, u, w - 1.55, 0.06, 0.06, 0.9, 0.9); ibox(green, u, w - 1.55, 0.35, 0.05, 0.25, 1.85); ibox(black, u - 1.0, w - 0.9, 0.5, 0.5, 0.45, 0);
+    // checkout parts you can use: belt, scanner window, bagging tray, card machine on a post on the customer's side
+    ibox(mg('scanGlass', new THREE.MeshBasicMaterial({ color: 0x3a1010 }), false, false), u, w - 1.2, 0.55, 0.32, 0.012, 0.87); ibox(mg('scanLine', new THREE.MeshBasicMaterial({ color: 0xff2a2a }), false, false), u, w - 1.2, 0.5, 0.02, 0.014, 0.874);
+    ibox(steel, u, w - 2.05, 0.9, 0.6, 0.86, 0, true); ibox(mg('bagLip', lit({ color: 0x8d949a }, 0.35)), u, w - 2.05, 0.92, 0.62, 0.05, 0.86);
+    ibox(black, u + 0.62, w - 1.25, 0.05, 0.05, 0.95, 0); ibox(mg('cardM', lit({ color: 0x23272b }, 0.25)), u + 0.62, w - 1.25, 0.1, 0.17, 0.07, 0.98);
+    { const inv = new THREE.MeshBasicMaterial({ visible: false }), hb = (du, dw, h, uu, ww, y0, kind, T) => { const [hx, hz] = I(uu, ww), m = new THREE.Mesh(new THREE.BoxGeometry(du, h, dw), inv); m.position.set(hx, y0 + h / 2, hz); m.rotation.y = yawU; m.userData = { till: T, kind }; shopGroup.add(m); return m; };
+      const P = (uu, ww, y) => { const [px, pz] = I(uu, ww); return new THREE.Vector3(px, y, pz); };
+      const T = { belt: [], scanned: [], total: 0, start: P(u, w + 1.4, 0.89), end: P(u, w - 0.85, 0.89), bag: P(u, w - 2.05, 0.91), dir: P(u, w - 1, 0).sub(P(u, w, 0)).normalize(), side: P(u + 1, w, 0).sub(P(u, w, 0)).normalize(), yaw: yawU };
+      const cs = document.createElement('canvas'); cs.width = 64; cs.height = 40; T.cv = cs; T.ctx = cs.getContext('2d'); T.tex = new THREE.CanvasTexture(cs);
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.075, 0.047), new THREE.MeshBasicMaterial({ map: T.tex, toneMapped: false })); const cp = P(u + 0.62, w - 1.25, 1.056); scr.position.copy(cp); scr.rotation.set(-Math.PI / 2 + 0.5, 0, 0, 'YXZ'); scr.rotation.y = yawU + Math.PI / 2; shopGroup.add(scr);
+      T.hits = [hb(0.75, 2.4, 0.25, u, w + 0.25, 0.8, 'belt', T), hb(0.7, 0.5, 0.3, u, w - 1.2, 0.8, 'scan', T), hb(0.32, 0.32, 0.4, u + 0.62, w - 1.25, 0.85, 'card', T)];
+      TILLS.push(T); drawCardScreen(T); } }
   // trolleys parked by the door
   for (let k = 0; k < 4; k++) ibox(steel, su + 2.0, sw - 0.6 + k * 0.35, 0.6, 0.9, 0.95, 0.1, false);
   // sliding entrance doors on the side of the entrance block: outside pair (world) and inside pair (shop only), with a green canopy over them
@@ -1011,6 +1081,9 @@ function buildShopInterior(b, F, wallH) {
     mg('dark', new THREE.MeshBasicMaterial({ color: 0x3a4a50 })).add(new THREE.BoxGeometry(pw * 2, 2.3, 0.02), mat4(...(([x, z]) => [x, 1.15, z])(P(0, -0.08)), dyaw)); }
   for (const sd of [-1, 1]) { const [x, z] = P(sd * pw / 2, 0.08), o = pane(); o.position.set(x, 0, z); o.rotation.y = dyaw; scene.add(o); SD.panes.push({ o, x, y: 0, z, dx: E.ex * sd * (pw - 0.05), dz: E.ez * sd * (pw - 0.05) });
     const [x2, z2] = P(sd * pw / 2, -0.25), o2 = pane(); o2.position.set(x2, 0, z2); o2.rotation.y = dyaw; shopGroup.add(o2); }
+  for (const [, e] of pending) { const { T, list } = e, im = new THREE.InstancedMesh(T.geo, T.mats, list.length); im.frustumCulled = false; im.userData.items = []; im.userData.c = [e.cx / list.length, e.cz / list.length];
+    list.forEach((mtx, i2) => { im.setMatrixAt(i2, mtx); im.userData.items.push(instItem(T, im, i2, mtx)); }); im.instanceMatrix.needsUpdate = true; shopGroup.add(im); SHOP_STOCK.push(im); }
+  SHOPGATE.exitCheck = true;
   DOORS.push({ g: shopGroup, out: P(0, 0.9), inn: P(0, -0.9), ox: E.nx, oz: E.nz, rIn: 1.2, rOut: 1.0, anim: SD, light: 0.3,
     spawn: () => I(su, sw), look: () => I(su, sw + 10), exit: P(0, 2.2) });
 }
@@ -2023,6 +2096,7 @@ function setInside(g) {
   else scene.background = null;
 }
 function goThroughDoor(d, enter) {
+  if (!enter && d.g === shopGroup && (basket.length || TILLS.some(T => T.belt.length || T.scanned.length))) { caughtShoplifting(d); return; }
   W.busy = true; d.anim.want = 1; const f = $('fade'); setTimeout(() => { f.style.opacity = 1; }, enter ? 380 : 0);
   setTimeout(() => {
     if (enter) { const [sx, sz] = d.spawn(), [lx, lz] = d.look(); W.x = sx; W.z = sz; W.h = Math.atan2(-(lx - sx), -(lz - sz)); }   // in: stand just inside, facing into the building
@@ -2123,26 +2197,79 @@ function updateWork(dt) {
 }
 // what the centre dot is aiming at: a shop item within reach, or your car
 const aimRay = new THREE.Raycaster(); let aimT = null; const basket = [];
+const onTill = m => TILLS.some(T => T.belt.some(e => e.m === m) || T.scanned.some(e => e.m === m));
 function updateAim() {
   aimT = null; if (!W.on || W.busy) { $('tAct').classList.remove('show'); $('xhair').classList.remove('on'); return; }
   aimRay.setFromCamera({ x: 0, y: 0 }, camera); aimRay.far = 3.2;
-  if (INSIDE === shopGroup) { const hit = aimRay.intersectObjects(SHOP_ITEMS.filter(m => m.visible), false)[0]; if (hit) aimT = { kind: 'item', m: hit.object }; }
+  if (INSIDE === shopGroup) { const hits = aimRay.intersectObjects(SHOP_STOCK.filter(m => m.visible).concat(SHOP_ITEMS.filter(m => m.visible && !onTill(m)), TILLS.flatMap(T => T.hits)), false);
+    for (const hit of hits) { const ud = hit.object.userData;
+      if (ud.till) { const T = ud.till; if (ud.kind === 'belt' && basket.length) aimT = { kind: 'belt', T }; else if (ud.kind === 'scan' && T.belt.length) aimT = { kind: 'scan', T }; else if (ud.kind === 'card' && T.total && !T.belt.length) aimT = { kind: 'card', T }; if (aimT) break; continue; }
+      if (hit.object.isInstancedMesh) { const it = hit.object.userData.items[hit.instanceId]; if (it && !basket.includes(it) && !it.mesh) aimT = { kind: 'item', it }; }
+      break; } }
   else if (INSIDE === interiorGroup) {
     if (W.seated) { aimRay.far = 1.6; if (aimRay.intersectObject(W.seated.hitKb, false)[0]) aimT = { kind: 'kb' }; }
     else { const hit = aimRay.intersectObjects(OFFICE_DESKS.flatMap(d => d.hitDesk), false)[0]; if (hit) aimT = { kind: 'desk', d: hit.object.userData.desk }; } }
   else if (!INSIDE) { aimRay.far = 4.5; const hit = aimRay.intersectObject(player.car.grp, true)[0]; if (hit) aimT = { kind: 'car' }; }
   const b = $('tAct'); b.classList.toggle('show', !!aimT); $('xhair').classList.toggle('on', !!aimT);
-  if (aimT) b.textContent = { car: 'GET IN', item: 'PICK UP', desk: 'SIT', kb: 'TYPE' }[aimT.kind];
+  if (aimT && aimT.kind === 'item') { b.textContent = 'PICK UP'; $('aimLbl').textContent = aimT.it.name + '  £' + aimT.it.price.toFixed(2); } else $('aimLbl').textContent = '';
+  if (aimT && aimT.kind !== 'item') b.textContent = aimT.kind === 'card' ? 'PAY £' + aimT.T.total.toFixed(2) : { car: 'GET IN', item: 'PICK UP', desk: 'SIT', kb: 'TYPE', belt: 'PLACE ITEM', scan: 'SCAN' }[aimT.kind];
 }
 function doAction() {
   if (!aimT) return;
   if (aimT.kind === 'car') { toggleFoot(); return; }
   if (aimT.kind === 'desk') { sitAt(aimT.d); updateAim(); return; }
   if (aimT.kind === 'kb') { pressKeyboard(); return; }
-  const m = aimT.m; m.visible = false; basket.push(m.userData);                 // into the basket (paying at the till comes later)
-  const tot = basket.reduce((a, it) => a + it.price, 0), counts = {}; for (const it of basket) counts[it.item] = (counts[it.item] || 0) + 1;
-  const bk = $('basket'); bk.classList.add('show'); bk.textContent = 'Basket: ' + Object.entries(counts).map(([k2, v]) => v + ' ' + k2).join(', ') + '  £' + tot.toFixed(2);
-  updateAim();
+  if (aimT.kind === 'belt') { const T = aimT.T, it = basket.shift(); if (!it) return; const m = it.makeMesh(); m.position.copy(T.start); m.rotation.y = T.yaw; T.belt.push({ it, m, t: 0 }); showBasket(); updateAim(); return; }
+  if (aimT.kind === 'scan') { const T = aimT.T, e = T.belt.find(q => q.t >= 0.98) || T.belt[0]; if (!e) return; T.belt.splice(T.belt.indexOf(e), 1);
+    const k = T.scanned.length; e.m.position.copy(T.bag).addScaledVector(T.side, ((k % 3) - 1) * 0.25).addScaledVector(T.dir, (Math.floor(k / 3) % 2 - 0.5) * 0.25); e.m.position.y = T.bag.y + e.it.h / 2 + Math.floor(k / 6) * 0.3;
+    T.scanned.push(e); T.total += e.it.price; drawCardScreen(T); beep(1800, 0.07); showBasket(T); updateAim(); return; }
+  if (aimT.kind === 'card') { const T = aimT.T; if (!T.total) return;
+    if (money < T.total) { drawCardScreen(T, 'DECLINED'); beep(220, 0.3); toast('Card declined: you need £' + T.total.toFixed(2) + '. Earn some at the office!'); setTimeout(() => drawCardScreen(T), 1800); return; }
+    money -= T.total; showMoney(); const paid = T.total, n = T.scanned.length; for (const e of T.scanned) { e.m.visible = false; if (e.it.mesh) { shopGroup.remove(e.it.mesh); e.it.mesh = null; } bought.push(e.it.name); } T.scanned.length = 0; T.total = 0;
+    drawCardScreen(T, 'APPROVED'); beep(1400, 0.08); setTimeout(() => beep(2100, 0.12), 110); setTimeout(() => drawCardScreen(T), 2200); toast('Paid £' + paid.toFixed(2) + ' for ' + n + ' item' + (n > 1 ? 's' : '') + '. Thank you for shopping!'); showBasket(); updateAim(); return; }
+  const it = aimT.it; it.hide(); basket.push(it);                              // into the basket
+  showBasket(); updateAim();
+}
+const bought = [];
+function showBasket(T) {
+  const counts = {}; for (const it of basket) counts[it.name] = (counts[it.name] || 0) + 1; const tot = basket.reduce((a, it) => a + it.price, 0);
+  const tt = TILLS.find(q => q.total || q.belt.length) || T, bk = $('basket'); let txt = basket.length ? '🧺 ' + basket.length + ' item' + (basket.length > 1 ? 's' : '') + '  £' + tot.toFixed(2) + '  (tap to view)' : '';
+  if (tt && (tt.total || tt.belt.length)) txt += (txt ? '  |  ' : '') + 'Till: ' + tt.scanned.length + ' scanned  £' + tt.total.toFixed(2) + (tt.belt.length ? '  (' + tt.belt.length + ' on belt)' : '');
+  bk.textContent = txt; bk.classList.toggle('show', !!txt); if ($('bpanel').classList.contains('show')) drawBasketPanel();
+}
+function drawBasketPanel() {
+  const P = $('bpanel'), counts = new Map(); for (const it of basket) { const c = counts.get(it.name) || { n: 0, price: it.price }; c.n++; counts.set(it.name, c); }
+  P.innerHTML = '<div style="font-weight:800;margin-bottom:6px">Your basket</div>' + (basket.length ? '' : '<div style="opacity:.7">Empty</div>') +
+    [...counts].map(([nm, c]) => `<div class="brow"><span>${c.n} × ${nm}</span><span>£${(c.n * c.price).toFixed(2)}</span><button data-rm="${nm}">Put back</button></div>`).join('') +
+    (basket.length ? `<div class="brow" style="font-weight:800"><span>Total</span><span>£${basket.reduce((a, it) => a + it.price, 0).toFixed(2)}</span><button data-close="1">Close</button></div>` : '<button data-close="1">Close</button>');
+}
+function returnAll() { for (const it of basket) it.restore(); basket.length = 0; for (const T of TILLS) { for (const e of T.belt.concat(T.scanned)) e.it.restore(); T.belt.length = 0; T.scanned.length = 0; T.total = 0; drawCardScreen(T); } showBasket(); }
+let toastT = 0; function toast(msg) { const t = $('toast'); t.textContent = msg; t.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => t.style.opacity = 0, 2800); }
+let actxB = null; function beep(f, d) { try { actxB = actxB || new (window.AudioContext || window.webkitAudioContext)(); const o = actxB.createOscillator(), g = actxB.createGain(); o.frequency.value = f; o.type = 'square'; g.gain.value = 0.05; o.connect(g); g.connect(actxB.destination); o.start(); o.stop(actxB.currentTime + d); } catch (_) {} }
+// security guard: walking out with unpaid goods gets you stopped, your goods taken back and you escorted outside
+const GUARD = (() => { const g = new THREE.Group(), M = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 });
+  const add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); g.add(o); return o; };
+  for (const sx of [-0.1, 0.1]) add(new THREE.CylinderGeometry(0.08, 0.07, 0.9, 8), M(0x1b1d22), sx, 0.45, 0);
+  add(new THREE.CylinderGeometry(0.21, 0.18, 0.62, 10), M(0x1b1d22), 0, 1.22, 0).scale.set(1, 1, 0.7);
+  add(new THREE.CylinderGeometry(0.215, 0.19, 0.42, 10), M(0xd9ff2a), 0, 1.25, 0).scale.set(1, 1, 0.72);                      // hi-vis vest
+  add(new THREE.BoxGeometry(0.2, 0.06, 0.02), new THREE.MeshBasicMaterial({ color: 0x111111 }), 0, 1.36, -0.16);
+  add(new THREE.SphereGeometry(0.12, 12, 10), M(0xc68a62), 0, 1.68, 0); add(new THREE.CylinderGeometry(0.13, 0.13, 0.06, 12), M(0x1b1d22), 0, 1.79, 0);
+  for (const sx of [-0.26, 0.26]) add(new THREE.CylinderGeometry(0.055, 0.05, 0.6, 8), M(0x1b1d22), sx, 1.18, 0);
+  g.visible = false; shopGroup.add(g); return g; })();
+function caughtShoplifting(d) {
+  W.busy = true; const f = -Math.sin(W.h), fz = -Math.cos(W.h); GUARD.position.set(W.x + f * 6, W.y, W.z + fz * 6); GUARD.visible = true; toast('🛑 Security! You haven\'t paid for those items.');
+  const t0 = performance.now(), walk = () => { const t = (performance.now() - t0) / 1000, k = Math.min(1, t / 1.4); GUARD.position.set(W.x + f * (6 - 5 * k), W.y, W.z + fz * (6 - 5 * k)); GUARD.lookAt(W.x, W.y, W.z); GUARD.rotation.x = 0; GUARD.rotation.z = 0;
+    if (t < 1.4) requestAnimationFrame(walk);
+    else { returnAll(); toast('The security guard takes your items back and walks you out of the shop.'); setTimeout(() => { const fd = $('fade'); fd.style.opacity = 1;
+      setTimeout(() => { GUARD.visible = false; W.x = d.exit[0]; W.z = d.exit[1]; W.h = Math.atan2(-d.ox, -d.oz); setInside(null); fd.style.opacity = 0; setTimeout(() => { W.busy = false; }, 250); toast('You\'ve been escorted out of Morrisons.'); }, 350); }, 1600); } };
+  requestAnimationFrame(walk);
+}
+let stockTick = 0;
+function updateTills(dt) {
+  if (INSIDE !== shopGroup) return;
+  if ((stockTick++ & 7) === 0) for (const im of SHOP_STOCK) { const c = im.userData.c; im.visible = Math.hypot(W.x - c[0], W.z - c[1]) < 17; }
+  for (const T of TILLS) { let limit = 1; const L = T.start.distanceTo(T.end); for (const e of T.belt) { e.t = Math.min(limit, e.t + dt * 0.35 / L);
+      e.m.position.lerpVectors(T.start, T.end, e.t); e.m.position.y = 0.89 + e.it.h / 2; limit = Math.max(0, e.t - ((e.it.d || 0.15) + 0.06) / L); } }
 }
 function stepWalker(dt) {
   if (W.busy) return;
@@ -2208,6 +2335,12 @@ function updateParts(dt) {
 /* ================= input / audio ================= */
 let state = 'menu', camMode = 0;
 const keys = { up: 0, down: 0, left: 0, right: 0, hand: 0 };
+addEventListener('DOMContentLoaded', () => {});
+setTimeout(() => {
+  $('basket').addEventListener('pointerdown', e => { e.stopPropagation(); const P = $('bpanel'); P.classList.toggle('show'); if (P.classList.contains('show')) { drawBasketPanel(); if (document.pointerLockElement) document.exitPointerLock(); } });
+  $('bpanel').addEventListener('pointerdown', e => { e.stopPropagation(); const t = e.target; if (t.dataset.close) { $('bpanel').classList.remove('show'); return; }
+    if (t.dataset.rm) { const k = basket.map(it => it.name).lastIndexOf(t.dataset.rm); if (k >= 0) { basket[k].restore(); basket.splice(k, 1); showBasket(); drawBasketPanel(); } } });
+}, 0);
 const joy = { x: 0, y: 0, id: null }, look = { id: null, lx: 0, ly: 0 }; W.pitch = 0;
 { const J = $('joy'), K = $('joyKnob');
   const setK = (dx, dy) => { const r = J.clientWidth / 2, d = Math.hypot(dx, dy), k = d > r ? r / d : 1; joy.x = dx * k / r; joy.y = dy * k / r; K.style.transform = `translate(${dx * k}px, ${dy * k}px)`; };
@@ -2433,7 +2566,7 @@ let last = performance.now(), hudT = 0, skidAccInit = 0, frameN = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
-  stepPlayer(dt); if (W.on) stepWalker(dt); updateWork(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
+  stepPlayer(dt); if (W.on) stepWalker(dt); updateWork(dt); updateTills(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
   { const f = follow(); sun.position.set(f.x + SUN.x * 220, SUN.y * 220, f.z + SUN.z * 220); sun.target.position.set(f.x, 0, f.z); } sun.target.updateMatrixWorld();
   sky.position.copy(camera.position); clouds.position.set(camera.position.x, 0, camera.position.z);
   hudT -= dt;
