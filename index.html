@@ -2885,25 +2885,41 @@ const NPC = (() => {
   const seatH = Math.atan2(d.n.x, d.n.z), seat = { x: d.chair.x + d.n.x * 0.02, z: d.chair.z + d.n.z * 0.02 }, standAt = { x: d.chair.x + d.n.x * 0.75, z: d.chair.z + d.n.z * 0.75 };
   const S = { st: 'sit', t: 0, x: seat.x, z: seat.z, h: seatH, shoes: 'on', path: null, pi: 0, ph: 0, look: 0, sitK: 1, crouch: 0, spot: null, saidT: 0 };
   // --- grid path-finding round the desks and walls ---
-  let grid = null; const CS = 0.25;
+  let grid = null; const CS = 0.2;
   const buildGrid = () => { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const q of OFFICE_DESKS) { x0 = Math.min(x0, q.chair.x); x1 = Math.max(x1, q.chair.x); z0 = Math.min(z0, q.chair.z); z1 = Math.max(z1, q.chair.z); }
     x0 -= 6; x1 += 6; z0 -= 6; z1 += 6; const nx = Math.ceil((x1 - x0) / CS), nz = Math.ceil((z1 - z0) / CS), b = new Uint8Array(nx * nz);
     for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) { const x = x0 + (i + 0.5) * CS, z = z0 + (j + 0.5) * CS, l = cgrid.at(x, z); if (!l) continue;
       for (const c of l) { if (c.lv) continue; const dd = c.t === 0 ? Math.hypot(x - c.x, z - c.z) - c.r : distSeg(x, z, c.x0, c.z0, c.x1, c.z1); if (dd < 0.28) { b[i * nz + j] = 1; break; } } }
-    grid = { x0, z0, nx, nz, b }; };
+    // everything actually built in the office (desks, chairs, tables, walls, plants...): sample each triangle between ankle and head height
+    const raw = new Uint8Array(nx * nz), A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), P = new THREE.Vector3(), skip = new Set([fig.g, pair, feetHit]);
+    interiorGroup.updateMatrixWorld(true);
+    interiorGroup.traverse(m => { if (!m.isMesh || m.isInstancedMesh || !m.visible || (m.material && m.material.visible === false)) return; for (let p2 = m.parent; p2; p2 = p2.parent) if (skip.has(p2)) return; if (skip.has(m)) return;
+      const pa = m.geometry.attributes.position, ix = m.geometry.index, n = ix ? ix.count : pa.count, mw = m.matrixWorld;
+      for (let t = 0; t < n; t += 3) { const ia = ix ? ix.getX(t) : t, ib = ix ? ix.getX(t + 1) : t + 1, ic = ix ? ix.getX(t + 2) : t + 2;
+        A.fromBufferAttribute(pa, ia).applyMatrix4(mw); B.fromBufferAttribute(pa, ib).applyMatrix4(mw); C.fromBufferAttribute(pa, ic).applyMatrix4(mw);
+        if (Math.max(A.y, B.y, C.y) < 0.08 || Math.min(A.y, B.y, C.y) > 1.8) continue;
+        if (Math.max(A.x, B.x, C.x) < x0 || Math.min(A.x, B.x, C.x) > x0 + nx * CS || Math.max(A.z, B.z, C.z) < z0 || Math.min(A.z, B.z, C.z) > z0 + nz * CS) continue;
+        const L = Math.max(A.distanceTo(B), B.distanceTo(C), C.distanceTo(A)), s = Math.min(60, Math.ceil(L / (CS * 0.5)));
+        for (let u = 0; u <= s; u++) for (let v = 0; v <= s - u; v++) { const a2 = u / s, b2 = v / s; P.copy(A).multiplyScalar(1 - a2 - b2).addScaledVector(B, a2).addScaledVector(C, b2);
+          if (P.y < 0.08 || P.y > 1.8) continue; const i = Math.floor((P.x - x0) / CS), j = Math.floor((P.z - z0) / CS); if (i >= 0 && j >= 0 && i < nx && j < nz) raw[i * nz + j] = 1; } } });
+    const R = 1; for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) if (raw[i * nz + j]) for (let di = -R; di <= R; di++) for (let dj = -R; dj <= R; dj++) { const p = i + di, q = j + dj; if (p >= 0 && q >= 0 && p < nx && q < nz && di * di + dj * dj <= 1) b[p * nz + q] = 1; }
+    const near = new Uint8Array(nx * nz); for (let i = 1; i < nx - 1; i++) for (let j = 1; j < nz - 1; j++) if (!b[i * nz + j]) { for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) if (b[(i + di) * nz + j + dj]) near[i * nz + j] = 1; }
+    grid = { x0, z0, nx, nz, b, near }; };
   const cell = (x, z) => [Math.floor((x - grid.x0) / CS), Math.floor((z - grid.z0) / CS)];
   const free = (i, j) => i >= 0 && j >= 0 && i < grid.nx && j < grid.nz && !grid.b[i * grid.nz + j];
   const nearestFree = (i, j) => { if (free(i, j)) return [i, j]; for (let r = 1; r < 8; r++) for (let a = -r; a <= r; a++) for (const [p, q] of [[i + a, j - r], [i + a, j + r], [i - r, j + a], [i + r, j + a]]) if (free(p, q)) return [p, q]; return [i, j]; };
   const los = (ax, az, bx, bz) => { const L = Math.hypot(bx - ax, bz - az), n = Math.ceil(L / (CS * 0.5)); for (let k = 1; k < n; k++) { const [i, j] = cell(ax + (bx - ax) * k / n, az + (bz - az) * k / n); if (!free(i, j)) return false; } return true; };
   function findPath(ax, az, bx, bz) {
     if (!grid) buildGrid(); const [si, sj] = nearestFree(...cell(ax, az)), [ti, tj] = nearestFree(...cell(bx, bz)), N = grid.nx * grid.nz, g = new Float32Array(N).fill(1e9), from = new Int32Array(N).fill(-1), open = [[0, si * grid.nz + sj]];
-    g[si * grid.nz + sj] = 0; const tgt = ti * grid.nz + tj; let it = 0;
+    g[si * grid.nz + sj] = 0; const tgt = ti * grid.nz + tj; let it = 0, best = si * grid.nz + sj, bestD = 1e9;
     while (open.length && it++ < 20000) { let bi = 0; for (let k = 1; k < open.length; k++) if (open[k][0] < open[bi][0]) bi = k; const [, cur] = open.splice(bi, 1)[0]; if (cur === tgt) break;
+      { const dd = Math.hypot(Math.floor(cur / grid.nz) - ti, cur % grid.nz - tj); if (dd < bestD) { bestD = dd; best = cur; } }
       const ci = Math.floor(cur / grid.nz), cj = cur % grid.nz;
       for (const [di, dj, w] of [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.41], [1, -1, 1.41], [-1, 1, 1.41], [-1, -1, 1.41]]) { const ni = ci + di, nj = cj + dj; if (!free(ni, nj) || (di && dj && (!free(ci + di, cj) || !free(ci, cj + dj)))) continue;
-        const nn = ni * grid.nz + nj, ng = g[cur] + w; if (ng < g[nn]) { g[nn] = ng; from[nn] = cur; open.push([ng + Math.hypot(ni - ti, nj - tj), nn]); } } }
-    const pts = []; let c = tgt; if (from[c] < 0 && c !== si * grid.nz + sj) return [[bx, bz]];
-    while (c >= 0) { pts.push([grid.x0 + (Math.floor(c / grid.nz) + 0.5) * CS, grid.z0 + (c % grid.nz + 0.5) * CS]); c = from[c]; } pts.reverse(); if (free(...cell(bx, bz))) pts.push([bx, bz]);
+        const nn = ni * grid.nz + nj, ng = g[cur] + w + (grid.near[nn] ? 0.8 : 0); if (ng < g[nn]) { g[nn] = ng; from[nn] = cur; open.push([ng + Math.hypot(ni - ti, nj - tj), nn]); } } }
+    const pts = []; let c = tgt; if (from[c] < 0 && c !== si * grid.nz + sj) { c = best; bx = null; }   // can't get there: go as close as he can
+    while (c >= 0) { pts.push([grid.x0 + (Math.floor(c / grid.nz) + 0.5) * CS, grid.z0 + (c % grid.nz + 0.5) * CS]); c = from[c]; } pts.reverse(); if (bx != null && free(...cell(bx, bz))) pts.push([bx, bz]);
+    if (!pts.length) return [];
     const out = [[ax, az]]; for (let k = 1; k < pts.length; k++) { const a = out[out.length - 1]; if (k === pts.length - 1 || !los(a[0], a[1], pts[k + 1][0], pts[k + 1][1])) out.push(pts[k]); }   // string-pull
     return out.slice(1);
   }
@@ -2971,7 +2987,7 @@ const NPC = (() => {
   pose(0);
   const floorHit = new THREE.Vector3();
   return {
-    S, d, step,
+    S, d, step, _dbg: () => { const t0 = performance.now(); if (!grid) buildGrid(); return { ms: performance.now() - t0, grid, path: findPath(S.x, S.z, standAt.x - 6, standAt.z - 3) }; },
     aim(ray) {                                                             // what the dot is on
       if (S.shoes === 'carried' && S.by !== 'me') return null;
       if (S.shoes === 'carried') { const r = ray.ray; if (r.direction.y < -0.05) { const t = -r.origin.y / r.direction.y; if (t < 4.2) { floorHit.copy(r.origin).addScaledVector(r.direction, t); return { kind: 'putshoes', p: floorHit.clone() }; } } return { kind: 'holding' }; }
