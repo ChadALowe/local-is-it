@@ -471,14 +471,15 @@ class Merger {
       g.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(c.n), 3));
       g.setAttribute('uv', new THREE.BufferAttribute(Float32Array.from(c.u), 2));
       g.computeBoundingSphere();
-      const m = new THREE.Mesh(g, this.mat); m.castShadow = this.cast; m.receiveShadow = this.recv; m.matrixAutoUpdate = false; if (this.interior) { m.castShadow = false; interiorGroup.add(m); } else { scene.add(m); chunkMeshes.push(m); }
+      const m = new THREE.Mesh(g, this.mat); m.castShadow = this.cast; m.receiveShadow = this.recv; m.matrixAutoUpdate = false; if (this.interior) { m.castShadow = false; this.interior.add(m); } else { scene.add(m); chunkMeshes.push(m); }
     }
     this.ch = null;
   }
 }
 const MG = {};
-let INT = false; const interiorGroup = new THREE.Group(); interiorGroup.visible = false; scene.add(interiorGroup);   // the L office interior: only shown while you are inside
-const mg = (name, mat, cast = true, recv = true) => { const k = INT ? 'int:' + name : name; if (MG[k]) return MG[k]; const m = MG[k] = new Merger(mat || (MG[name] && MG[name].mat), cast, recv); m.interior = INT; return m; };
+let INTG = null; const mkInt = n => { const g = new THREE.Group(); g.name = n; g.visible = false; scene.add(g); return g; };   // walk-in interiors: each only shown while you are inside it
+const interiorGroup = mkInt('office'), shopGroup = mkInt('shop'), DOORS = [];
+const mg = (name, mat, cast = true, recv = true) => { const k = INTG ? INTG.name + ':' + name : name; if (MG[k]) return MG[k]; const m = MG[k] = new Merger(mat || (MG[name] && MG[name].mat), cast, recv); m.interior = INTG; return m; };
 const tmpQ = new THREE.Quaternion(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(1, 1, 1), tmpE = new THREE.Euler();
 function mat4(x, y, z, yaw = 0, sx = 1, sy = 1, sz = 1) { tmpQ.setFromEuler(tmpE.set(0, yaw, 0)); return new THREE.Matrix4().compose(tmpV.set(x, y, z), tmpQ, tmpS.set(sx, sy, sz)); }
 class Grid {
@@ -841,6 +842,69 @@ function buildLInterior(b, door, wallH) {
   pbox(white, 372, 100, 9, 11, 1.0, 0, true);
 }
 const STORE = {};
+const SD = { t: 0, want: 0, panes: [] };                               // Morrisons sliding entrance doors
+function buildShopInterior(b, F, wallH) {
+  const { ax, az, tx, tz, ox, oz, L } = F, CE = Math.min(3.6, wallH - 0.1), yawU = Math.atan2(-tz, tx), u0 = L * 0.93;
+  const I = (u, w) => [ax + tx * u - ox * w, az + tz * u - oz * w];     // u along the shop front (towards the entrance end), w into the shop
+  const inside = (x, z, m = 0.8) => inPoly(x, z, b.p) && !nearWall(x, z, m);
+  const ibox = (m, u, w, du, dw, h, y0 = 0, collide = false) => { const [x, z] = I(u, w); m.add(new THREE.BoxGeometry(du, h, dw), mat4(x, y0 + h / 2, z, yawU));
+    if (collide) { const c = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, c2]) => I(u + a * du / 2, w + c2 * dw / 2)); for (let k = 0; k < 4; k++) addSeg(c[k][0], c[k][1], c[(k + 1) % 4][0], c[(k + 1) % 4][1]); } };
+  // floor, ceiling and wall lining
+  const floor = mg('shopFloor', lit({ map: mkTex(64, 64, (g, w, h) => { g.fillStyle = '#d9d6cf'; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(0, 0, w, 1); g.fillRect(0, 0, 1, h); for (let i = 0; i < 160; i++) { g.fillStyle = 'rgba(90,80,70,.08)'; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); } }), color: 0xc8c4bb }, 0.22), false, true);
+  const ceil = mg('shopCeil', lit({ color: 0xe4e2dc }, 0.35), false, false), lin = mg('shopLin', lit({ color: 0xd9d3c4 }, 0.25), false, false), winIn = mg('shopWinIn', lit({ color: 0x9fc3d6 }, 0.9), false, false);
+  for (const [i, j, k] of triangulate(b.p)) { const A = b.p[i], B = b.p[j], C = b.p[k];
+    floor.tri([A[0], 0.06, A[1]], [B[0], 0.06, B[1]], [C[0], 0.06, C[1]], [A[0] / 1.6, A[1] / 1.6], [B[0] / 1.6, B[1] / 1.6], [C[0] / 1.6, C[1] / 1.6], UP);
+    ceil.tri([A[0], CE, A[1]], [C[0], CE, C[1]], [B[0], CE, B[1]], [0, 0], [1, 0], [1, 1], [0, -1, 0]); }
+  const sg = b.area >= 0 ? 1 : -1, n = b.p.length;
+  for (let i = 0; i < n; i++) { const a = b.p[i], c = b.p[(i + 1) % n], Le = Math.hypot(c[0] - a[0], c[1] - a[1]), nx = -sg * (c[1] - a[1]) / Le * 0.12, nz = sg * (c[0] - a[0]) / Le * 0.12;
+    const front = Math.abs((c[0] - a[0]) / Le * tx + (c[1] - a[1]) / Le * tz) > 0.98 && Math.abs((a[0] - ax) * ox + (a[1] - az) * oz) < 0.5;
+    lin.quad([a[0] + nx, 0, a[1] + nz], [c[0] + nx, 0, c[1] + nz], [c[0] + nx, CE, c[1] + nz], [a[0] + nx, CE, a[1] + nz], [0, 0], [1, 0], [1, 1], [0, 1], [nx, 0, nz]);
+    if (front) winIn.quad([a[0] + nx * 1.1, 0.5, a[1] + nz * 1.1], [c[0] + nx * 1.1, 0.5, c[1] + nz * 1.1], [c[0] + nx * 1.1, CE - 0.3, c[1] + nz * 1.1], [a[0] + nx * 1.1, CE - 0.3, a[1] + nz * 1.1], [0, 0], [1, 0], [1, 1], [0, 1], [nx, 0, nz]); }   // shop-front glazing seen from inside
+  // long strip lights
+  const Lm = mg('shopLight', new THREE.MeshBasicMaterial({ color: 0xffffff }), false, false);
+  for (let u = -24; u < L + 2; u += 3.4) for (let w = 3; w < 60; w += 6) { const [x, z] = I(u, w); if (inside(x, z, 0.6)) Lm.add(new THREE.BoxGeometry(0.25, 0.04, 4.2), mat4(x, CE - 0.03, z, yawU)); }
+  const grey = mg('shopGrey', lit({ color: 0x8d949a }, 0.35)), black = mg('shopBlack', lit({ color: 0x1b1d20 }, 0.25)), green = mg('shopGreen', lit({ color: 0x1f5c3a }, 0.4)), steel = mg('shopSteel', lit({ color: 0xb4b8bb }, 0.4));
+  // checkouts along the front, between the entrance and the far end
+  for (let k = 0; k < 7; k++) { const u = u0 - 7 - k * 3.1, w = 8.2, [x, z] = I(u, w); if (!inside(x, z, 1.8)) continue;
+    ibox(grey, u, w, 0.9, 3.4, 0.86, 0, true); ibox(black, u, w + 0.25, 0.7, 2.6, 0.03, 0.86); ibox(steel, u, w - 1.6, 0.9, 0.3, 0.06, 0.86);
+    ibox(black, u - 0.2, w - 1.3, 0.05, 0.3, 0.25, 0.92); ibox(green, u, w - 1.55, 0.06, 0.06, 0.9, 0.9); ibox(green, u, w - 1.55, 0.35, 0.05, 0.25, 1.85);   // till screen and lane light
+    ibox(black, u - 1.0, w - 0.9, 0.5, 0.5, 0.45, 0); }
+  // product shelving: aisles running into the shop, each made of 2.5 m modules, products on both faces
+  const prodMat = col => lit({ map: mkTex(128, 64, (g, w, h) => { g.fillStyle = '#e2e2dc'; g.fillRect(0, 0, w, h); const pal = col;
+    for (let r = 0; r < 4; r++) { const y0 = r * 16; g.fillStyle = '#9aa0a4'; g.fillRect(0, y0 + 14, w, 2); for (let x = 1; x < w;) { const bw = 4 + Math.random() * 7; g.fillStyle = pal[(Math.random() * pal.length) | 0]; g.fillRect(x, y0 + 3 + Math.random() * 3, bw - 1, 11 - Math.random() * 3); x += bw; } } }) }, 0.45);
+  const shelfMats = [['#c8102e', '#f2c500', '#2a6db0', '#ffffff', '#e86a10'], ['#2f8f3a', '#86c440', '#e9d8a6', '#7a4e2d', '#ffffff'], ['#5b2a86', '#e43d8b', '#2fb6c8', '#f4f4f4', '#1d3f8a'], ['#d9a21b', '#9c5a2c', '#e8e0c8', '#b2382d', '#2c2c2c']].map((c, k) => mg('shelf' + k, prodMat(c)));
+  const signMat = n2 => new THREE.MeshBasicMaterial({ map: mkTex(64, 32, (g, w, h) => { g.fillStyle = '#1f5c3a'; g.fillRect(0, 0, w, h); g.fillStyle = '#f5c400'; g.fillRect(0, h - 4, w, 4); g.fillStyle = '#fff'; g.font = 'bold 20px Arial, sans-serif'; g.textAlign = 'center'; g.fillText(String(n2), w / 2, 22); }) });
+  let aisle = 1;
+  for (let u = u0 - 6; u > -26; u -= 3.4) {
+    let placed = false;
+    for (const [wa, wb] of [[13, 26], [28.5, 41]]) for (let w = wa; w + 2.5 <= wb + 0.01; w += 2.5) {
+      const [x0, z0] = I(u, w), [x1, z1] = I(u, w + 2.5); if (!inside(x0, z0, 1.3) || !inside(x1, z1, 1.3)) continue;
+      const m = shelfMats[(aisle + Math.round(w)) % 4]; ibox(m, u, w + 1.25, 1.0, 2.5, 1.75, 0.08, true); ibox(grey, u, w + 1.25, 1.04, 2.52, 0.06, 1.83); ibox(grey, u, w + 1.25, 1.04, 2.52, 0.12, 0.0); placed = true;
+    }
+    if (placed) { const [sx, sz] = I(u + 1.7, 20); if (inside(sx, sz, 0.5)) { const sgn = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.45), signMat(aisle)); sgn.position.set(sx, CE - 0.7, sz); sgn.rotation.y = yawU + Math.PI / 2; shopGroup.add(sgn);
+      const s2 = sgn.clone(); s2.rotation.y += Math.PI; shopGroup.add(s2); aisle++; } }
+  }
+  // chilled cabinets along the back of the shop: lit glass fronts
+  const fridge = mg('fridge', lit({ map: mkTex(64, 64, (g, w, h) => { g.fillStyle = '#d7edf5'; g.fillRect(0, 0, w, h); for (let r = 0; r < 4; r++) for (let x = 2; x < w - 2; x += 6) { g.fillStyle = ['#f4f4f4', '#7fb3d9', '#e0b33c', '#c93b3b', '#9bd06a'][(Math.random() * 5) | 0]; g.fillRect(x, r * 15 + 5, 5, 8); } g.fillStyle = '#9aa7ad'; for (let x = 0; x < w; x += 16) g.fillRect(x, 0, 2, h); }) }, 0.85));
+  for (let u = u0 - 2; u > -26; u -= 2.6) { for (let w = 46; w > 40; w -= 0.5) { const [x, z] = I(u, w); if (inside(x, z, 0.6) && !inside(...I(u, w + 1.6), 0.0)) { ibox(fridge, u, w, 2.5, 0.9, 2.0, 0, true); ibox(grey, u, w + 0.1, 2.5, 1.1, 0.2, 2.0); break; } } }
+  // fresh produce near the entrance: low tables of crates
+  const crate = ['#3e8f3a', '#d23a2a', '#f08a1c', '#f2d33a', '#7a3d8f', '#9bcf55'].map((c, k) => mg('crate' + k, lit({ color: parseInt(c.slice(1), 16) }, 0.4)));
+  for (let k = 0; k < 6; k++) { const u = u0 - 2 - (k % 3) * 3.6, w = 13 + Math.floor(k / 3) * 4; const [x, z] = I(u, w); if (!inside(x, z, 1.5)) continue;
+    ibox(mg('crateWood', lit({ color: 0x9c7a52 }, 0.35)), u, w, 1.6, 2.6, 0.75, 0, true); for (let c = 0; c < 4; c++) ibox(crate[(k * 2 + c) % 6], u + (c % 2 - 0.5) * 0.75, w + (Math.floor(c / 2) - 0.5) * 1.25, 0.7, 1.2, 0.14, 0.75); }
+  // a line of trolleys by the entrance
+  for (let k = 0; k < 5; k++) ibox(steel, u0 + 2.2, 3.2 + k * 0.35, 0.6, 0.9, 0.95, 0.1, false);
+  ibox(steel, u0 + 2.2, 3.9, 0.7, 2.2, 0.02, 0.05, true);
+  // sliding entrance doors: outside pair (world) and inside pair (shop only)
+  const gl = new THREE.MeshStandardMaterial({ color: 0x9fb9c4, roughness: 0.05, metalness: 0.3, transparent: true, opacity: 0.45 }), fr = new THREE.MeshStandardMaterial({ color: 0x1f5c3a, roughness: 0.4 });
+  const pane = () => { const g = new THREE.Group(); const a2 = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.3, 0.03), gl); a2.position.y = 1.15; g.add(a2); for (const y of [0.04, 2.28]) { const r = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.08, 0.06), fr); r.position.y = y; g.add(r); } for (const x of [-0.72, 0.72]) { const r = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.3, 0.06), fr); r.position.set(x, 1.15, 0); g.add(r); } return g; };
+  const Wo = (u, v) => [ax + tx * u + ox * v, az + tz * u + oz * v];
+  for (const sd of [-1, 1]) {
+    const [x, z] = Wo(u0 + sd * 0.75, 2.86), o = pane(); o.position.set(x, 0, z); o.rotation.y = yawU; scene.add(o); SD.panes.push({ o, x, y: 0, z, dx: tx * sd * 1.45, dz: tz * sd * 1.45 });
+    const [x2, z2] = I(u0 + sd * 0.75, 0.2), o2 = pane(); o2.position.set(x2, 0, z2); o2.rotation.y = yawU; shopGroup.add(o2);
+  }
+  DOORS.push({ g: shopGroup, out: Wo(u0, 3.6), inn: I(u0, 0.9), ox, oz, rIn: 1.2, rOut: 1.0, anim: SD, light: 0.3,
+    spawn: () => I(u0, 2.6), look: () => I(u0 - 8, 12), exit: Wo(u0, 4.6) });
+}
 // trolley shelters in the Morrisons car park, read off the aerial photo: each sits across a double row of bays, long side across the rows
 const aisleZ = (p, x) => { for (let i = 0; i < p.length - 1; i++) { const a = p[i], b = p[i + 1]; if ((x - a[0]) * (x - b[0]) <= 0 && a[0] !== b[0]) return a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]); } return null; };
 const SHELTERS = (() => {
@@ -895,7 +959,7 @@ for (const b of builds) {
     if (lDoorEdge) { piece(0, LD.uc - DW, 0, wallH); piece(LD.uc + DW, L, 0, wallH); piece(LD.uc - DW, LD.uc + DW, DH, wallH); }
     else piece(0, L, 0, wallH);
     if (isLB(b)) {                                                      // interior lining (plaster with the same window openings), a little inside the outer wall
-      INT = true; const lm = mg(endW ? 'linEnd' : 'linOffice', endW ? linEndMat : linOfficeMat, false, true), CE = 2.8; INT = false;
+      INTG = interiorGroup; const lm = mg(endW ? 'linEnd' : 'linOffice', endW ? linEndMat : linOfficeMat, false, true), CE = 2.8; INTG = null;
       if (lDoorEdge) { piece(0, LD.uc - 1.75, 0, CE, lm, k2, u0, u1, floors, 0.12); piece(LD.uc + 1.75, L, 0, CE, lm, k2, u0, u1, floors, 0.12); piece(LD.uc - 1.75, LD.uc + 1.75, DH, CE, lm, k2, u0, u1, floors, 0.12); }
       else piece(0, L, 0, CE, lm, k2, u0, u1, floors, 0.12);
     }
@@ -945,7 +1009,7 @@ for (const b of builds) {
           for (const [w2, h2, oxx, oy] of [[DW, 0.06, 0, DH - 0.03], [DW, 0.1, 0, 0.05], [0.06, DH, -DW / 2 + 0.03, DH / 2], [0.06, DH, DW / 2 - 0.03, DH / 2]]) frame.add(new THREE.BoxGeometry(w2, h2, 0.05), mat4(cx + Math.cos(ang) * oxx, oy, cz - Math.sin(ang) * oxx, ang));
           addCircle(hx[0] + Math.cos(ang) * -sd * DW * 0.75, hx[2] - Math.sin(ang) * -sd * DW * 0.75, 0.12);
         }
-        INT = true; buildLInterior(b, { ...best, tx, tz }, wallH); INT = false;
+        INTG = interiorGroup; buildLInterior(b, { ...best, tx, tz }, wallH); INTG = null;
       } else
       pm2.quad(P(-W, 0, D), P(W, 0, D), P(W, H, D), P(-W, H, D), [0, 0], [1, 0], [1, 1], [0, 1], [ox, 0, oz]);
       for (const sd of [-1, 1]) pm2.quad(P(sd * W, 0, 0), P(sd * W, 0, D), P(sd * W, H, D), P(sd * W, H, 0), [0, 0], [0.2, 0], [0.2, 1], [0, 1], [tx * sd, 0, tz * sd]);
@@ -968,6 +1032,8 @@ for (const b of builds) {
         sgM.add(new THREE.PlaneGeometry(15, 2.9), mat4(sx, wallH + 2.15, sz, Math.atan2(ox, oz))); mg('pole', poleMat).add(new THREE.BoxGeometry(14, 0.12, 0.12), mat4(sx - ox * 0.05, wallH + 0.75, sz - oz * 0.05, Math.atan2(ox, oz))); }
       // a smaller lettering board over the parade end of the store
       { const [sx, sz] = W(L * 0.12, -0.6); mg('storeSign').add(new THREE.PlaneGeometry(5, 0.95), mat4(sx, wallH + 0.95, sz, Math.atan2(ox, oz))); }
+      INTG = shopGroup; buildShopInterior(b, STORE.front, wallH); INTG = null;
+      { const u0 = L * 0.93, c = [[-3, 0], [-3, 2.8], [3, 2.8], [3, 0]].map(([du, v]) => W(u0 + du, v)); for (let k = 0; k < 3; k++) addSeg(c[k][0], c[k][1], c[k + 1][0], c[k + 1][1]); }   // lobby walls
       // entrance lobby: glazed box with a green frame and a flat canopy
       { const [ex, ez] = W(L * 0.93, 1.4); mg('shopGlass', shopGlassMat).add(new THREE.BoxGeometry(6, 3.0, 2.8), mat4(ex, 1.5, ez, yaw)); mg('shopCanopy', shopCanopyMat).add(new THREE.BoxGeometry(6.6, 0.25, 3.4), mat4(ex, 3.1, ez, yaw)); }
       // black bollards with yellow bands along the front walkway
@@ -1610,6 +1676,8 @@ if (LD) {
     const o = leaf(side); o.position.set(hx + ox * 0.04, 0, hz + oz * 0.04); o.rotation.y = yaw; scene.add(o); FD.leaves.push({ o, yaw, open: side * sg * Math.PI * 0.48 });
     const i2 = leaf(side); i2.position.set(hx - ox * 0.16, 0, hz - oz * 0.16); i2.rotation.y = yaw; interiorGroup.add(i2);
   }
+  DOORS.push({ g: interiorGroup, out: [mx + ox * 0.9, mz + oz * 0.9], inn: [mx - ox * 0.7, mz - oz * 0.7], ox, oz, rIn: 1.0, rOut: 0.8, anim: FD, light: 0.35,
+    spawn: () => LOBBY.spawn || [mx - ox * 1.4, mz - oz * 1.4], look: () => LOBBY.look || [mx - ox * 3, mz - oz * 3], exit: [mx + ox * 2.3, mz + oz * 2.3] });
 }
 
 /* ================= Citroen C1 (2011), modelled in Blender and exported as indexed meshes (mm, normals x127) ================= */
@@ -1838,20 +1906,20 @@ function toggleFoot() {
   }
   $('tOut').textContent = W.on ? 'IN' : 'OUT';
 }
-let INSIDE = false; const hidden = [];
-function setInside(on) {
-  INSIDE = on;
-  sun.intensity = on ? 0.35 : 3.0; hemi.intensity = on ? 0.55 : 0.5; if (renderer.__exp == null) renderer.__exp = renderer.toneMappingExposure; renderer.toneMappingExposure = on ? renderer.__exp * 0.85 : renderer.__exp;
-  if (on) { for (const c of scene.children) if (c !== interiorGroup && c !== W.g && !c.isLight && c.visible) { c.visible = false; hidden.push(c); } interiorGroup.visible = true; scene.background = new THREE.Color(0x2a2c30); }
-  else { for (const c of hidden) c.visible = true; hidden.length = 0; interiorGroup.visible = false; scene.background = null; }
+let INSIDE = null; const hidden = [];
+function setInside(g) {
+  INSIDE = g || null; const on = !!g, d = DOORS.find(q => q.g === g);
+  sun.intensity = on ? (d ? d.light : 0.35) : 3.0; hemi.intensity = on ? 0.55 : 0.5; if (renderer.__exp == null) renderer.__exp = renderer.toneMappingExposure; renderer.toneMappingExposure = on ? renderer.__exp * 0.85 : renderer.__exp;
+  for (const c of hidden) c.visible = true; hidden.length = 0; for (const q of DOORS) q.g.visible = false;
+  if (on) { for (const c of scene.children) if (c !== g && c !== W.g && !c.isLight && c.visible) { c.visible = false; hidden.push(c); } g.visible = true; scene.background = new THREE.Color(0x2a2c30); }
+  else scene.background = null;
 }
-function goThroughDoor(enter) {
-  W.busy = true; FD.want = 1; const f = $('fade'); setTimeout(() => { f.style.opacity = 1; }, enter ? 380 : 0);
+function goThroughDoor(d, enter) {
+  W.busy = true; d.anim.want = 1; const f = $('fade'); setTimeout(() => { f.style.opacity = 1; }, enter ? 380 : 0);
   setTimeout(() => {
-    const ox = LD.ox, oz = LD.oz;
-    // entering: stand in the lobby facing the way into the office; leaving: step out in front of the doors
-    if (enter) { const [sx, sz] = LOBBY.spawn || [LD.mx - ox * 1.4, LD.mz - oz * 1.4], [lx, lz] = LOBBY.look || [sx - ox, sz - oz]; W.x = sx; W.z = sz; W.h = Math.atan2(-(lx - sx), -(lz - sz)); } else { W.x = LD.mx + ox * 2.3; W.z = LD.mz + oz * 2.3; W.h = Math.atan2(-ox, -oz); }
-    setInside(enter); f.style.opacity = 0; setTimeout(() => { W.busy = false; }, 250); setTimeout(() => { FD.want = 0; }, enter ? 200 : 900);
+    if (enter) { const [sx, sz] = d.spawn(), [lx, lz] = d.look(); W.x = sx; W.z = sz; W.h = Math.atan2(-(lx - sx), -(lz - sz)); }   // in: stand just inside, facing into the building
+    else { W.x = d.exit[0]; W.z = d.exit[1]; W.h = Math.atan2(-d.ox, -d.oz); }                                                       // out: step out in front of the doors
+    setInside(enter ? d.g : null); f.style.opacity = 0; setTimeout(() => { W.busy = false; }, 250); setTimeout(() => { d.anim.want = 0; }, enter ? 200 : 900);
   }, enter ? 660 : 280);
 }
 function stepWalker(dt) {
@@ -1872,10 +1940,10 @@ function stepWalker(dt) {
   { const cf = -Math.sin(player.h), cz = -Math.cos(player.h), rx = Math.cos(player.h), rz = -Math.sin(player.h), dx = W.x - player.x, dz = W.z - player.z, u = dx * cf + dz * cz, v = dx * rx + dz * rz;   // walk round the parked car
     if (Math.abs(u) < 2.4 && Math.abs(v) < 1.2) { if (2.4 - Math.abs(u) < 1.2 - Math.abs(v)) { const nu = Math.sign(u) * 2.4; W.x += cf * (nu - u); W.z += cz * (nu - u); } else { const nv = Math.sign(v) * 1.2; W.x += rx * (nv - v); W.z += rz * (nv - v); } } }
   W.x = clamp(W.x, -LIM, LIM); W.z = clamp(W.z, -LIM, LIM);
-  if (LD && sp > 0) {                                                    // front door of the L office: step up to it and you go through
-    const ox = LD.ox, oz = LD.oz, dOut = Math.hypot(W.x - (LD.mx + ox * 0.9), W.z - (LD.mz + oz * 0.9)), dIn = Math.hypot(W.x - (LD.mx - ox * 0.7), W.z - (LD.mz - oz * 0.7));
-    const fx = -Math.sin(W.h), fz = -Math.cos(W.h), toOut = fx * ox + fz * oz;      // only when heading towards the door
-    if (!INSIDE && dOut < 1.0 && toOut < -0.3) goThroughDoor(true); else if (INSIDE && dIn < 0.8 && toOut > 0.3) goThroughDoor(false);
+  if (sp > 0) for (const d of DOORS) {                                  // walk-in doors: step up to one, heading towards it, and you go through
+    const toOut = -Math.sin(W.h) * d.ox - Math.cos(W.h) * d.oz;
+    if (!INSIDE && Math.hypot(W.x - d.out[0], W.z - d.out[1]) < d.rIn && toOut < -0.3) { goThroughDoor(d, true); break; }
+    if (INSIDE === d.g && Math.hypot(W.x - d.inn[0], W.z - d.inn[1]) < d.rOut && toOut > 0.3) { goThroughDoor(d, false); break; }
   }
   W.ph += Math.abs(sp) * dt * 3.2; const sw = Math.abs(sp) > 0.1 ? Math.sin(W.ph) * (run ? 0.8 : 0.45) : 0;
   W.lL.rotation.x = sw; W.lR.rotation.x = -sw; W.aL.rotation.x = -sw * 0.8; W.aR.rotation.x = sw * 0.8;
@@ -1958,7 +2026,7 @@ function start() {
   $('overlay').style.display = 'none'; document.body.classList.add('playing'); initAudio(); tryFullscreen();
   if (actx && actx.state === 'suspended') actx.resume(); state = 'play'; setTimeout(() => { $('hint').style.opacity = 0; }, 14000);
 }
-function resetCar() { if (INSIDE) setInside(false); if (W.on) { W.on = false; W.g.visible = false; $('tOut').textContent = 'OUT'; } Object.assign(player, { x: spawn.x, z: spawn.z, y: 0, h: spawn.h, vx: 0, vz: 0, steer: 0 }); drift.pts = 0; drift.on = false; drift.t = 0; showCombo(false); }
+function resetCar() { if (INSIDE) setInside(null); if (W.on) { W.on = false; W.g.visible = false; $('tOut').textContent = 'OUT'; } Object.assign(player, { x: spawn.x, z: spawn.z, y: 0, h: spawn.h, vx: 0, vz: 0, steer: 0 }); drift.pts = 0; drift.on = false; drift.t = 0; showCombo(false); }
 
 /* ================= driving ================= */
 function surfaceAt(x, z) {                                             // 0 = road / pavement, 1 = grass
@@ -2127,6 +2195,7 @@ function frame(now) {
   hudT -= dt;
   if (hudT <= 0) { hudT = 0.05; $('spd').textContent = Math.round((W.on ? Math.hypot(W.vx, W.vz) : spdNow) * 2.237); $('g').textContent = gearNow; $('rpmf').style.width = (rpmNow * 100) + '%'; drawMinimap(); $('coords').textContent = 'x ' + follow().x.toFixed(0) + '  z ' + follow().z.toFixed(0) + '  h ' + (((-follow().h * 180 / Math.PI) % 360 + 360) % 360).toFixed(0) + '\u00b0'; }
   if (FD.leaves.length) { FD.t += (FD.want - FD.t) * Math.min(1, dt * 6); for (const l of FD.leaves) l.o.rotation.y = l.yaw + l.open * FD.t; }
+  if (SD.panes.length) { SD.t += (SD.want - SD.t) * Math.min(1, dt * 5); for (const q of SD.panes) q.o.position.set(q.x + q.dx * SD.t, q.y, q.z + q.dz * SD.t); }
   for (const gt of gates) {                                              // retractable bollards sink into the road as you approach, and rise again behind you
     const want = Math.hypot(follow().x - gt.x, follow().z - gt.z) < 7 ? 1 : 0; gt.t += (want - gt.t) * Math.min(1, dt * 5);
     for (const bo of gt.bollards) { bo.position.y = 0.5 - gt.t * 1.05; bo.visible = !INSIDE && gt.t < 0.98; }
