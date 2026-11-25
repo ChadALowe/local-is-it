@@ -822,7 +822,8 @@ function buildLInterior(b, door, wallH) {
       const [sx2, sy2] = [mx2 + cdx * 0.018 * mU, my2 + cdy * 0.018 * mV]; pbox(screenM, sx2, sy2, cdx ? 0.005 * mU : 0.5 * mU, cdy ? 0.005 * mV : 0.5 * mV, 0.29, 0.95, false);
     }
     const [kx, ky] = front(0.22); pbox(kb, kx, ky, cdx ? 0.15 * mU : 0.44 * mU, cdy ? 0.15 * mV : 0.44 * mV, 0.025, 0.755, false);
-    pbox(kb, kx + ax * 0.34 * mU, ky + ay * 0.34 * mV, 0.07 * mU, 0.07 * mV, 0.03, 0.755, false);   // mouse
+    const msd = (() => { const c0 = PG(pxc, pyc), c1 = PG(pxc + cdx, pyc + cdy), nx = c1[0] - c0[0], nz = c1[1] - c0[1], k0 = PG(kx, ky), k1 = PG(kx + ax, ky + ay); return ((k1[0] - k0[0]) * nz - (k1[1] - k0[1]) * nx) >= 0 ? 1 : -1; })();   // which way is the sitter's right
+    pbox(kb, kx + msd * ax * 0.34 * mU, ky + msd * ay * 0.34 * mV, 0.07 * mU, 0.07 * mV, 0.03, 0.755, false);   // mouse, on the right
     const cx2 = pxc + cdx * (w / 2 + 0.42 * mU), cy2 = pyc + cdy * (h / 2 + 0.42 * mV); pbox(dark, cx2, cy2, 0.48 * mU, 0.48 * mV, 0.08, 0.46, false);
     { const Pw = (px, py, y) => { const [x, z] = PG(px, py); return new THREE.Vector3(x, y, z); }, c0 = Pw(pxc, pyc, 0), nrm = Pw(pxc + cdx, pyc + cdy, 0).sub(c0).normalize();
       const rec = { chair: Pw(cx2, cy2, 0), n: nrm, kb: Pw(kx, ky, 0.77), mouse: Pw(kx + ax * 0.34 * mU, ky + ay * 0.34 * mV, 0.785), mons: [] };
@@ -2092,7 +2093,7 @@ function updateArms(dt) {
   const shL = eye.clone().addScaledVector(r, -0.19).add(new THREE.Vector3(0, -0.34, 0)).addScaledVector(f, 0.16), shR = eye.clone().addScaledVector(r, 0.19).add(new THREE.Vector3(0, -0.34, 0)).addScaledVector(f, 0.16);
   const typing = WORK.st === 2, mousing = WORK.st === 3, t = WORK.t;
   const kL = d.kb.clone().addScaledVector(r, -0.11).addScaledVector(f, 0.05).setY(0.805), kR = d.kb.clone().addScaledVector(r, 0.1).addScaledVector(f, 0.05).setY(0.805);
-  const ms = d.mouse.clone().addScaledVector(f, 0.06).setY(0.81);
+  const ms = d.kb.clone().addScaledVector(r, 0.36).addScaledVector(f, 0.06).setY(0.81);   // mouse always on the right
   if (mousing) ms.addScaledVector(r, Math.sin(t * 2.3) * 0.03).addScaledVector(f, Math.cos(t * 1.7) * 0.025);
   if (WORK.clickT > 0) { ms.y -= 0.008 * Math.sin(WORK.clickT * 20); WORK.clickT -= dt; }
   const wl = (typing ? kL.clone().setY(0.81 + Math.abs(Math.sin(t * 9)) * 0.015) : kL.clone()).addScaledVector(f, -0.13), wr = (typing ? kR.clone().setY(0.81 + Math.abs(Math.sin(t * 9 + 1.3)) * 0.015) : ms.clone()).addScaledVector(f, -0.12);
@@ -2223,7 +2224,7 @@ const joy = { x: 0, y: 0, id: null }, look = { id: null, lx: 0, ly: 0 }; W.pitch
   // desktop: on foot the mouse is captured and looking simply follows it (Esc frees it, click the game to capture again)
   const lockOK = () => !isTouch && W.on && renderer.domElement.requestPointerLock;
   window.__lockMouse = on => { try { if (on && lockOK()) renderer.domElement.requestPointerLock(); else if (!on && document.pointerLockElement) document.exitPointerLock(); } catch (_) {} };
-  renderer.domElement.addEventListener('click', () => { if (lockOK() && !document.pointerLockElement) window.__lockMouse(true); });
+  renderer.domElement.addEventListener('mousedown', e => { if (e.button !== 0 || !lockOK()) return; if (!document.pointerLockElement) { window.__lockMouse(true); return; } if (aimT) doAction(); });   // point and click
   addEventListener('mousemove', e => { if (!W.on || isTouch) return; if (document.pointerLockElement || e.buttons === 1) { W.h -= e.movementX * 0.0028; W.pitch = clamp(W.pitch - e.movementY * 0.0028, -1.2, 1.2); } });
 }
 const keyMap = { KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', Space: 'hand' };
