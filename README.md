@@ -16,3 +16,9 @@ Open `index.html` in a browser (it loads three.js from a CDN, so it needs an int
 Roads, buildings and green areas come from OpenStreetMap, projected to metres around Pendeford and embedded in `index.html`. Building heights and roofs are approximated.
 
 Map data (c) OpenStreetMap contributors, available under the Open Database Licence (ODbL): https://www.openstreetmap.org/copyright
+
+## Multiplayer
+Everyone who opens the link joins one shared session. `worker.js` serves the game and runs a Cloudflare
+Durable Object room (`/ws` WebSocket) that relays each player's car / on-foot / ragdoll state about 10 times a second.
+Config is in `wrangler.jsonc`; deploy with `npx wrangler deploy` (Workers Builds does this on push to `main`).
+Press **N** (or tap the "online" pill) to change your name.

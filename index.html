@@ -89,7 +89,7 @@
 <canvas class="hud" id="mm" width="150" height="150"></canvas>
 <div id="xhair"></div><div id="aimLbl" style="position:fixed;left:50%;top:calc(50% + 14px);transform:translateX(-50%);font:700 13px system-ui,sans-serif;color:#fff;text-shadow:0 1px 3px #000;pointer-events:none;z-index:6"></div><div id="bpanel"></div><div id="toast" style="position:fixed;left:50%;top:38%;transform:translateX(-50%);max-width:80%;text-align:center;font:700 15px/1.3 'Segoe UI',system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.6);padding:8px 14px;border-radius:10px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:8"></div><div class="hud" id="money"></div><div class="hud" id="basket"></div>
 <div id="fade" style="position:fixed;inset:0;background:#000;opacity:0;transition:opacity .25s;pointer-events:none;z-index:50"></div>
-<div class="hud" id="coords" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 150px);left:10px;font:600 12px/1.3 monospace;color:#fff;background:rgba(0,0,0,.45);padding:3px 7px;border-radius:6px;pointer-events:none;z-index:5">x 0 z 0</div>
+<div class="hud" id="online" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 174px);left:10px;font:600 12px/1.3 system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.45);padding:3px 8px;border-radius:6px;z-index:5;cursor:pointer;pointer-events:auto" title="Tap to change your name">⚪ offline</div><div class="hud" id="coords" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 150px);left:10px;font:600 12px/1.3 monospace;color:#fff;background:rgba(0,0,0,.45);padding:3px 7px;border-radius:6px;pointer-events:none;z-index:5">x 0 z 0</div>
 <div class="hud" id="mmcap">PENDEFORD<br>WOLVERHAMPTON<small>Map data &copy; OpenStreetMap contributors</small></div>
 <div class="hud" id="br">
   <div id="speed"><span id="spd">0</span><small>MPH</small></div>
@@ -2102,7 +2102,7 @@ function setInside(g) {
   INSIDE = g || null; const on = !!g, d = DOORS.find(q => q.g === g);
   sun.intensity = on ? (d ? d.light : 0.35) : 3.0; hemi.intensity = window.__noEnv ? (on ? 1.0 : 1.1) : on ? 0.55 : 0.5; if (renderer.__exp == null) renderer.__exp = renderer.toneMappingExposure; renderer.toneMappingExposure = on ? renderer.__exp * 0.85 : renderer.__exp;
   for (const c of hidden) c.visible = true; hidden.length = 0; for (const q of DOORS) q.g.visible = false;
-  if (on) { for (const c of scene.children) if (c !== g && c !== W.g && !c.isLight && c.visible) { c.visible = false; hidden.push(c); } g.visible = true; scene.background = new THREE.Color(0x2a2c30); }
+  if (on) { for (const c of scene.children) if (c !== g && c !== W.g && !c.isLight && !c.userData.keep && c.visible) { c.visible = false; hidden.push(c); } g.visible = true; scene.background = new THREE.Color(0x2a2c30); }
   else scene.background = null;
 }
 function goThroughDoor(d, enter) {
@@ -2422,7 +2422,7 @@ function cycleColor() { paintIdx = (paintIdx + 1) % paintChoices.length; player.
 addEventListener('keydown', e => {
   if (keyMap[e.code]) { keys[keyMap[e.code]] = 1; e.preventDefault(); }
   if (e.code === 'Enter' && state === 'menu') start();
-  if (state === 'play') { if (e.code === 'KeyR') resetCar(); if (e.code === 'KeyC') cycleColor(); if (e.code === 'KeyB') switchCar(); if (e.code === 'KeyF') toggleFoot(); if (e.code === 'KeyE') doAction(); if (e.code === 'Space' && W.on && !e.repeat) jump(); if (e.code === 'KeyV') camMode = (camMode + 1) % 2; }
+  if (state === 'play') { if (e.code === 'KeyR') resetCar(); if (e.code === 'KeyC') cycleColor(); if (e.code === 'KeyB') switchCar(); if (e.code === 'KeyF') toggleFoot(); if (e.code === 'KeyE') doAction(); if (e.code === 'Space' && W.on && !e.repeat) jump(); if (e.code === 'KeyV') camMode = (camMode + 1) % 2; if (e.code === 'KeyN') { document.exitPointerLock && document.exitPointerLock(); keys.up = keys.down = keys.left = keys.right = 0; MP.rename(); } }
 });
 addEventListener('keyup', e => { if (keyMap[e.code]) keys[keyMap[e.code]] = 0; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = 0; });
@@ -2538,11 +2538,33 @@ function stepDebris(dt) {
       if (d.m.position.y < 0.04) { d.m.position.y = 0.04; if (Math.abs(d.vy) < 1.2) { d.vy = 0; d.vx = d.vz = 0; d.m.rotation.x = 0; d.m.rotation.z = 0; } else { d.vy *= -0.3; d.vx *= 0.5; d.vz *= 0.5; d.wx *= 0.5; d.wz *= 0.5; } } } }
 }
 // ===== ragdoll: a floppy body of joints held together by sticks (verlet), thrown out of the car =====
-const RAG = (() => {
+function ragFigure(I, topCol = 0x2c4f7c) {        // the floppy figure's meshes, posed from joint positions I[name] = {x,y,z}
   const M = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 });
-  const skin = M(0xd9a785), top = M(0x2c4f7c), legs = M(0x2d2f36), shoe = M(0x18191b), hair = M(0x3a2618), g = new THREE.Group();
+  const skin = M(0xd9a785), top = M(topCol), legs = M(0x2d2f36), shoe = M(0x18191b), hair = M(0x3a2618), g = new THREE.Group();
   const cyl = (r0, r1, m) => { const geo = new THREE.CylinderGeometry(r0, r1, 1, 8); geo.translate(0, 0.5, 0); const o = new THREE.Mesh(geo, m); o.castShadow = true; g.add(o); return o; };
   const ball = (r, m) => { const o = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), m); o.castShadow = true; g.add(o); return o; };
+  // meshes
+  const torsoM = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.16, 0.6, 10), top); torsoM.scale.set(1, 1, 0.7); torsoM.castShadow = true; g.add(torsoM);
+  const headM = ball(0.12, skin), hairM = new THREE.Mesh(new THREE.SphereGeometry(0.125, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hair); g.add(hairM);
+  const neckM = cyl(0.07, 0.07, skin), bones = [];
+  for (const s of ['L', 'R']) { bones.push([cyl(0.055, 0.05, top), I['sh' + s], I['el' + s]], [cyl(0.05, 0.045, top), I['el' + s], I['ha' + s]], [cyl(0.075, 0.07, legs), I['hi' + s], I['kn' + s]], [cyl(0.07, 0.064, legs), I['kn' + s], I['ft' + s]]); }
+  const hands = [ball(0.05, skin), ball(0.05, skin)], shoes = [0, 1].map(() => { const o = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.26), shoe); o.castShadow = true; g.add(o); return o; });
+  const up = new THREE.Vector3(0, 1, 0), v = new THREE.Vector3(), q = new THREE.Quaternion(), mx = new THREE.Matrix4(), ax = new THREE.Vector3(), ay = new THREE.Vector3(), az = new THREE.Vector3();
+  const place = (o, a, b) => { v.set(b.x - a.x, b.y - a.y, b.z - a.z); const L = v.length() || 1e-3; o.position.set(a.x, a.y, a.z); o.quaternion.setFromUnitVectors(up, v.multiplyScalar(1 / L)); o.scale.set(1, L, 1); };
+  g.visible = false; scene.add(g);
+  const draw = () => {
+    const pl = I.pel, nk = I.neck; ay.set(nk.x - pl.x, nk.y - pl.y, nk.z - pl.z).normalize(); ax.set(I.shR.x - I.shL.x, I.shR.y - I.shL.y, I.shR.z - I.shL.z); ax.addScaledVector(ay, -ax.dot(ay)).normalize(); az.crossVectors(ax, ay);
+    mx.makeBasis(ax, ay, az); torsoM.quaternion.setFromRotationMatrix(mx); torsoM.position.set((pl.x + nk.x) / 2 + ay.x * -0.02, (pl.y + nk.y) / 2, (pl.z + nk.z) / 2);
+    place(neckM, nk, I.head); headM.position.set(I.head.x, I.head.y, I.head.z);
+    const hy = v.set(I.head.x - nk.x, I.head.y - nk.y, I.head.z - nk.z).normalize(), hx = ax.clone().addScaledVector(hy, -ax.dot(hy)).normalize(), hz = new THREE.Vector3().crossVectors(hx, hy);
+    mx.makeBasis(hx, hy, hz); hairM.quaternion.setFromRotationMatrix(mx); hairM.position.set(I.head.x + hy.x * 0.02 + hz.x * 0.01, I.head.y + hy.y * 0.02 + hz.y * 0.01, I.head.z + hy.z * 0.02 + hz.z * 0.01);
+    for (const [m, a, b] of bones) place(m, a, b);
+    hands[0].position.set(I.haL.x, I.haL.y, I.haL.z); hands[1].position.set(I.haR.x, I.haR.y, I.haR.z);
+    [[shoes[0], I.knL, I.ftL], [shoes[1], I.knR, I.ftR]].forEach(([m, k, f]) => { const sy = v.set(k.x - f.x, k.y - f.y, k.z - f.z).normalize(); m.position.set(f.x - az.x * 0.05, f.y, f.z - az.z * 0.05); const sx2 = ax.clone().addScaledVector(sy, -ax.dot(sy)).normalize(); mx.makeBasis(sx2, sy, new THREE.Vector3().crossVectors(sx2, sy)); m.quaternion.setFromRotationMatrix(mx); });
+  };
+  return { g, draw };
+}
+const RAG = (() => {
   // joints in the standing pose (x right, y up, z back), radius for touching the ground
   const J = { head: [0, 1.66, 0, 0.12], neck: [0, 1.5, 0, 0.07], shL: [-0.22, 1.44, 0, 0.07], shR: [0.22, 1.44, 0, 0.07], elL: [-0.25, 1.14, 0, 0.05], elR: [0.25, 1.14, 0, 0.05],
     haL: [-0.25, 0.84, 0, 0.05], haR: [0.25, 0.84, 0, 0.05], pel: [0, 0.95, 0, 0.12], hiL: [-0.1, 0.9, 0, 0.08], hiR: [0.1, 0.9, 0, 0.08], knL: [-0.1, 0.48, 0, 0.07], knR: [0.1, 0.48, 0, 0.07], ftL: [-0.1, 0.06, 0, 0.06], ftR: [0.1, 0.06, 0, 0.06] };
@@ -2556,15 +2578,7 @@ const RAG = (() => {
   for (const s of ['L', 'R']) { stick('sh' + s, 'el' + s); stick('el' + s, 'ha' + s); stick('hi' + s, 'kn' + s); stick('kn' + s, 'ft' + s);
     minD('sh' + s, 'ha' + s, 0.3); minD('hi' + s, 'ft' + s, 0.5); minD('kn' + s, 'neck', 0.5); minD('ft' + s, 'neck', 0.75); minD('ha' + s, 'pel', 0.12); }
   minD('knL', 'knR', 0.12); minD('ftL', 'ftR', 0.1);
-  // meshes
-  const torsoM = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.16, 0.6, 10), top); torsoM.scale.set(1, 1, 0.7); torsoM.castShadow = true; g.add(torsoM);
-  const headM = ball(0.12, skin), hairM = new THREE.Mesh(new THREE.SphereGeometry(0.125, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hair); g.add(hairM);
-  const neckM = cyl(0.07, 0.07, skin), bones = [];
-  for (const s of ['L', 'R']) { bones.push([cyl(0.055, 0.05, top), I['sh' + s], I['el' + s]], [cyl(0.05, 0.045, top), I['el' + s], I['ha' + s]], [cyl(0.075, 0.07, legs), I['hi' + s], I['kn' + s]], [cyl(0.07, 0.064, legs), I['kn' + s], I['ft' + s]]); }
-  const hands = [ball(0.05, skin), ball(0.05, skin)], shoes = [0, 1].map(() => { const o = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.26), shoe); o.castShadow = true; g.add(o); return o; });
-  g.visible = false; scene.add(g);
-  const up = new THREE.Vector3(0, 1, 0), v = new THREE.Vector3(), q = new THREE.Quaternion(), mx = new THREE.Matrix4(), ax = new THREE.Vector3(), ay = new THREE.Vector3(), az = new THREE.Vector3();
-  const place = (o, a, b) => { v.set(b.x - a.x, b.y - a.y, b.z - a.z); const L = v.length() || 1e-3; o.position.set(a.x, a.y, a.z); o.quaternion.setFromUnitVectors(up, v.multiplyScalar(1 / L)); o.scale.set(1, L, 1); };
+  const fig = ragFigure(I), g = fig.g;
   const ground = (x, z, y) => { if (!TR.foot(x, z, 0.5)) return 0; const l = TR.loc(x, z); if (Math.abs(l.q) > TR.band) return 0; return (Math.abs(l.t) < TR.Ld + 0.2 && y > -1) ? 0 : -TR.depth(l.t); };
   const cross = (ax, az, bx, bz, cx, cz, dx, dz) => { const rx = bx - ax, rz = bz - az, sx = dx - cx, sz = dz - cz, den = rx * sz - rz * sx; if (Math.abs(den) < 1e-9) return -1;
     const t = ((cx - ax) * sz - (cz - az) * sx) / den, u = ((cx - ax) * rz - (cz - az) * rx) / den; return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? t : -1; };
@@ -2623,16 +2637,7 @@ const RAG = (() => {
     o.rest = maxV < 0.6 ? o.rest + dt : 0;
     o.draw(); return maxV;
   };
-  o.draw = () => {
-    const pl = I.pel, nk = I.neck; ay.set(nk.x - pl.x, nk.y - pl.y, nk.z - pl.z).normalize(); ax.set(I.shR.x - I.shL.x, I.shR.y - I.shL.y, I.shR.z - I.shL.z); ax.addScaledVector(ay, -ax.dot(ay)).normalize(); az.crossVectors(ax, ay);
-    mx.makeBasis(ax, ay, az); torsoM.quaternion.setFromRotationMatrix(mx); torsoM.position.set((pl.x + nk.x) / 2 + ay.x * -0.02, (pl.y + nk.y) / 2, (pl.z + nk.z) / 2);
-    place(neckM, nk, I.head); headM.position.set(I.head.x, I.head.y, I.head.z);
-    const hy = v.set(I.head.x - nk.x, I.head.y - nk.y, I.head.z - nk.z).normalize(), hx = ax.clone().addScaledVector(hy, -ax.dot(hy)).normalize(), hz = new THREE.Vector3().crossVectors(hx, hy);
-    mx.makeBasis(hx, hy, hz); hairM.quaternion.setFromRotationMatrix(mx); hairM.position.set(I.head.x + hy.x * 0.02 + hz.x * 0.01, I.head.y + hy.y * 0.02 + hz.y * 0.01, I.head.z + hy.z * 0.02 + hz.z * 0.01);
-    for (const [m, a, b] of bones) place(m, a, b);
-    hands[0].position.set(I.haL.x, I.haL.y, I.haL.z); hands[1].position.set(I.haR.x, I.haR.y, I.haR.z);
-    [[shoes[0], I.knL, I.ftL], [shoes[1], I.knR, I.ftR]].forEach(([m, k, f]) => { const sy = v.set(k.x - f.x, k.y - f.y, k.z - f.z).normalize(); m.position.set(f.x - az.x * 0.05, f.y, f.z - az.z * 0.05); const sx2 = ax.clone().addScaledVector(sy, -ax.dot(sy)).normalize(); mx.makeBasis(sx2, sy, new THREE.Vector3().crossVectors(sx2, sy)); m.quaternion.setFromRotationMatrix(mx); });
-  };
+  o.draw = fig.draw; o.names = names; o.J = J;
   return o;
 })();
 // ===== big crash: you are thrown out through the windscreen and the car explodes =====
@@ -2828,6 +2833,104 @@ function stepPlayer(dt) {
   }
 }
 
+// ===== multiplayer: everyone on the link shares one session (Cloudflare Durable Object room at /ws) =====
+const MP = (() => {
+  const o = { ws: null, id: null, peers: new Map(), g: new THREE.Group(), tries: 0, sendT: 0, online: 1 };
+  o.g.userData.keep = true; scene.add(o.g);
+  let name = ''; try { name = localStorage.getItem('pd_name') || ''; } catch (_) {}
+  if (!name) { name = 'Driver ' + (1000 + Math.floor(Math.random() * 9000)); try { localStorage.setItem('pd_name', name); } catch (_) {} }
+  o.name = () => name;
+  o.rename = () => { const n = (prompt('Your name (shown above you to other players)', name) || '').trim().slice(0, 20); if (n) { name = n; try { localStorage.setItem('pd_name', n); } catch (_) {} hud(); } };
+  const TOPS = [0x2c4f7c, 0xa3161a, 0x2f7d32, 0xe36f1c, 0x6c2a8a, 0x1f7f8a, 0x8a6d1f, 0x444a52];
+  const label = txt => { const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d'); g.font = 'bold 30px system-ui,sans-serif'; const w = Math.min(248, g.measureText(txt).width + 24);
+    g.fillStyle = 'rgba(0,0,0,.55)'; g.beginPath(); g.roundRect ? g.roundRect(128 - w / 2, 8, w, 46, 14) : g.rect(128 - w / 2, 8, w, 46); g.fill(); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, 128, 32);
+    const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false, transparent: true })); s.scale.set(2.4, 0.6, 1); s.renderOrder = 5; return s; };
+  const hash = s => { let h = 0; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) | 0; return Math.abs(h); };
+  function hud() { const e = $('online'); if (!e) return; e.textContent = (o.ws && o.ws.readyState === 1 ? '🟢 ' : '⚪ ') + o.online + ' online · ' + name; }
+  o.hud = hud;
+  function makePeer(id) {
+    const P = { id, n: '', car: null, k: -1, c: -1, wr: 0, I: {}, fig: null, lab: null, s: null, x: 0, y: 0, z: 0, h: 0, fx: 0, fy: 0, fz: 0, fh: 0, ph: 0, spin: 0, seen: performance.now(), fresh: true };
+    for (const n of RAG.names) P.I[n] = { x: 0, y: 0, z: 0 };
+    P.fig = ragFigure(P.I, TOPS[hash(id) % TOPS.length]); scene.remove(P.fig.g); o.g.add(P.fig.g); P.fig.g.visible = false;
+    o.peers.set(id, P); return P;
+  }
+  function dropPeer(id, quiet) { const P = o.peers.get(id); if (!P) return; if (P.car) o.g.remove(P.car.grp); o.g.remove(P.fig.g); if (P.lab) o.g.remove(P.lab); o.peers.delete(id); o.online = o.peers.size + 1; hud(); if (!quiet && P.n) toast('👋 ' + P.n + ' left'); }
+  function onState(d) {
+    let P = o.peers.get(d.id); const isNew = !P; if (!P) P = makePeer(d.id);
+    P.s = d; P.seen = performance.now();
+    if (d.n !== P.n) { P.n = d.n || 'Player'; if (P.lab) o.g.remove(P.lab); P.lab = label(P.n); o.g.add(P.lab); if (isNew) toast('🚗 ' + P.n + ' joined'); }
+    if (d.k !== P.k || d.c !== P.c || (P.wr && !d.w)) { if (P.car) o.g.remove(P.car.grp); P.k = d.k; P.c = d.c; P.wr = 0; P.car = (d.k ? createCar2 : createCar)(paintChoices[d.c] || paintChoices[0]); o.g.add(P.car.grp); P.fresh = true; }
+    if (d.w && !P.wr) { P.wr = 1; P.car.grp.traverse(m => { if (m.isMesh) { if (m.userData.glass) m.visible = false; else m.material = charMat; } }); }
+    if (P.fresh) { P.x = d.x; P.y = d.y; P.z = d.z; P.h = d.h; if (d.f) { P.fx = d.f[0]; P.fy = d.f[1]; P.fz = d.f[2]; P.fh = d.f[3]; } P.fresh = false; }
+    o.online = o.peers.size + 1; hud();
+  }
+  function connect() {
+    if (!/^https?:$/.test(location.protocol) || window.__noMP) return;
+    let ws; try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'); } catch (_) { return retry(); }
+    o.ws = ws;
+    ws.onopen = () => { o.tries = 0; hud(); };
+    ws.onmessage = e => { let d; try { d = JSON.parse(e.data); } catch (_) { return; }
+      if (d.t === 'hi') { o.id = d.id; for (const id of [...o.peers.keys()]) dropPeer(id, true); for (const s of d.players) if (s.id !== o.id) onState(s); hud(); }
+      else if (d.t === 's' && d.id !== o.id) onState(d);
+      else if (d.t === 'bye') dropPeer(d.id);
+      else if (d.t === 'chat') toast('💬 ' + d.n + ': ' + d.m); };
+    ws.onclose = () => { o.ws = null; for (const id of [...o.peers.keys()]) dropPeer(id, true); o.online = 1; hud(); retry(); };
+    ws.onerror = () => { try { ws.close(); } catch (_) {} };
+  }
+  function retry() { o.tries++; setTimeout(connect, Math.min(15000, 1500 * o.tries)); }
+  const r2 = v => Math.round(v * 100) / 100;
+  function snapshot() {
+    const d = { t: 's', n: name, x: r2(player.x), y: r2(player.y), z: r2(player.z), h: r2(player.h), k: carModel, c: paintIdx, s: r2(player.steer), v: r2(spdNow), w: player.wrecked ? 1 : 0,
+      i: INSIDE ? DOORS.findIndex(q => q.g === INSIDE) : -1, m: W.on ? (W.fly ? 2 : 1) : 0 };
+    if (W.on) d.f = [r2(W.x), r2(W.y), r2(W.z), r2(W.h), r2(Math.hypot(W.vx, W.vz)), W.seated ? 1 : 0];
+    if (W.fly) { d.j = []; for (const n of RAG.names) { const q = RAG.I[n]; d.j.push(r2(q.x), r2(q.y), r2(q.z)); } }
+    return d;
+  }
+  const lerpA = (a, b, k) => { let d = b - a; d = ((d + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + d * k; };
+  const J = RAG.J;
+  function walkPose(P, x, y, z, h, ph, moving, seated) {     // a standing/walking/sitting figure from the joints' rest pose
+    const c = Math.cos(h), s = Math.sin(h), sw = moving ? Math.sin(ph) * 0.55 : 0;
+    for (const n of RAG.names) { const j = J[n]; let lx = j[0], ly = j[1], lz = j[2];
+      const side = n.endsWith('L') ? 1 : -1;
+      if (seated) { if (n.startsWith('kn')) { ly = 0.5; lz = -0.42; } else if (n.startsWith('ft')) { ly = 0.06; lz = -0.48; } else if (n.startsWith('el')) { ly = 0.82; lz = -0.2; } else if (n.startsWith('ha')) { ly = 0.78; lz = -0.48; lx *= 0.8; } else ly -= 0.42; }
+      else { if (n.startsWith('kn') || n.startsWith('ft')) { const a = sw * side, dy = ly - 0.9; ly = 0.9 + dy * Math.cos(a); lz = -dy * Math.sin(a); }
+        if (n.startsWith('el') || n.startsWith('ha')) { const a = -sw * side * 0.8, dy = ly - 1.44; ly = 1.44 + dy * Math.cos(a); lz = -dy * Math.sin(a); } }
+      const q = P.I[n]; q.x = x + lx * c + lz * s; q.y = y + ly; q.z = z - lx * s + lz * c; }
+  }
+  o.step = dt => {
+    o.sendT -= dt; if (o.ws && o.ws.readyState === 1 && o.sendT <= 0 && state === 'play') { o.sendT = W.fly ? 0.08 : 0.1; try { o.ws.send(JSON.stringify(snapshot())); } catch (_) {} }
+    const now = performance.now(), myIn = INSIDE ? DOORS.findIndex(q => q.g === INSIDE) : -1, k = Math.min(1, dt * 10);
+    for (const P of [...o.peers.values()]) {
+      if (now - P.seen > 12000) { dropPeer(P.id, true); continue; }
+      const d = P.s; if (!d || !P.car) continue;
+      const lead = Math.min(0.15, (now - P.seen) / 1000), fwd = d.v || 0;           // extrapolate a touch, then ease towards it
+      const tx = d.x - Math.sin(d.h) * fwd * lead, tz = d.z - Math.cos(d.h) * fwd * lead;
+      P.x += (tx - P.x) * k; P.z += (tz - P.z) * k; P.y += (d.y - P.y) * k; P.h = lerpA(P.h, d.h, k);
+      const c = P.car; c.grp.position.set(P.x, P.y, P.z); c.grp.rotation.set(0, P.h, 0); c.grp.visible = myIn < 0;
+      P.spin += fwd * dt / 0.31; for (const w of c.wheels) { w.spin.rotation.x = -P.spin; if (w.front) w.pivot.rotation.y = (d.s || 0) * 0.45; }
+      const fig = P.fig, sameRoom = (d.i ?? -1) === myIn;
+      if (d.m === 2 && d.j) { let i = 0; for (const n of RAG.names) { const q = P.I[n]; q.x += (d.j[i] - q.x) * k; q.y += (d.j[i + 1] - q.y) * k; q.z += (d.j[i + 2] - q.z) * k; i += 3; } fig.g.visible = sameRoom; }
+      else if (d.m === 1 && d.f) { P.fx += (d.f[0] - P.fx) * k; P.fy += (d.f[1] - P.fy) * k; P.fz += (d.f[2] - P.fz) * k; P.fh = lerpA(P.fh, d.f[3], k); P.ph += (d.f[4] || 0) * dt * 3.2;
+        walkPose(P, P.fx, P.fy, P.fz, P.fh, P.ph, (d.f[4] || 0) > 0.2, d.f[5]); fig.g.visible = sameRoom; }
+      else fig.g.visible = false;
+      if (fig.g.visible) fig.draw();
+      if (P.lab) { const hd = P.I.head; if (fig.g.visible) P.lab.position.set(hd.x, hd.y + 0.45, hd.z); else P.lab.position.set(P.x, P.y + 2.1, P.z); P.lab.visible = (fig.g.visible || (c.grp.visible && d.m === 0)) && camera.position.distanceTo(P.lab.position) > 4.5; }
+      // bump into other players' cars (and don't walk through them)
+      if (myIn < 0) {
+        const rc = carCircles({ x: P.x, z: P.z, yaw: P.h });
+        if (!W.on || W.fly) for (const [ax, az] of carCircles({ x: player.x, z: player.z, yaw: player.h })) for (const [bx, bz] of rc) {
+          const dx = ax - bx, dz = az - bz, dd = Math.hypot(dx, dz), R = 2 * CR; if (dd >= R || dd < 1e-4 || Math.abs(player.y - P.y) > 1.5) continue;
+          const nx = dx / dd, nz = dz / dd, ov = R - dd; player.x += nx * ov; player.z += nz * ov;
+          const vn = player.vx * nx + player.vz * nz; if (vn < 0) { player.vx -= vn * nx * 1.5; player.vz -= vn * nz * 1.5; if (-vn > 3) { thud(60, Math.min(0.4, -vn * 0.03)); shake = Math.max(shake, Math.min(0.8, -vn * 0.05)); spray((ax + bx) / 2, 0.6, (az + bz) / 2, nx * 0.3, nz * 0.3, -vn, c.paint || shardMat, -vn > 7); } } }
+        if (W.on && !W.fly) for (const [bx, bz] of rc) { const dx = W.x - bx, dz = W.z - bz, dd = Math.hypot(dx, dz); if (dd < 0.32 + CR && dd > 1e-4) { W.x += dx / dd * (0.32 + CR - dd); W.z += dz / dd * (0.32 + CR - dd); } }
+      }
+    }
+  };
+  o.connect = connect;
+  return o;
+})();
+setTimeout(() => MP.connect(), 300); MP.hud();
+$('online').addEventListener('click', e => { e.stopPropagation(); MP.rename(); }); $('online').addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
 /* ================= camera / HUD ================= */
 let camA = player.h;
 camera.position.set(player.x + 6, 3, player.z + 9);
@@ -2874,6 +2977,7 @@ const MS = 150 / (2 * LIM + 60), mpx = v => 75 + v * MS;
 }
 function drawMinimap() {
   mctx.clearRect(0, 0, 150, 150); mctx.drawImage(mmBg, 0, 0);
+  for (const P of MP.peers.values()) { const d = P.s; if (!d) continue; const on = d.m && d.f, x = on ? d.f[0] : d.x, z = on ? d.f[2] : d.z; mctx.fillStyle = '#3cc8ff'; mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.2; mctx.beginPath(); mctx.arc(mpx(x), mpx(z), 3.6, 0, 7); mctx.fill(); mctx.stroke(); }
   mctx.save(); mctx.translate(mpx(follow().x), mpx(follow().z)); mctx.rotate(-follow().h);
   mctx.fillStyle = '#ff5a3c'; mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.moveTo(0, -6); mctx.lineTo(4.5, 5); mctx.lineTo(-4.5, 5); mctx.closePath(); mctx.fill(); mctx.stroke(); mctx.restore();
 }
@@ -2884,7 +2988,7 @@ let last = performance.now(), hudT = 0, skidAccInit = 0, frameN = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
-  stepPlayer(dt); if (W.on) stepWalker(dt); updateWork(dt); updateTills(dt); stepCars(dt); stepFX(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
+  stepPlayer(dt); if (W.on) stepWalker(dt); MP.step(dt); updateWork(dt); updateTills(dt); stepCars(dt); stepFX(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
   { const f = follow(); sun.position.set(f.x + SUN.x * 220, SUN.y * 220, f.z + SUN.z * 220); sun.target.position.set(f.x, 0, f.z); } sun.target.updateMatrixWorld();
   sky.position.copy(camera.position); clouds.position.set(camera.position.x, 0, camera.position.z);
   hudT -= dt;
