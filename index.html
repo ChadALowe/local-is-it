@@ -1901,7 +1901,7 @@ function createCar(color) {
   const grp = new THREE.Group(), body = new THREE.Group(); grp.add(body);
   const mats = c1Mats(color);
   for (const [k, geo] of c1Body0) {
-    const m = new THREE.Mesh(geo, mats[k] || mats.black); m.castShadow = !k.startsWith('glass'); m.receiveShadow = true; m.userData.glass = k.startsWith('glass'); m.userData.paint = k === 'paint';
+    const m = new THREE.Mesh(geo, mats[k] || mats.black); m.castShadow = !k.startsWith('glass'); m.receiveShadow = true; m.userData.glass = k.startsWith('glass'); m.userData.paint = k === 'paint'; m.userData.body = !m.userData.glass;
     if (k.startsWith('glass')) m.renderOrder = 2;
     body.add(m);
   }
@@ -2024,7 +2024,7 @@ function createCar2(color) {
     for (const [x, y] of pts) B2.P.push(x * sx, y, S[a].z);
     for (let k = 0; k < 8; k++) { const p = base + 1 + k, q = p + 1; (dir * sx > 0) ? B2.I.push(base, p, q) : B2.I.push(base, q, p); }
   }
-  for (const [m, B2] of buckets) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(B2.P, 3)); g.setIndex(B2.I); g.computeVertexNormals(); const o = new THREE.Mesh(g, m); o.castShadow = m !== glass; o.receiveShadow = true; o.userData.glass = m === glass; o.userData.paint = m === paint; body.add(o); }
+  for (const [m, B2] of buckets) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(B2.P, 3)); g.setIndex(B2.I); g.computeVertexNormals(); const o = new THREE.Mesh(g, m); o.castShadow = m !== glass; o.receiveShadow = true; o.userData.glass = m === glass; o.userData.paint = m === paint; o.userData.body = m !== glass; body.add(o); }
   const add = (g, m, x, y, z, ry = 0, rx = 0) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.rotation.set(rx, ry, 0); o.castShadow = true; body.add(o); return o; };
   const nose = S[0].z, tail = S[NZ].z;
   // details set into the shell (each overlaps the surface so it reads as part of it)
@@ -2510,7 +2510,7 @@ function dentMesh(mesh, pt, dir, depth, rad) {
 const _dp = new THREE.Vector3(), _dd = new THREE.Vector3();
 // dent every paint (and trim) mesh of a car model group at a world contact point; crack the glass on a big hit
 function damageModel(grp, wx, wy, wz, inx, inz, speed) {
-  if (speed < 3) return; const depth = clamp(speed * 0.011, 0.03, 0.26), rad = 0.45 + Math.min(0.5, speed * 0.025); grp.updateMatrixWorld(true);
+  if (speed < 3) return; const depth = clamp(speed * 0.022, 0.06, 0.4), rad = 0.55 + Math.min(0.6, speed * 0.035); grp.updateMatrixWorld(true);
   grp.traverse(m => { if (!m.isMesh || m.userData.glass) return; if (!(m.userData.paint || m.userData.body)) return;
     _dp.set(wx, wy, wz); m.worldToLocal(_dp); const inv = new THREE.Matrix4().copy(m.matrixWorld).invert(); _dd.set(inx, 0, inz).transformDirection(inv); dentMesh(m, _dp, _dd, depth, rad); });
   if (speed > 7) grp.traverse(m => { if (m.isMesh && m.userData.glass && !m.userData.cracked) { m.userData.cracked = true; m.material = crackedMat; } });
@@ -2518,7 +2518,7 @@ function damageModel(grp, wx, wy, wz, inx, inz, speed) {
 // a parked car that gets hit hard is swapped from its instance to its own model so it can carry dents
 function wreckOf(c) {
   if (c.wreck || !PARKED_GROUPS) return c.wreck; const g = new THREE.Group();
-  PARKED_GROUPS.forEach(([geo, mat, cast], gi) => { let m2 = mat; if (gi === 0) { m2 = mat.clone(); m2.color.setHex(c.color); } const mesh = new THREE.Mesh(geo, m2); mesh.castShadow = cast; mesh.receiveShadow = true; mesh.userData.paint = gi === 0; mesh.userData.glass = gi === 1 || gi === 2; g.add(mesh); });
+  PARKED_GROUPS.forEach(([geo, mat, cast], gi) => { let m2 = mat; if (gi === 0) { m2 = mat.clone(); m2.color.setHex(c.color); } const mesh = new THREE.Mesh(geo, m2); mesh.castShadow = cast; mesh.receiveShadow = true; mesh.userData.paint = gi === 0; mesh.userData.glass = gi === 1 || gi === 2; mesh.userData.body = !mesh.userData.glass; g.add(mesh); });
   g.position.set(c.x, 0.05, c.z); g.rotation.y = c.yaw; scene.add(g); c.wreck = g; c.paintMat = g.children[0].material;
   for (const im of c.ims) { im.setMatrixAt(c.i, ZERO_M); im.instanceMatrix.needsUpdate = true; } return g;
 }
@@ -2538,6 +2538,8 @@ function stepDebris(dt) {
       if (d.m.position.y < 0.04) { d.m.position.y = 0.04; if (Math.abs(d.vy) < 1.2) { d.vy = 0; d.vx = d.vz = 0; d.m.rotation.x = 0; d.m.rotation.z = 0; } else { d.vy *= -0.3; d.vx *= 0.5; d.vz *= 0.5; d.wx *= 0.5; d.wz *= 0.5; } } } }
 }
 // ===== big crash: you are thrown out through the windscreen and the car explodes =====
+const BOOM_LIGHT = new THREE.PointLight(0xffa040, 0, 40, 2); scene.add(BOOM_LIGHT);   // always in the scene (off) so adding it never forces a recompile
+const fireMatShared = new THREE.MeshBasicMaterial({ color: 0xffa23a, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending });
 const FX = [], charMat = new THREE.MeshStandardMaterial({ color: 0x0b0a09, roughness: 1, metalness: 0, envMapIntensity: 0.15 });
 function boom() { if (!actx) return; const n = actx.sampleRate * 1.6, buf = actx.createBuffer(1, n, actx.sampleRate), d = buf.getChannelData(0); for (let k = 0; k < n; k++) d[k] = (Math.random() * 2 - 1) * Math.pow(1 - k / n, 2.2);
   const src = actx.createBufferSource(), lp = actx.createBiquadFilter(), g = actx.createGain(); lp.type = 'lowpass'; lp.frequency.value = 520; g.gain.value = 0.9; src.buffer = buf; src.connect(lp); lp.connect(g); g.connect(actx.destination); src.start(); thud(45, 0.5); }
@@ -2557,8 +2559,8 @@ function explodeCar(P) {
   c.grp.traverse(m => { if (m.isMesh) { if (m.userData.glass) m.visible = false; else m.material = charMat; } });   // burnt shell
   spray(pos.x, 1, pos.z, 0, 0, 26, charMat, true); spray(pos.x, 1, pos.z, 0, 0, 20, c.paint, false);
   for (const wh of c.wheels) wh.pivot.rotation.z = (Math.random() - 0.5) * 0.5;
-  const light = new THREE.PointLight(0xffa040, 9, 40, 2); light.position.copy(pos).setY(2); scene.add(light);
-  const fireMat = () => new THREE.MeshBasicMaterial({ color: 0xffa23a, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending });
+  const light = BOOM_LIGHT; light.intensity = 9; light.position.copy(pos).setY(2);
+  const fireMat = () => fireMatShared.clone();
   const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 2), fireMat()); ball.position.copy(pos); scene.add(ball);
   const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.7, 2), new THREE.MeshBasicMaterial({ color: 0xfff1b0, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending })); core.position.copy(pos); scene.add(core);
   const smoke = [], smat = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 1, transparent: true, opacity: 0.75, depthWrite: false });
@@ -2571,9 +2573,12 @@ function explodeCar(P) {
     puff -= dt; if (t < 16 && puff <= 0) { puff = 0.12; const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 1), smat.clone()); m.position.set(pos.x + (Math.random() - 0.5) * 1.2, 1.4, pos.z + (Math.random() - 0.5) * 1.8); scene.add(m); smoke.push({ m, life: 0 }); }
     for (let i = smoke.length - 1; i >= 0; i--) { const s2 = smoke[i]; s2.life += dt; s2.m.position.y += dt * (1.6 + s2.life * 0.3); s2.m.position.x += dt * 0.6; s2.m.scale.setScalar(1 + s2.life * 1.3); s2.m.material.opacity = Math.max(0, 0.7 - s2.life / 6); if (s2.life > 4.2) { scene.remove(s2.m); s2.m.material.dispose(); smoke.splice(i, 1); } }
     if (k >= 1 && ball.parent) { scene.remove(ball, core); }
-    if (t > 17 && !smoke.length) { scene.remove(light); for (const f of flames) scene.remove(f); return true; }
+    if (t > 17 && !smoke.length) { light.intensity = 0; for (const f of flames) scene.remove(f); return true; }
     return false; });
 }
+{ const warm = new THREE.Group(), gq = new THREE.BoxGeometry(0.01, 0.01, 0.01);                      // build every crash/explosion material once, out of sight, at start-up
+  for (const m of [crackedMat, charMat, shardMat, darkBit, fireMatShared, new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 1, transparent: true, opacity: 0.75, depthWrite: false })]) { const o = new THREE.Mesh(gq, m); o.frustumCulled = false; warm.add(o); }
+  warm.position.set(0, -50, 0); scene.add(warm); setTimeout(() => scene.remove(warm), 4000); }
 function stepFX(dt) { for (let i = FX.length - 1; i >= 0; i--) if (FX[i](dt)) FX.splice(i, 1); }
 // flying through the air, landing, lying there, then getting up
 function stepFly(dt) {
@@ -2676,7 +2681,7 @@ function stepPlayer(dt) {
       }
       p.x += nx * ov; p.z += nz * ov;
       const vn = p.vx * nx + p.vz * nz;
-      if (vn < 0) { p.vx -= nx * vn * 1.22; p.vz -= nz * vn * 1.22; p.vx *= 0.97; p.vz *= 0.97; hit = Math.max(hit, -vn); if (-vn > 19) bigCrash(p, -nx, -nz, -vn); if (-vn > 6 && damageCooldown <= 0) { damageCooldown = 0.2; damageModel(p.car.grp, px - nx * R, 0.6 + p.y, pz - nz * R, nx, nz, -vn * 0.7); p.damaged = true; spray(px - nx * R, 0.6, pz - nz * R, nx, nz, -vn * 0.6, p.car.paint, -vn > 10); } }
+      if (vn < 0) { p.vx -= nx * vn * 1.22; p.vz -= nz * vn * 1.22; p.vx *= 0.97; p.vz *= 0.97; hit = Math.max(hit, -vn); if (-vn > 19) bigCrash(p, -nx, -nz, -vn); if (-vn > 4 && damageCooldown <= 0) { damageCooldown = 0.2; damageModel(p.car.grp, px - nx * R, 0.6 + p.y, pz - nz * R, nx, nz, -vn * 0.7); p.damaged = true; spray(px - nx * R, 0.6, pz - nz * R, nx, nz, -vn * 0.6, p.car.paint, -vn > 10); } }
     }
   }
   hit = Math.max(hit, carVsCars(p, cf, cz2, cir));
