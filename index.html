@@ -773,7 +773,7 @@ for (const b of builds) {
       // entrance lobby: glazed box with a green frame and a flat canopy
       { const [ex, ez] = W(L * 0.93, 1.4); mg('shopGlass', shopGlassMat).add(new THREE.BoxGeometry(6, 3.0, 2.8), mat4(ex, 1.5, ez, yaw)); mg('shopCanopy', shopCanopyMat).add(new THREE.BoxGeometry(6.6, 0.25, 3.4), mat4(ex, 3.1, ez, yaw)); }
       // black bollards with yellow bands along the front walkway
-      { const bG = new THREE.CylinderGeometry(0.1, 0.1, 1.0, 8), yG = new THREE.CylinderGeometry(0.105, 0.105, 0.08, 8), bm = mg('sbBlack', stdMat({ color: 0x151719, roughness: 0.5 })), ym = mg('yellow');
+      { const bG = new THREE.CylinderGeometry(0.1, 0.1, 1.0, 8), yG = new THREE.CylinderGeometry(0.105, 0.105, 0.08, 8), bm = mg('sbBlack', stdMat({ color: 0x151719, roughness: 0.5 })), ym = mg('yellow', stdMat({ color: 0xd9b230, roughness: 0.8 }), false, true);
         for (let u = 2; u < L - 1; u += 1.9) { if (Math.abs(u - L * 0.93) < 4.5 || Math.abs(u - (419 - az) / tz) < 4.5) continue; const [px, pz] = W(u, 4.2); bm.add(bG, mat4(px, 0.5, pz)); ym.add(yG, mat4(px, 0.86, pz)); addCircle(px, pz, 0.15); } }
       // front walkway (pale slabs) and zebra crossings from the car park
       { const st = mg('stoneSlab', stdMat({ color: 0xc9c4b8, roughness: 0.95 }), false, true), [p0x, p0z] = W(0, 0), [p1x, p1z] = W(L, 0), [p2x, p2z] = W(L, 4.6), [p3x, p3z] = W(0, 4.6);
@@ -865,7 +865,7 @@ for (const r of roads) {
         const nx = tz * sd, nz = -tx * sd, d0 = r.w / 2 + 0.1, cx = x + nx * (d0 + depth / 2), cz = z + nz * (d0 + depth / 2), fx = x + nx * (d0 + depth), fz = z + nz * (d0 + depth);
         const shopBay = inShop(cx, cz);
         if (shopBay && inShelter(cx, cz)) continue;
-        if (r.id === ENTRY_RD || (r.id === 42 && z < -325)) continue;          // entrance road is verge and birches, not parking
+        if (r.id === ENTRY_RD || r.id === 42) continue;          // entrance road is verge and birches, not parking
         if (!shopBay && roads.indexOf(r) !== 314 && Math.hypot(cx + 436, cz + 290) < 40) continue;     // the entrance approach is open verge and hedges, no bays (as in the real park)
         if (!shopBay && (cx > -335 || !inPark(cx, cz)) || inBuilding(cx, cz) || inBuilding(fx, fz) || inBuilding(x + nx * d0, z + nz * d0) || nearWall(cx, cz, 1.0)) continue;
         if (roadDist(cx, cz, r.id) < 1.6 || roadDist(fx, fz, r.id) < 0.4) continue;
@@ -1148,6 +1148,20 @@ for (const r of roads) {
           for (const [ox, oy, oz, rad] of [[0, 6.4, 0, 1.9], [0.9, 5.2, 0.4, 1.5], [-0.8, 4.4, -0.5, 1.4], [0.2, 3.6, 0.9, 1.1]]) lm3.add(leafG, mat4(bx + ox, oy * sc, bz + oz, 0, rad, rad * 1.35, rad));
         }
       }, 3);
+      {                                                              // dense shrubs and trees on the east side of the entrance road, low shrubs under the birches on the west
+        const sh = mg('hedge', hedgeMat, true, true), dome = new THREE.IcosahedronGeometry(1, 1);
+        for (const rr of [er, ov]) if (rr) walk(rr.p, 2.4, (x, z, tx, tz) => {
+          if (z < J.z + 8 || z > -318) return;
+          for (const sd of [-1, 1]) { const nx = tz * sd, nz = -tx * sd, east = nx > 0;
+            for (const o of east ? [5.2, 7.6, 10.2, 12.8] : [5.6]) {
+              if (!east && srand() < 0.55) continue; const bx = x + nx * (e + o) + tx * sr(-0.8, 0.8), bz = z + nz * (e + o) + tz * sr(-0.8, 0.8);
+              if (inBuilding(bx, bz) || roadDist(bx, bz, -1) < 2.2 || nearWall(bx, bz, 0.9)) continue;
+              if (east && o > 9 && srand() < 0.22 && treeCount < maxTrees) { addTree(bx, bz, sr(1.2, 1.7)); continue; }
+              const h2 = east ? 1.6 + sr(0, 1.4) : 0.8 + sr(0, 0.4); sh.add(dome, mat4(bx, h2 * 0.45, bz, sr(0, 6), 1.6 + sr(0, 0.8), h2, 1.5 + sr(0, 0.7))); if (east) addCircle(bx, bz, 0.9);
+            }
+          }
+        }, 1);
+      }
       const p0 = er.p[er.p.length - 1], p1 = er.p[er.p.length - 2], L = Math.hypot(p0[0] - p1[0], p0[1] - p1[1]), tx = (p1[0] - p0[0]) / L, tz = (p1[1] - p0[1]) / L;
       {                                                              // triangular A-frame sign stands with yellow sandbags on the right-hand verge
         const fr = mg('aframe', stdMat({ color: 0x6a4630, roughness: 0.8 })), tri = mg('aSign', stdMat({ color: 0xdedbd2, roughness: 0.7 })), bag = mg('sandbag', stdMat({ color: 0xd8b02c, roughness: 0.9 }));
@@ -1194,7 +1208,7 @@ for (const r of roads) {
   for (const sh of SHELTERS) trolleyShelter(sh.x, sh.z, sh.yaw, sh.len);
   if (STORE.front) { const f = STORE.front, u = L => [f.ax + f.tx * L + f.ox * 2.2, f.az + f.tz * L + f.oz * 2.2], [sx, sz] = u(Math.max(4, Math.min(f.L - 4, (419 - f.az) / f.tz))); trolleyShelter(sx, sz, f.yaw + Math.PI / 2, 7); }
   const zebra = (x, z, ang, w2, n = 6) => { const tx = Math.cos(ang), tz = -Math.sin(ang); for (let k = 0; k < n; k++) { const o = (k - (n - 1) / 2) * 0.95; quadAt(dm, x + tx * o - tz * w2 / 2, z + tz * o + tx * w2 / 2, tz, -tx, w2, 0.5); } };
-  const hatch = (x, z, ang, sz) => { const ym = mg('yellow'), tx = Math.cos(ang), tz = -Math.sin(ang); for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {} for (let k = -2; k <= 2; k++) for (const sg of [-1, 1]) { const ox = x + (tx * k - tz * k * sg) * sz / 5, oz = z + (tz * k + tx * k * sg) * sz / 5; quadAt(ym, ox - (tx + tz * sg) * sz / 2 * 0, oz, (tx + tz * sg) / Math.SQRT2, (tz - tx * sg) / Math.SQRT2, 0.01, 0.01); }
+  const hatch = (x, z, ang, sz) => { const ym = mg('yellow', stdMat({ color: 0xd9b230, roughness: 0.8 }), false, true), tx = Math.cos(ang), tz = -Math.sin(ang); for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {} for (let k = -2; k <= 2; k++) for (const sg of [-1, 1]) { const ox = x + (tx * k - tz * k * sg) * sz / 5, oz = z + (tz * k + tx * k * sg) * sz / 5; quadAt(ym, ox - (tx + tz * sg) * sz / 2 * 0, oz, (tx + tz * sg) / Math.SQRT2, (tz - tx * sg) / Math.SQRT2, 0.01, 0.01); }
     for (const sg of [-1, 1]) for (let k = -3; k <= 3; k++) { const cx = x + tx * k * sz / 7, cz = z + tz * k * sz / 7, dx = (tx * sg - tz) / Math.SQRT2, dz = (tz * sg + tx) / Math.SQRT2, L = sz * 0.9 - Math.abs(k) * sz / 7 * 1.2; if (L > 0.3) quadAt(ym, cx - dx * L / 2, cz - dz * L / 2, dx, dz, L, 0.12); }
     for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const p = [x + (tx * a - tz * b) * sz / 2, z + (tz * a + tx * b) * sz / 2], q = [x + (tx * -b - tz * a) * sz / 2, z + (tz * -b + tx * a) * sz / 2], L = Math.hypot(q[0] - p[0], q[1] - p[1]); quadAt(ym, p[0], p[1], (q[0] - p[0]) / L, (q[1] - p[1]) / L, L, 0.12); } };
   { const r = roads[104], xs = aisleZ ? null : null; const zc = 433, xr = -40 + (-49 + 40) * (zc - 390) / 68;   // store-front road position at the entrance
