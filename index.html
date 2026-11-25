@@ -2274,8 +2274,7 @@ function updateTills(dt) {
 function stepWalker(dt) {
   if (W.busy) return;
   if (W.seated) { W.vx = W.vz = 0; return; }
-  let mf = keys.up - keys.down - joy.y, ms = joy.x; const mag = Math.min(1, Math.hypot(mf, ms));
-  W.h += (keys.left - keys.right) * 2.6 * dt;
+  let mf = keys.up - keys.down - joy.y, ms = joy.x + keys.right - keys.left; const mag = Math.min(1, Math.hypot(mf, ms));   // A/D and arrows strafe; the mouse turns
   const run = keys.hand || mag > 0.85, vmax = run ? 7.0 : 2.8 * Math.min(1, mag / 0.85 + 0.15), nmag = mag > 0.08 ? mag : 0;   // push further for faster; right to the edge to run
   const fx = -Math.sin(W.h), fz = -Math.cos(W.h), rx = Math.cos(W.h), rz = -Math.sin(W.h), dl = Math.hypot(mf, ms) || 1;
   const sp = nmag ? vmax : 0; W.vx = (fx * mf + rx * ms) / dl * sp; W.vz = (fz * mf + rz * ms) / dl * sp;
