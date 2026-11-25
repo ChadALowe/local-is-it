@@ -56,6 +56,11 @@ export class Room {
         if (e) { if (v > e[key]) { e[key] = v; changed = true; } } else { list.push({ n, [key]: v }); changed = true; }
         list.sort((a, b) => b[key] - a[key]); if (list.length > 10) list.length = 10; }
       if (changed) { await this.state.storage.put('lb', lb); const out = JSON.stringify(Object.assign({ t: 'lb' }, lb)); for (const s of this.state.getWebSockets()) { try { s.send(out); } catch (_) {} } }
+    } else if (d.t === 'rtime' && typeof d.n === 'string' && isFinite(+d.time) && +d.time > 20) {   // fastest laps (lower is better)
+      const n = d.n.slice(0, 20), v = +d.time, lb = (await this.state.storage.get('lb')) || { money: [], drift: [] }; lb.race = lb.race || []; const e = lb.race.find(r => r.n === n); let changed = false;
+      if (e) { if (v < e.race) { e.race = v; changed = true; } } else { lb.race.push({ n, race: v }); changed = true; }
+      lb.race.sort((a, b) => a.race - b.race); if (lb.race.length > 10) lb.race.length = 10;
+      if (changed) { await this.state.storage.put('lb', lb); const out = JSON.stringify(Object.assign({ t: 'lb' }, lb)); for (const s of this.state.getWebSockets()) { try { s.send(out); } catch (_) {} } }
     } else if (d.t === 'chat' && typeof d.m === 'string') {
       const out = JSON.stringify({ t: 'chat', id: a.id, n: String(d.n || '').slice(0, 20), m: d.m.slice(0, 140) });
       for (const w of this.state.getWebSockets()) { try { w.send(out); } catch (_) {} }

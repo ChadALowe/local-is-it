@@ -89,7 +89,7 @@
 <canvas class="hud" id="mm" width="150" height="150"></canvas>
 <div id="xhair"></div><div id="aimLbl" style="position:fixed;left:50%;top:calc(50% + 14px);transform:translateX(-50%);font:700 13px system-ui,sans-serif;color:#fff;text-shadow:0 1px 3px #000;pointer-events:none;z-index:6"></div><div id="bpanel"></div><div id="toast" style="position:fixed;left:50%;top:38%;transform:translateX(-50%);max-width:80%;text-align:center;font:700 15px/1.3 'Segoe UI',system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.6);padding:8px 14px;border-radius:10px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:8"></div><div class="hud" id="money"></div><div class="hud" id="basket"></div>
 <div id="fade" style="position:fixed;inset:0;background:#000;opacity:0;transition:opacity .25s;pointer-events:none;z-index:50"></div>
-<div class="hud" id="online" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 174px);left:10px;font:600 12px/1.3 system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.45);padding:3px 8px;border-radius:6px;z-index:5;cursor:pointer;pointer-events:auto" title="Tap to change your name">⚪ offline</div><div id="mpBtns" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 200px);left:10px;display:flex;gap:6px;z-index:6"><button id="chatBtn" class="mpb">💬 Chat</button><button id="lbBtn" class="mpb">🏆 Top</button></div>
+<div class="hud" id="online" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 174px);left:10px;font:600 12px/1.3 system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.45);padding:3px 8px;border-radius:6px;z-index:5;cursor:pointer;pointer-events:auto" title="Tap to change your name">⚪ offline</div><div id="mpBtns" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 200px);left:10px;display:flex;gap:6px;z-index:6"><button id="chatBtn" class="mpb">💬 Chat</button><button id="lbBtn" class="mpb">🏆 Top</button><button id="raceBtn" class="mpb">🏁 Race</button></div>
 <div id="chatBox" style="display:none;position:fixed;left:50%;transform:translateX(-50%);top:28%;z-index:30;background:rgba(0,0,0,.7);padding:8px;border-radius:12px;gap:6px"><input id="chatIn" maxlength="140" placeholder="Say something… (Enter to send)" style="width:min(70vw,420px);font:16px system-ui;padding:8px 10px;border-radius:8px;border:0"><button id="chatSend" class="mpb" style="font-size:15px">Send</button></div>
 <div id="lbPanel" style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;background:rgba(14,18,24,.92);color:#fff;padding:16px 18px;border-radius:14px;font:14px/1.45 system-ui;min-width:min(86vw,520px);box-shadow:0 10px 40px rgba(0,0,0,.5)"></div>
 <div class="hud" id="coords" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 150px);left:10px;font:600 12px/1.3 monospace;color:#fff;background:rgba(0,0,0,.45);padding:3px 7px;border-radius:6px;pointer-events:none;z-index:5">x 0 z 0</div>
@@ -3587,6 +3587,74 @@ const POOL = (() => {
   };
 })();
 
+// ===== races: a checkpoint lap of Pendeford (time trial, or race everyone online) =====
+const RACE = (() => {
+  // road graph (drivable streets only), built once
+  let route = null;
+  function buildRoute() {
+    const key = p => Math.round(p[0] * 2) + ',' + Math.round(p[1] * 2), nodes = new Map(), node = p => { const k = key(p); let n = nodes.get(k); if (!n) { n = { k, x: p[0], z: p[1], e: [] }; nodes.set(k, n); } return n; };
+    for (const r of roads) { if (r.c || r.k > 8) continue; const w = r.k === 8 ? 1.6 : r.k >= 5 ? 1.15 : 1; for (let i = 0; i < r.p.length - 1; i++) { const a = node(r.p[i]), b = node(r.p[i + 1]), L = Math.hypot(b.x - a.x, b.z - a.z) * w; a.e.push([b, L]); b.e.push([a, L]); } }
+    // OSM streets often meet at a T without sharing a point: join each dead end to the nearest street within 7 m
+    const edges = []; for (const n of nodes.values()) for (const [m] of n.e) if (n.k < m.k) edges.push([n, m]);
+    for (const n of [...nodes.values()]) { if (n.e.length !== 1) continue; let best = null, bd = 7;
+      for (const [a, b] of edges) { if (a === n || b === n || a === n.e[0][0] || b === n.e[0][0]) continue; const sx = b.x - a.x, sz = b.z - a.z, l2 = sx * sx + sz * sz || 1, t = Math.max(0, Math.min(1, ((n.x - a.x) * sx + (n.z - a.z) * sz) / l2)), d = Math.hypot(n.x - a.x - sx * t, n.z - a.z - sz * t); if (d < bd) { bd = d; best = [a, b, t]; } }
+      if (best) { const [a, b, t] = best, p = { k: 'j' + n.k, x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, e: [] }, ln = (u, v) => { const L = Math.hypot(u.x - v.x, u.z - v.z) + 0.01; u.e.push([v, L]); v.e.push([u, L]); }; ln(p, a); ln(p, b); ln(p, n); nodes.set(p.k, p); } }
+    // keep the biggest connected network
+    const comp = new Map(); let bigC = -1, bigN = 0, ci = 0; for (const n of nodes.values()) { if (comp.has(n)) continue; let cnt = 0; const st = [n]; comp.set(n, ci); while (st.length) { const c = st.pop(); cnt++; for (const [m] of c.e) if (!comp.has(m)) { comp.set(m, ci); st.push(m); } } if (cnt > bigN) { bigN = cnt; bigC = ci; } ci++; }
+    const all = [...nodes.values()].filter(n => comp.get(n) === bigC), near = (x, z) => { let best = null, bd = 1e9; for (const n of all) { const d = (n.x - x) ** 2 + (n.z - z) ** 2; if (d < bd) { bd = d; best = n; } } return best; };
+    const path = (A, B) => { const dist = new Map([[A, 0]]), prev = new Map(), open = [A], done = new Set(); while (open.length) { let bi = 0; for (let i = 1; i < open.length; i++) if (dist.get(open[i]) < dist.get(open[bi])) bi = i; const c = open.splice(bi, 1)[0]; if (c === B) break; if (done.has(c)) continue; done.add(c);
+        for (const [n, L] of c.e) { const d = dist.get(c) + L; if (d < (dist.get(n) ?? 1e18)) { dist.set(n, d); prev.set(n, c); open.push(n); } } }
+      const out = []; for (let c = B; c; c = prev.get(c)) out.push(c); return out[out.length - 1] === A ? out.reverse() : []; };
+    const W = [[spawn.x, spawn.z], [RBT.x, RBT.z], [-114, 470], [-20, 300], [spawn.x, spawn.z]].map(([x, z]) => near(x, z));
+    let pts = []; for (let i = 0; i < W.length - 1; i++) { const seg = path(W[i], W[i + 1]); pts = pts.concat(i ? seg.slice(1) : seg); }
+    const cps = []; let acc = 0; for (let i = 1; i < pts.length; i++) { acc += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z); if (acc > 140 || i === pts.length - 1) { acc = 0; const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)]; cps.push({ x: pts[i].x, z: pts[i].z, h: Math.atan2(b.x - a.x, b.z - a.z) }); } }
+    const s = pts[0], s2 = pts[Math.min(3, pts.length - 1)]; route = { cps, start: { x: s.x, z: s.z, h: Math.atan2(-(s2.x - s.x), -(s2.z - s.z)) }, len: pts.length };
+  }
+  // gates
+  const gateM = new THREE.MeshBasicMaterial({ color: 0x29e06b, transparent: true, opacity: 0.85 }), gateM2 = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 }), finM = new THREE.MeshBasicMaterial({ color: 0xffd400, transparent: true, opacity: 0.9 });
+  const mkGate = () => { const g = new THREE.Group(); for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 5, 8), gateM); p.position.set(s * 6, 2.5, 0); g.add(p); } const top = new THREE.Mesh(new THREE.BoxGeometry(12.4, 0.7, 0.2), gateM); top.position.y = 5; g.add(top); g.visible = false; scene.add(g); return g; };
+  const gA = mkGate(), gB = mkGate();
+  // HUD
+  const hud = document.createElement('div'); hud.style.cssText = 'display:none;position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 112px);z-index:8;background:rgba(0,0,0,.6);color:#fff;font:700 15px/1.3 system-ui;padding:6px 14px;border-radius:10px;text-align:center;pointer-events:none'; document.body.appendChild(hud);
+  const big = document.createElement('div'); big.style.cssText = 'display:none;position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);z-index:9;color:#fff;font:900 96px system-ui;text-shadow:0 4px 20px rgba(0,0,0,.6);pointer-events:none'; document.body.appendChild(big);
+  const panel = document.createElement('div'); panel.style.cssText = 'display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;background:rgba(14,18,24,.94);color:#fff;padding:14px 16px;border-radius:14px;font:14px/1.5 system-ui;min-width:min(84vw,380px)'; document.body.appendChild(panel);
+  for (const el of [panel]) for (const ev of ['touchstart', 'touchend', 'mousedown', 'pointerdown']) el.addEventListener(ev, x => x.stopPropagation(), { passive: true });
+  const fmt = t => { const m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2); };
+  const S = { on: false, i: 0, t0: 0, startAt: 0, multi: false, invite: null, results: [], best: +(localStorage.getItem('pd_raceBest') || 0) || 0 };
+  const btn = (txt, fn) => { const b = document.createElement('button'); b.className = 'mpb'; b.style.cssText = 'display:block;width:100%;margin:6px 0;padding:10px;font-size:15px;text-align:left'; b.textContent = txt; b.onclick = e => { e.stopPropagation(); fn(); }; return b; };
+  function openPanel() { document.exitPointerLock && document.exitPointerLock(); if (!route) buildRoute(); panel.innerHTML = `<b>🏁 Pendeford lap</b><div style="opacity:.75;font-size:12px">${route.cps.length} checkpoints up to the Droveway roundabout, round past Morrisons and The Pendulum and back. Your best: ${S.best ? fmt(S.best) : '—'}</div>`;
+    if (S.on) panel.appendChild(btn('✖ Quit this race', () => { stop(); close(); }));
+    else { panel.appendChild(btn('⏱ Time trial (just me)', () => { close(); begin(Date.now() + 3500, false, 0); }));
+      panel.appendChild(btn('👥 Race everyone online (starts in 15 s)', () => { close(); const at = Date.now() + 15000; MP.raceEv({ a: 'open', at, n: MP.name() }); begin(at, true, 0); toast('🏁 Race invite sent! Starting in 15 seconds.'); }));
+      if (S.invite && S.invite.at > Date.now() + 2500) panel.appendChild(btn('✅ Join ' + S.invite.n + '’s race', () => { close(); begin(S.invite.at, true, 1 + Math.floor(Math.random() * 5)); })); }
+    panel.appendChild(btn('Close', close)); panel.style.display = 'block'; }
+  const close = () => { panel.style.display = 'none'; };
+  function begin(at, multi, slot) {
+    if (W.on) toggleFoot(); if (INSIDE) { toast('Go outside to your car first!'); return; }
+    if (!route) buildRoute(); const st = route.start, rx = Math.cos(st.h), rz = -Math.sin(st.h), back = slot ? Math.floor((slot + 1) / 2) * 7 : 0, side = slot ? (slot % 2 ? 2.2 : -2.2) : 0;
+    player.x = st.x + rx * side + Math.sin(st.h) * back; player.z = st.z + rz * side + Math.cos(st.h) * back; player.h = st.h; player.vx = player.vz = 0;
+    Object.assign(S, { on: true, i: 0, startAt: at, t0: 0, multi, results: [] }); if (multi) S.invite = null; showGates();
+  }
+  function stop() { S.on = false; gA.visible = gB.visible = false; hud.style.display = 'none'; big.style.display = 'none'; }
+  function showGates() { const c = route.cps; const a = c[S.i], b = c[S.i + 1]; gA.visible = !!a; gB.visible = !!b; if (a) { gA.position.set(a.x, 0, a.z); gA.rotation.y = a.h + Math.PI / 2; gA.children.forEach(m => m.material = S.i === c.length - 1 ? finM : gateM); } if (b) { gB.position.set(b.x, 0, b.z); gB.rotation.y = b.h + Math.PI / 2; gB.children.forEach(m => m.material = gateM2); } }
+  function finish(t) { stop(); beep(880, 0.15); setTimeout(() => beep(1320, 0.3), 160); const pb = !S.best || t < S.best; if (pb) { S.best = t; try { localStorage.setItem('pd_raceBest', t); } catch (_) {} }
+    toast('🏁 Finished in ' + fmt(t) + (pb ? ' — new personal best!' : '')); MP.raceTime(t); if (S.multi) MP.raceEv({ a: 'fin', n: MP.name(), t }); }
+  return {
+    S, openPanel, get route() { if (!route) buildRoute(); return route; },
+    frozen: () => S.on && Date.now() < S.startAt,
+    onNet(d) { if (d.a === 'open') { S.invite = { n: d.n, at: d.at }; if (!S.on) toast('🏁 ' + d.n + ' started a race! Tap 🏁 Race within 15 s to join.'); }
+      else if (d.a === 'fin') { toast('🏁 ' + d.n + ' finished in ' + fmt(d.t)); } },
+    step(dt) {
+      if (!S.on) return; const now = Date.now();
+      if (now < S.startAt) { player.vx *= 0.8; player.vz *= 0.8; const n = Math.ceil((S.startAt - now) / 1000); big.style.display = 'block'; big.textContent = n <= 3 ? n : ''; hud.style.display = 'block'; hud.textContent = S.multi ? '👥 Race starts in ' + n + 's' : 'Get ready…'; return; }
+      if (!S.t0) { S.t0 = now; big.textContent = 'GO!'; beep(1200, 0.25); setTimeout(() => { if (S.on) big.style.display = 'none'; }, 900); }
+      const t = (now - S.t0) / 1000, c = route.cps, cp = c[S.i], px = W.on ? W.x : player.x, pz = W.on ? W.z : player.z;
+      hud.style.display = 'block'; hud.innerHTML = '⏱ ' + fmt(t) + ' &nbsp; ✔ ' + S.i + '/' + c.length + (S.best ? ' &nbsp; <span style="opacity:.7">PB ' + fmt(S.best) + '</span>' : '');
+      if (Math.hypot(px - cp.x, pz - cp.z) < 11) { S.i++; beep(1000, 0.08); if (S.i >= c.length) finish(t); else showGates(); }
+    },
+    next() { return S.on && route ? route.cps[S.i] : null; }
+  };
+})();
 // ===== multiplayer: everyone on the link shares one session (Cloudflare Durable Object room at /ws) =====
 const MP = (() => {
   const o = { ws: null, id: null, peers: new Map(), g: new THREE.Group(), tries: 0, sendT: 0, online: 1 };
@@ -3665,7 +3733,8 @@ const MP = (() => {
   function renderLB() { const p = $('lbPanel'), L = o.lb, row = (r, i, v) => `<tr class="${r.n === name ? 'me' : ''}"><td>${i + 1}.</td><td>${esc(r.n)}</td><td style="text-align:right">${v}</td></tr>`;
     p.innerHTML = `<h3>🏆 Leaderboard <span style="float:right;opacity:.6;font-size:13px">tap to close</span></h3>` + (!L ? '<div style="opacity:.7">Connecting…</div>' :
       `<div style="display:flex;gap:18px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>💷 Most money</b><table>${(L.money || []).map((r, i) => row(r, i, '£' + (+r.money).toFixed(2))).join('') || '<tr><td style="opacity:.6">No one yet</td></tr>'}</table></div>
-       <div style="flex:1;min-width:200px"><b>🏎️ Best drift</b><table>${(L.drift || []).map((r, i) => row(r, i, (+r.drift).toLocaleString())).join('') || '<tr><td style="opacity:.6">No one yet</td></tr>'}</table></div></div>`); }
+       <div style="flex:1;min-width:200px"><b>🏎️ Best drift</b><table>${(L.drift || []).map((r, i) => row(r, i, (+r.drift).toLocaleString())).join('') || '<tr><td style="opacity:.6">No one yet</td></tr>'}</table></div>
+       <div style="flex:1;min-width:200px"><b>🏁 Fastest lap</b><table>${(L.race || []).map((r, i) => row(r, i, Math.floor(r.race / 60) + ':' + (r.race % 60 < 10 ? '0' : '') + (r.race % 60).toFixed(2))).join('') || '<tr><td style="opacity:.6">No one yet</td></tr>'}</table></div></div>`); }
   o.showLB = () => { const p = $('lbPanel'); if (p.style.display === 'block') { p.style.display = 'none'; return; } sendScore(); renderLB(); p.style.display = 'block'; };
   o.onLB = d => { o.lb = d; if ($('lbPanel').style.display === 'block') renderLB(); };
   o.stepBubbles = dt => { for (const P of o.peers.values()) if (P.bub) { P.bubT -= dt; const hd = P.lab ? P.lab.position : null; if (hd) P.bub.position.set(hd.x, hd.y + 0.55, hd.z); P.bub.visible = !!(P.lab && P.lab.visible); if (P.bubT <= 0) { o.g.remove(P.bub); P.bub = null; } } };
@@ -3673,6 +3742,8 @@ const MP = (() => {
   o.tuckEv = e => send(Object.assign({ t: 'ev', e: 'tuck' }, e));
   o.kitEv = e => send(Object.assign({ t: 'ev', e: 'kit' }, e));
   o.poolEv = e => send(Object.assign({ t: 'ev', e: 'pool' }, e));
+  o.raceEv = e => send(Object.assign({ t: 'ev', e: 'race' }, e));
+  o.raceTime = t => send({ t: 'rtime', n: name, time: Math.round(t * 100) / 100 });
   o.parkedDent = (c, wx, wz, inx, inz, s) => { const [lx, lz] = toL(c.yaw, wx - c.x, wz - c.z), [dx, dz] = toL(c.yaw, inx, inz);
     send({ t: 'ev', e: 'dent', k: c.key, x: r2(c.x), z: r2(c.z), y: r2(c.yaw), col: c.color, d: [r2(lx), 0.62, r2(lz), r2(dx), r2(dz), r2(s)] }); };
   const applyParkedDent = (c, d) => { const w = wreckOf(c); if (!w) return; const [ox, oz] = toW(c.yaw, d[0], d[2]), [ix, iz] = toW(c.yaw, d[3], d[4]); damageModel(w, c.x + ox, d[1], c.z + oz, ix, iz, d[5]); };
@@ -3683,6 +3754,7 @@ const MP = (() => {
     if (d.e === 'tuck') { TUCKSHOP.onNet(d); return; }
     if (d.e === 'kit') { KITCHEN.onNet(d); return; }
     if (d.e === 'pool') { POOL.onNet(d, d.id); return; }
+    if (d.e === 'race') { RACE.onNet(d); return; }
     if (d.e === 'npc') { if (d.a !== 'on') NPC.onNet(d, d.id); return; }
     if (d.e === 'dent') { const c = carByKey(d.k, d.x, d.z, d.y, d.col); if (c) { applyParkedDent(c, d.d); const [ox, oz] = toW(c.yaw, d.d[0], d.d[2]); if (camera.position.distanceTo(new THREE.Vector3(c.x + ox, 1, c.z + oz)) < 60) { spray(c.x + ox, 0.6, c.z + oz, 0, 0, d.d[5] * 0.6, c.paintMat || shardMat, d.d[5] > 7); thud(55, 0.25); } } }
     else if (d.e === 'pk') for (const q of d.l) { const c = carByKey(q[0], q[1], q[2], q[3], q[5]); if (c) posePark(c, q[1], q[2], q[3], q[4]); }
@@ -3770,6 +3842,7 @@ $('chatBtn').addEventListener('click', e => { e.stopPropagation(); $('chatBox').
 $('chatSend').addEventListener('click', e => { e.stopPropagation(); sendChat(); });
 $('chatIn').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') sendChat(); else if (e.key === 'Escape') closeChat(); });
 $('chatIn').addEventListener('keyup', e => e.stopPropagation());
+$('raceBtn').addEventListener('click', e => { e.stopPropagation(); RACE.openPanel(); });
 $('lbBtn').addEventListener('click', e => { e.stopPropagation(); document.exitPointerLock && document.exitPointerLock(); MP.showLB(); });
 $('lbPanel').addEventListener('click', e => { e.stopPropagation(); $('lbPanel').style.display = 'none'; });
 $('online').addEventListener('click', e => { e.stopPropagation(); MP.rename(); }); $('online').addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
@@ -3820,6 +3893,7 @@ const MS = 150 / (2 * LIM + 60), mpx = v => 75 + v * MS;
 }
 function drawMinimap() {
   mctx.clearRect(0, 0, 150, 150); mctx.drawImage(mmBg, 0, 0);
+  { const c = RACE.next(); if (c) { mctx.fillStyle = '#ffd400'; mctx.strokeStyle = '#000'; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.arc(mpx(c.x), mpx(c.z), 5, 0, 7); mctx.fill(); mctx.stroke(); } }
   for (const P of MP.peers.values()) { const d = P.s; if (!d) continue; const on = d.m && d.f, x = on ? d.f[0] : d.x, z = on ? d.f[2] : d.z; mctx.fillStyle = '#3cc8ff'; mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.2; mctx.beginPath(); mctx.arc(mpx(x), mpx(z), 3.6, 0, 7); mctx.fill(); mctx.stroke(); }
   mctx.save(); mctx.translate(mpx(follow().x), mpx(follow().z)); mctx.rotate(-follow().h);
   mctx.fillStyle = '#ff5a3c'; mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.moveTo(0, -6); mctx.lineTo(4.5, 5); mctx.lineTo(-4.5, 5); mctx.closePath(); mctx.fill(); mctx.stroke(); mctx.restore();
@@ -3831,7 +3905,7 @@ let last = performance.now(), hudT = 0, skidAccInit = 0, frameN = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
-  stepPlayer(dt); if (W.on) stepWalker(dt); MP.step(dt); NPC.step(dt); WC.step(dt); TUCKSHOP.step(dt); KITCHEN.step(dt); POOL.step(dt); updateWork(dt); updateTills(dt); stepCars(dt); stepFX(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
+  if (RACE.frozen()) { player.vx = player.vz = 0; } stepPlayer(dt); if (W.on) stepWalker(dt); MP.step(dt); RACE.step(dt); NPC.step(dt); WC.step(dt); TUCKSHOP.step(dt); KITCHEN.step(dt); POOL.step(dt); updateWork(dt); updateTills(dt); stepCars(dt); stepFX(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
   { const f = follow(); sun.position.set(f.x + SUN.x * 220, SUN.y * 220, f.z + SUN.z * 220); sun.target.position.set(f.x, 0, f.z); } sun.target.updateMatrixWorld();
   sky.position.copy(camera.position); clouds.position.set(camera.position.x, 0, camera.position.z);
   hudT -= dt;
