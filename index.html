@@ -715,27 +715,80 @@ function buildLInterior(b, door, wallH) {
   for (const [i, j, k] of tri) { const A = b.p[i], B = b.p[j], C = b.p[k];
     carpet.tri([A[0], 0.07, A[1]], [B[0], 0.07, B[1]], [C[0], 0.07, C[1]], [A[0] / 2.4, A[1] / 2.4], [B[0] / 2.4, B[1] / 2.4], [C[0] / 2.4, C[1] / 2.4], UP);
     ceil.tri([A[0], CE, A[1]], [C[0], CE, C[1]], [B[0], CE, B[1]], [A[0] / 1.2, A[1] / 1.2], [C[0] / 1.2, C[1] / 1.2], [B[0] / 1.2, B[1] / 1.2], [0, -1, 0]); }
-  const { tx, tz, ox, oz, mx, mz } = door, inn = (u, v) => [mx + tx * u - ox * v, mz + tz * u - oz * v], Lm = mg('ceilLight', new THREE.MeshBasicMaterial({ color: 0xfffbea }), false, false);
+  const { tx, tz, ox, oz, mx, mz } = door, inn = (u, v) => [mx + tx * u - ox * v, mz + tz * u - oz * v];
   const inside = (x, z, m = 0.9) => inPoly(x, z, b.p) && !nearWall(x, z, m);
-  // ceiling light panels on a grid
+  // ---- ground-floor layout from the owner's floor plan (plan pixels -> metres). The planned square is the north end of the L;
+  // the plan's long rectangle (the rest of the building) is left empty and closed off.
+  const PA = [-478.1, -263.4], PB = [-477.5, -280.4], PC = [-464.2, -263.4], PD = [-463.7, -280.0];
+  const PG = (px, py) => { const u = (px - 288) / 245, v = (py - 39) / 236; return [PA[0] * (1 - u) * (1 - v) + PB[0] * u * (1 - v) + PC[0] * (1 - u) * v + PD[0] * u * v, PA[1] * (1 - u) * (1 - v) + PB[1] * u * (1 - v) + PC[1] * (1 - u) * v + PD[1] * u * v]; };
+  const dU = (() => { const d = [PB[0] - PA[0], PB[1] - PA[1]], l = Math.hypot(...d); return [d[0] / l, d[1] / l]; })(), dV = (() => { const d = [PC[0] - PA[0], PC[1] - PA[1]], l = Math.hypot(...d); return [d[0] / l, d[1] / l]; })();
+  const SU = Math.hypot(PB[0] - PA[0], PB[1] - PA[1]) / 245, SV = Math.hypot(PC[0] - PA[0], PC[1] - PA[1]) / 236, yawU = Math.atan2(-dU[1], dU[0]);
+  const inSq = (x, z) => { const dx = x - PA[0], dz = z - PA[1], u = dx * dU[0] + dz * dU[1], v = dx * dV[0] + dz * dV[1]; return u > 0.3 && u < 245 * SU - 0.3 && v > 0.3 && v < 236 * SV - 0.3; };
+  const plaster = mg('partition', lit({ color: 0xe9e5dc }, 0.5)), doorM = mg('doorLeaf', lit({ color: 0x9a7650 }, 0.35)), frameM = mg('doorFrame', lit({ color: 0xf4f2ec }, 0.5));
+  const wood = mg('deskWood', lit({ color: 0xb08a5c }, 0.35)), white = mg('deskWhite', lit({ color: 0xe9e9e4 }, 0.45)), dark = mg('chair', lit({ color: 0x2b2f36 }, 0.3));
+  const porc = mg('porcelain', lit({ color: 0xf7f7f4 }, 0.5)), steel = mg('steel', lit({ color: 0xa9adb1 }, 0.4)), green = mg('plant', lit({ color: 0x3d7a3a }, 0.35), true, false), pot = mg('pot', lit({ color: 0x6b5a4a }, 0.3));
+  const exitG = mg('exitSign', new THREE.MeshBasicMaterial({ color: 0x19b24b }), false, false), Lm = mg('ceilLight', new THREE.MeshBasicMaterial({ color: 0xfffbea }), false, false);
+  // a box laid out in plan pixels: centre, size along plan x / plan y, height, base
+  const pbox = (m, pxc, pyc, wpx, hpx, h, y0 = 0, collide = false) => {
+    const [x, z] = PG(pxc, pyc), w = wpx * SU, d = hpx * SV; m.add(new THREE.BoxGeometry(w, h, d), mat4(x, y0 + h / 2, z, yawU));
+    if (collide) { const c = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b2]) => PG(pxc + a * wpx / 2, pyc + b2 * hpx / 2)); for (let k = 0; k < 4; k++) addSeg(c[k][0], c[k][1], c[(k + 1) % 4][0], c[(k + 1) % 4][1]); }
+  };
+  // partition walls with door openings (gaps in plan pixels along the wall), each opening framed with an open door leaf
+  const wall = (px0, py0, px1, py1, gaps = []) => {
+    const hor = py0 === py1, a0 = hor ? px0 : py0, a1 = hor ? px1 : py1, at = t => hor ? PG(t, py0) : PG(px0, t);
+    let s2 = a0; const runs = []; for (const [g0, g1] of gaps) { runs.push([s2, g0]); s2 = g1; } runs.push([s2, a1]);
+    for (const [r0, r1] of runs) { if (r1 - r0 < 0.5) continue; const p = at(r0), q = at(r1), L = Math.hypot(q[0] - p[0], q[1] - p[1]), yaw = Math.atan2(-(q[1] - p[1]), q[0] - p[0]);
+      plaster.add(new THREE.BoxGeometry(L, CE, 0.12), mat4((p[0] + q[0]) / 2, CE / 2, (p[1] + q[1]) / 2, yaw)); addSeg(p[0], p[1], q[0], q[1]); }
+    for (const [g0, g1] of gaps) { const p = at(g0), q = at(g1), L = Math.hypot(q[0] - p[0], q[1] - p[1]), yaw = Math.atan2(-(q[1] - p[1]), q[0] - p[0]), nx = -(q[1] - p[1]) / L, nz = (q[0] - p[0]) / L;
+      plaster.add(new THREE.BoxGeometry(L, CE - DH, 0.12), mat4((p[0] + q[0]) / 2, DH + (CE - DH) / 2, (p[1] + q[1]) / 2, yaw));                       // lintel over the opening
+      frameM.add(new THREE.BoxGeometry(L + 0.1, 0.06, 0.16), mat4((p[0] + q[0]) / 2, DH, (p[1] + q[1]) / 2, yaw));
+      for (const e of [p, q]) frameM.add(new THREE.BoxGeometry(0.06, DH, 0.16), mat4(e[0], DH / 2, e[1], yaw));
+      doorM.add(new THREE.BoxGeometry(0.04, DH - 0.05, L - 0.08), mat4(p[0] + nx * (L / 2), (DH - 0.05) / 2, p[1] + nz * (L / 2), yaw)); addSeg(p[0], p[1], p[0] + nx * L, p[1] + nz * L);   // leaf swung open against the wall
+    }
+  };
+  // ceiling lights over the planned rooms only
   let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const [x, z] of b.p) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
-  for (let x = x0 + 2; x < x1 - 1; x += 3.6) for (let z = z0 + 2; z < z1 - 1; z += 3.6) if (inside(x, z, 0.5)) Lm.add(new THREE.BoxGeometry(1.2, 0.03, 0.6), mat4(x, CE - 0.02, z));
-  const wood = mg('deskWood', lit({ color: 0xb08a5c }, 0.35)), white = mg('deskWhite', lit({ color: 0xe9e9e4 }, 0.45)), dark = mg('chair', lit({ color: 0x2b2f36 }, 0.3)), green = mg('plant', lit({ color: 0x3d7a3a }, 0.35), true, false), pot = mg('pot', lit({ color: 0x7b5b45 }, 0.3));
-  const yaw = Math.atan2(-tz, tx);
-  // reception: curved-front desk facing the doors, a logo-free feature wall behind, sofas and plants by the entrance
-  { const [rx, rz] = inn(0, 3.6); wood.add(new THREE.BoxGeometry(3.0, 1.1, 0.7), mat4(rx, 0.55, rz, yaw)); white.add(new THREE.BoxGeometry(3.1, 0.05, 0.8), mat4(rx, 1.12, rz, yaw));
-    dark.add(new THREE.BoxGeometry(0.5, 0.5, 0.5), mat4(...(([x, z]) => [x, 0.45, z])(inn(-0.5, 4.4)), yaw)); for (let k = -1; k <= 1; k += 2) addCircle(...inn(k * 1.0, 3.6), 0.55); addCircle(...inn(0, 3.6), 0.55);
-    const [fx, fz] = inn(0, 5.6); if (inside(fx, fz, 0.3)) { mg('featureWall', lit({ color: 0x2f5a7a }, 0.35)).add(new THREE.BoxGeometry(4.2, 2.8, 0.12), mat4(fx, 1.45, fz, yaw)); addCircle(fx, fz, 0.4); addCircle(...inn(-1.5, 5.6), 0.4); addCircle(...inn(1.5, 5.6), 0.4); }
-    for (const sd of [-1, 1]) { const [px, pz] = inn(sd * 2.6, 1.1); if (inside(px, pz, 0.5)) { pot.add(new THREE.CylinderGeometry(0.25, 0.2, 0.5, 10), mat4(px, 0.3, pz)); green.add(new THREE.IcosahedronGeometry(0.5, 1), mat4(px, 1.0, pz, 0, 1, 1.3, 1)); addCircle(px, pz, 0.35); } }
-    for (const sd of [-1, 1]) { const [sx, sz] = inn(sd * 3.4, 3.2); if (inside(sx, sz, 0.8)) { dark.add(new THREE.BoxGeometry(0.9, 0.45, 1.8), mat4(sx, 0.3, sz, yaw + Math.PI / 2)); dark.add(new THREE.BoxGeometry(0.2, 0.5, 1.8), mat4(sx + tx * sd * 0.35, 0.65, sz + tz * sd * 0.35, yaw + Math.PI / 2)); addCircle(sx, sz, 0.8); } }
-  }
-  // open-plan office: desk pods with monitors and chairs wherever there is room
-  for (let x = x0 + 3; x < x1 - 2; x += 4.2) for (let z = z0 + 3; z < z1 - 2; z += 3.6) {
-    if (!inside(x, z, 2.2) || Math.hypot(x - mx, z - mz) < 8) continue;
-    white.add(new THREE.BoxGeometry(2.8, 0.05, 1.6), mat4(x, 0.74, z)); for (const [lx, lz] of [[-1.3, -0.7], [1.3, -0.7], [-1.3, 0.7], [1.3, 0.7]]) dark.add(new THREE.BoxGeometry(0.05, 0.72, 0.05), mat4(x + lx, 0.37, z + lz));
-    for (const sd of [-1, 1]) for (const lx of [-0.7, 0.7]) { dark.add(new THREE.BoxGeometry(0.5, 0.3, 0.03), mat4(x + lx, 1.0, z + sd * 0.15)); dark.add(new THREE.BoxGeometry(0.5, 0.08, 0.5), mat4(x + lx, 0.48, z + sd * 1.1)); dark.add(new THREE.BoxGeometry(0.5, 0.45, 0.06), mat4(x + lx, 0.75, z + sd * 1.35)); }
-    addCircle(x - 0.8, z, 0.85); addCircle(x + 0.8, z, 0.85);
-  }
+  for (let x = x0 + 1.6; x < x1; x += 3.2) for (let z = z0 + 1.6; z < z1; z += 3.2) if (inSq(x, z)) Lm.add(new THREE.BoxGeometry(1.2, 0.03, 0.6), mat4(x, CE - 0.02, z, yawU));
+  // the closed-off, unplanned part of the L
+  wall(288, 39, 288, 275);
+  // service core: stairs | back exit, WCs, kitchen (all open onto the main room through the east wall of the core)
+  wall(363, 39, 363, 155, [[47, 66], [120, 146]]);
+  wall(288, 155, 363, 155); wall(288, 113, 363, 113); wall(288, 84, 363, 84, [[320, 333], [345, 358]]); wall(340, 84, 340, 113); wall(325, 39, 325, 62);
+  // board rooms and the entrance lobby along the road side
+  wall(478, 39, 478, 275, [[88, 106], [128, 152], [232, 253]]); wall(478, 118, 533, 118); wall(478, 225, 533, 225);
+  // stairs: a flight rising towards the outside wall
+  for (let k = 0; k < 12; k++) pbox(white, 299, 82 - k * 3.6, 22, 3.6, 0.26 * (k + 1), 0, false);
+  pbox(steel, 311, 60, 1.2, 46, 1.0, 0.26 * 6, false); pbox(white, 299, 60, 22, 44, 0.02, 3.2, true);
+  // back exit: a door in the outside wall with a green running-man sign above it
+  { const [dx, dz] = PG(342, 39.6); doorM.add(new THREE.BoxGeometry(1.0 / SU * SU, DH, 0.06), mat4(dx, DH / 2, dz, yawU)); exitG.add(new THREE.BoxGeometry(0.4, 0.18, 0.04), mat4(dx, DH + 0.2, dz, yawU));
+    const [bx, bz] = PG(342, 41); steel.add(new THREE.BoxGeometry(0.8, 0.05, 0.05), mat4(bx, 1.0, bz, yawU)); }
+  // WCs: toilet and basin in each
+  for (const [cx, w0] of [[314, 52], [351.5, 23]]) { pbox(porc, cx, 106, Math.min(14, w0 * 0.5), 9, 0.42, 0, true); pbox(porc, cx, 110, Math.min(14, w0 * 0.5), 4, 0.75, 0, false); pbox(porc, cx + w0 * 0.3 - 4, 89, 8, 6, 0.12, 0.82, false); pbox(steel, cx + w0 * 0.3 - 4, 88, 2, 2, 0.2, 0.9, false); }
+  // kitchen: worktop with sink along the back, fridge, small table
+  pbox(white, 322, 118.5, 64, 9, 0.9, 0, true); pbox(wood, 322, 118.5, 64, 9, 0.04, 0.9, false); pbox(steel, 340, 118.5, 9, 6, 0.02, 0.94, false);
+  pbox(steel, 294, 119, 9, 10, 1.85, 0, true); pbox(wood, 320, 140, 18, 14, 0.04, 0.74, true); for (const [ox2, oy2] of [[-12, 0], [12, 0]]) pbox(dark, 320 + ox2, 140 + oy2, 6, 7, 0.45, 0, false);
+  // desks (orange on the plan): white tops on legs, a monitor, and a chair on the side the plan leaves open
+  const desk = (px0, py0, px1, py1, cdx, cdy) => {
+    const pxc = (px0 + px1) / 2, pyc = (py0 + py1) / 2, w = px1 - px0 - 1, h = py1 - py0 - 1;
+    pbox(white, pxc, pyc, w, h, 0.04, 0.72, true); for (const [a, b2] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) pbox(dark, pxc + a * (w / 2 - 1), pyc + b2 * (h / 2 - 1), 0.8, 0.9, 0.72, 0, false);
+    const mx2 = pxc - cdx * (w / 2 - 3), my2 = pyc - cdy * (h / 2 - 3); pbox(dark, mx2, my2, cdx ? 0.9 : Math.min(w * 0.6, 8), cdy ? 0.9 : Math.min(h * 0.6, 8), 0.34, 0.8, false);
+    const cx2 = pxc + cdx * (w / 2 + 6), cy2 = pyc + cdy * (h / 2 + 7); pbox(dark, cx2, cy2, 7, 8, 0.08, 0.46, false); pbox(dark, cx2 + cdx * 3, cy2 + cdy * 3.5, cdx ? 1 : 7, cdy ? 1 : 8, 0.5, 0.5, false); pbox(steel, cx2, cy2, 1, 1, 0.46, 0, false);
+  };
+  for (const [ya, yb] of [[177, 208], [212, 243], [246, 274]]) { desk(310, ya, 326, yb, -1, 0); desk(327, ya, 342, yb, 1, 0); }
+  for (const xs of [[365, 380, 381, 395], [419, 434, 435, 449]]) for (const [ya, yb] of [[199, 233], [236, 272]]) { desk(xs[0], ya, xs[1], yb, -1, 0); desk(xs[2], ya, xs[3], yb, 1, 0); }
+  desk(392, 118, 415, 133, 0, -1); desk(419, 118, 445, 133, 0, -1); desk(392, 136, 415, 155, 0, 1); desk(419, 136, 445, 155, 0, 1);
+  for (const [ya, yb] of [[41, 61], [64, 90]]) { desk(436, ya, 447, yb, -1, 0); desk(450, ya, 462, yb, 1, 0); }
+  desk(384, 41, 395, 65, -1, 0); desk(395, 52, 414, 65, 0, 1);                      // the L-shaped desk
+  // board rooms: long table with chairs round it
+  for (const [pyc, len] of [[78, 44], [172, 66]]) { pbox(wood, 507, pyc, 22, len, 0.05, 0.74, true); pbox(dark, 507, pyc, 6, len * 0.6, 0.7, 0, false);
+    for (let k = 0; k < Math.floor(len / 12); k++) { const y2 = pyc - len / 2 + 6 + k * 12; for (const sd of [-1, 1]) pbox(dark, 507 + sd * 17, y2, 7, 7, 0.5, 0, false); } }
+  // entrance lobby: mat, plant and a small bench
+  pbox(dark, 506, 262, 20, 16, 0.015, 0.072, false);
+  { const [px2, pz2] = PG(526, 232); pot.add(new THREE.CylinderGeometry(0.25, 0.2, 0.5, 10), mat4(px2, 0.3, pz2)); green.add(new THREE.IcosahedronGeometry(0.5, 1), mat4(px2, 1.0, pz2, 0, 1, 1.4, 1)); addCircle(px2, pz2, 0.35); }
+  pbox(wood, 527, 252, 8, 18, 0.45, 0, true);
+  // main room: a couple of plants and a printer by the core
+  for (const [ppx, ppy] of [[370, 160], [470, 190], [295, 165]]) { const [px2, pz2] = PG(ppx, ppy); pot.add(new THREE.CylinderGeometry(0.25, 0.2, 0.5, 10), mat4(px2, 0.3, pz2)); green.add(new THREE.IcosahedronGeometry(0.5, 1), mat4(px2, 1.0, pz2, 0, 1, 1.4, 1)); addCircle(px2, pz2, 0.35); }
+  pbox(white, 372, 100, 9, 11, 1.0, 0, true);
 }
 const STORE = {};
 // trolley shelters in the Morrisons car park, read off the aerial photo: each sits across a double row of bays, long side across the rows
