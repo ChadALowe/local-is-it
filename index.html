@@ -53,7 +53,7 @@
   #tBrake{right:calc(22px + var(--b)*1.25 + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom))}
   #tHand{right:calc(14px + env(safe-area-inset-right));bottom:calc(30px + var(--b)*1.25 + env(safe-area-inset-bottom))}
   .tsm{width:44px;height:44px;font-size:20px;top:calc(10px + env(safe-area-inset-top))}
-  #tReset{left:calc(50% - 100px)} #tColor{left:calc(50% - 48px)} #tCam{left:calc(50% + 4px)} #tCar{left:calc(50% + 56px)}
+  #tReset{left:calc(50% - 126px)} #tColor{left:calc(50% - 74px)} #tCam{left:calc(50% - 22px)} #tCar{left:calc(50% + 30px)} #tOut{left:calc(50% + 82px)}
   body.touch #tl{left:calc(12px + env(safe-area-inset-left));top:calc(8px + env(safe-area-inset-top))}
   body.touch #tl .val{font-size:26px} body.touch #tl .sub{font-size:12px}
   body.touch #mm{width:96px;height:96px;right:calc(12px + env(safe-area-inset-right));top:calc(8px + env(safe-area-inset-top))}
@@ -80,13 +80,13 @@
 <div class="hud" id="coords" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 150px);left:10px;font:600 12px/1.3 monospace;color:#fff;background:rgba(0,0,0,.45);padding:3px 7px;border-radius:6px;pointer-events:none;z-index:5">x 0 z 0</div>
 <div class="hud" id="mmcap">PENDEFORD<br>WOLVERHAMPTON<small>Map data &copy; OpenStreetMap contributors</small></div>
 <div class="hud" id="br">
-  <div id="speed"><span id="spd">0</span><small>KM/H</small></div>
+  <div id="speed"><span id="spd">0</span><small>MPH</small></div>
   <div id="gear">GEAR <span id="g">1</span></div>
   <div id="rpm"><div id="rpmf"></div></div>
 </div>
 <div class="hud" id="hint">
   <kbd>W</kbd><kbd>S</kbd> gas / brake &nbsp; <kbd>A</kbd><kbd>D</kbd> steer<br>
-  <kbd>SPACE</kbd> handbrake to start a drift &nbsp; <kbd>C</kbd> car colour &nbsp; <kbd>B</kbd> change car &nbsp; <kbd>V</kbd> camera &nbsp; <kbd>R</kbd> reset
+  <kbd>SPACE</kbd> handbrake to start a drift &nbsp; <kbd>C</kbd> car colour &nbsp; <kbd>B</kbd> change car &nbsp; <kbd>F</kbd> get out / in &nbsp; <kbd>V</kbd> camera &nbsp; <kbd>R</kbd> reset
 </div>
 
 <div id="overlay">
@@ -115,6 +115,7 @@
   <div class="tb tsm" id="tColor" data-key="color">&#9680;</div>
   <div class="tb tsm" id="tCam" data-key="cam">CAM</div>
   <div class="tb tsm" id="tCar" data-key="car" style="font-size:11px">CAR</div>
+  <div class="tb tsm" id="tOut" data-key="out" style="font-size:11px">OUT</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1593,6 +1594,7 @@ function createCar2(color) {
 }
 let carModel = 0;
 function switchCar() {
+  if (W.on) return;
   const old = player.car; scene.remove(old.grp); carModel = (carModel + 1) % 2; const col = paintChoices[paintIdx];
   player.car = carModel ? createCar2(col) : createCar(col); scene.add(player.car.grp);
 }
@@ -1600,6 +1602,57 @@ const paintChoices = [0xa3161a, 0x1f4f9a, 0xe9e9e6, 0x2c2e31, 0x9aa0a6, 0x2f7d32
 let paintIdx = 0;
 const player = { x: spawn.x, z: spawn.z, y: 0, h: spawn.h, vx: 0, vz: 0, steer: 0, spin: 0, car: createCar(paintChoices[0]) };
 scene.add(player.car.grp);
+// on foot: an original simple figure that can get out of the car and walk anywhere
+const W = (() => {
+  const g = new THREE.Group(), M = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 });
+  const skin = M(0xd9a785), top = M(0x2c4f7c), legs = M(0x2d2f36), shoe = M(0x18191b), hair = M(0x3a2618);
+  const part = (geo, m, x, y, z, parent = g) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = true; parent.add(o); return o; };
+  const limb = (x, y, len, w, m) => { const pv = new THREE.Group(); pv.position.set(x, y, 0); g.add(pv); const o = new THREE.Mesh(new THREE.CylinderGeometry(w, w * 0.85, len, 8), m); o.position.y = -len / 2; o.castShadow = true; pv.add(o); return pv; };
+  const lL = limb(-0.1, 0.9, 0.86, 0.075, legs), lR = limb(0.1, 0.9, 0.86, 0.075, legs);
+  part(new THREE.BoxGeometry(0.12, 0.08, 0.26), shoe, 0, -0.84, -0.05, lL); part(new THREE.BoxGeometry(0.12, 0.08, 0.26), shoe, 0, -0.84, -0.05, lR);
+  part(new THREE.CylinderGeometry(0.19, 0.16, 0.6, 10), top, 0, 1.2, 0).scale.set(1, 1, 0.7);
+  part(new THREE.CylinderGeometry(0.07, 0.07, 0.08, 8), skin, 0, 1.53, 0);
+  part(new THREE.SphereGeometry(0.12, 14, 12), skin, 0, 1.66, 0);
+  part(new THREE.SphereGeometry(0.125, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hair, 0, 1.68, 0.01);
+  const aL = limb(-0.24, 1.46, 0.62, 0.055, top), aR = limb(0.24, 1.46, 0.62, 0.055, top);
+  for (const a of [aL, aR]) part(new THREE.SphereGeometry(0.05, 8, 6), skin, 0, -0.64, 0, a);
+  g.visible = false; scene.add(g);
+  return { on: false, x: 0, z: 0, y: 0, h: 0, vx: 0, vz: 0, ph: 0, g, lL, lR, aL, aR };
+})();
+const follow = () => W.on ? W : player;
+function toggleFoot() {
+  if (state !== 'play') return;
+  if (!W.on) {
+    if (spdNow > 3) return;                                            // stop first
+    const rx = Math.cos(player.h), rz = -Math.sin(player.h);
+    Object.assign(W, { on: true, x: player.x + rx * 1.5, z: player.z + rz * 1.5, y: player.y, h: player.h, vx: 0, vz: 0 }); W.g.visible = true;
+  } else {
+    if (Math.hypot(W.x - player.x, W.z - player.z) > 4.5) { $('ctag').textContent = 'Walk to your car'; $('cpts').textContent = ''; $('cmult').textContent = ''; showCombo(true); comboTimer = 1.5; return; }
+    W.on = false; W.g.visible = false;
+  }
+  $('tOut').textContent = W.on ? 'IN' : 'OUT';
+}
+function stepWalker(dt) {
+  const run = keys.hand, sp = keys.up ? (run ? 5.2 : 1.7) : keys.down ? -1.1 : 0;
+  W.h += (keys.left - keys.right) * 2.6 * dt;
+  const fx = -Math.sin(W.h), fz = -Math.cos(W.h); W.vx = fx * sp; W.vz = fz * sp;
+  W.x += W.vx * dt; W.z += W.vz * dt;
+  { const l = TR.loc(W.x, W.z), inF = Math.abs(l.q) < TR.band && Math.abs(l.t) < TR.Lf, tgt = !inF ? 0 : (Math.abs(l.t) < TR.Ld + 0.2 && W.y > -1) ? 0 : -TR.depth(l.t); W.y += (tgt - W.y) * Math.min(1, dt * 14); }
+  const R = 0.32, list = cgrid.at(W.x, W.z);
+  if (list) for (const c of list) {
+    if (c.lv && (c.lv === 2) !== (W.y > -1)) continue;
+    let nx, nz, ov;
+    if (c.t === 0) { const dx = W.x - c.x, dz = W.z - c.z, d = Math.hypot(dx, dz); if (d >= R + c.r || d < 1e-4) continue; nx = dx / d; nz = dz / d; ov = R + c.r - d; }
+    else { const sx = c.x1 - c.x0, sz = c.z1 - c.z0, l2 = sx * sx + sz * sz || 1, t = clamp(((W.x - c.x0) * sx + (W.z - c.z0) * sz) / l2, 0, 1), dx = W.x - (c.x0 + sx * t), dz = W.z - (c.z0 + sz * t), d = Math.hypot(dx, dz); if (d >= R || d < 1e-4) continue; nx = dx / d; nz = dz / d; ov = R - d; }
+    W.x += nx * ov; W.z += nz * ov;
+  }
+  { const cf = -Math.sin(player.h), cz = -Math.cos(player.h), rx = Math.cos(player.h), rz = -Math.sin(player.h), dx = W.x - player.x, dz = W.z - player.z, u = dx * cf + dz * cz, v = dx * rx + dz * rz;   // walk round the parked car
+    if (Math.abs(u) < 2.4 && Math.abs(v) < 1.2) { if (2.4 - Math.abs(u) < 1.2 - Math.abs(v)) { const nu = Math.sign(u) * 2.4; W.x += cf * (nu - u); W.z += cz * (nu - u); } else { const nv = Math.sign(v) * 1.2; W.x += rx * (nv - v); W.z += rz * (nv - v); } } }
+  W.x = clamp(W.x, -LIM, LIM); W.z = clamp(W.z, -LIM, LIM);
+  W.ph += Math.abs(sp) * dt * 3.2; const sw = Math.abs(sp) > 0.1 ? Math.sin(W.ph) * (run ? 0.8 : 0.45) : 0;
+  W.lL.rotation.x = sw; W.lR.rotation.x = -sw; W.aL.rotation.x = -sw * 0.8; W.aR.rotation.x = sw * 0.8;
+  W.g.position.set(W.x, W.y + (run && sp > 0 ? Math.abs(Math.cos(W.ph)) * 0.05 : 0), W.z); W.g.rotation.y = W.h;
+}
 
 /* ================= tyre marks + smoke ================= */
 const SKIDS = 3200;
@@ -1639,13 +1692,13 @@ function cycleColor() { paintIdx = (paintIdx + 1) % paintChoices.length; player.
 addEventListener('keydown', e => {
   if (keyMap[e.code]) { keys[keyMap[e.code]] = 1; e.preventDefault(); }
   if (e.code === 'Enter' && state === 'menu') start();
-  if (state === 'play') { if (e.code === 'KeyR') resetCar(); if (e.code === 'KeyC') cycleColor(); if (e.code === 'KeyB') switchCar(); if (e.code === 'KeyV') camMode = (camMode + 1) % 2; }
+  if (state === 'play') { if (e.code === 'KeyR') resetCar(); if (e.code === 'KeyC') cycleColor(); if (e.code === 'KeyB') switchCar(); if (e.code === 'KeyF' || e.code === 'KeyE') toggleFoot(); if (e.code === 'KeyV') camMode = (camMode + 1) % 2; }
 });
 addEventListener('keyup', e => { if (keyMap[e.code]) keys[keyMap[e.code]] = 0; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = 0; });
 document.querySelectorAll('.tb').forEach(b => {
   const k = b.dataset.key;
-  const down = e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (_) {} b.classList.add('on'); if (k === 'reset') resetCar(); else if (k === 'color') cycleColor(); else if (k === 'car') switchCar(); else if (k === 'cam') camMode = (camMode + 1) % 2; else keys[k] = 1; };
+  const down = e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (_) {} b.classList.add('on'); if (k === 'reset') resetCar(); else if (k === 'color') cycleColor(); else if (k === 'car') switchCar(); else if (k === 'out') toggleFoot(); else if (k === 'cam') camMode = (camMode + 1) % 2; else keys[k] = 1; };
   const up = e => { e.preventDefault(); b.classList.remove('on'); if (keys[k] !== undefined) keys[k] = 0; };
   b.addEventListener('pointerdown', down); b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
   b.addEventListener('contextmenu', e => e.preventDefault());
@@ -1677,7 +1730,7 @@ function start() {
   $('overlay').style.display = 'none'; document.body.classList.add('playing'); initAudio(); tryFullscreen();
   if (actx && actx.state === 'suspended') actx.resume(); state = 'play'; setTimeout(() => { $('hint').style.opacity = 0; }, 14000);
 }
-function resetCar() { Object.assign(player, { x: spawn.x, z: spawn.z, y: 0, h: spawn.h, vx: 0, vz: 0, steer: 0 }); drift.pts = 0; drift.on = false; drift.t = 0; showCombo(false); }
+function resetCar() { if (W.on) { W.on = false; W.g.visible = false; $('tOut').textContent = 'OUT'; } Object.assign(player, { x: spawn.x, z: spawn.z, y: 0, h: spawn.h, vx: 0, vz: 0, steer: 0 }); drift.pts = 0; drift.on = false; drift.t = 0; showCombo(false); }
 
 /* ================= driving ================= */
 function surfaceAt(x, z) {                                             // 0 = road / pavement, 1 = grass
@@ -1708,14 +1761,15 @@ function crashDrift() {
 const cir = [-1.05, 0, 1.05];
 let shake = 0, gearNow = 1, rpmNow = 0.3, spdNow = 0;
 function stepPlayer(dt) {
-  const p = player, playing = state === 'play';
-  const thr = playing ? keys.up : 0, brk = playing ? keys.down : 1, st = playing ? (keys.left - keys.right) : 0;
+  const p = player, playing = state === 'play' && !W.on;
+  const thr = playing ? keys.up : 0, brk = playing ? keys.down : W.on ? 0 : 1, st = playing ? (keys.left - keys.right) : 0;
   const fx = -Math.sin(p.h), fz = -Math.cos(p.h), rx = Math.cos(p.h), rz = -Math.sin(p.h);
   let vf = p.vx * fx + p.vz * fz, vl = p.vx * rx + p.vz * rz;
   const surf = surfaceAt(p.x, p.z), maxS = 58, sp0 = Math.abs(vf);
   if (thr) vf += 27 * Math.max(0, 1 - vf / maxS) * dt * (surf ? 0.75 : 1);
   if (brk) { if (vf > 0.5) vf -= 50 * brk * dt; else vf = Math.max(-12, vf - 14 * dt); }
   if (!thr && !brk) vf -= Math.sign(vf) * Math.min(Math.abs(vf), 3.2 * dt);
+  if (W.on) vf *= Math.exp(-4 * dt);                                     // parked: handbrake on, no reversing away
   vf *= 1 - 0.04 * dt; if (surf) vf *= Math.exp(-0.22 * dt);
   const hand = playing && keys.hand; if (hand) vf *= Math.exp(-0.42 * dt);
   let grip = 8.5 - Math.min(2.5, sp0 / 28), slide = 1;
@@ -1793,9 +1847,9 @@ function stepPlayer(dt) {
 let camA = player.h;
 camera.position.set(player.x + 6, 3, player.z + 9);
 function stepCamera(dt) {
-  const p = player, spd = spdNow, velA = spd > 5 ? Math.atan2(-p.vx, -p.vz) : p.h;
+  const p = follow(), spd = W.on ? 0 : spdNow, velA = spd > 5 ? Math.atan2(-p.vx, -p.vz) : p.h;
   camA += angDiff(p.h + angDiff(velA, p.h) * 0.3, camA) * Math.min(1, dt * 4.2);
-  const dist = camMode ? 11 + spd * 0.03 : 7.3 + spd * 0.025, hgt = camMode ? 3.8 : 2.5 + spd * 0.006, fx = -Math.sin(camA), fz = -Math.cos(camA);
+  const dist = W.on ? (camMode ? 6 : 3.6) : camMode ? 11 + spd * 0.03 : 7.3 + spd * 0.025, hgt = W.on ? (camMode ? 3.0 : 2.1) : camMode ? 3.8 : 2.5 + spd * 0.006, fx = -Math.sin(camA), fz = -Math.cos(camA);
   camera.position.x += (p.x - fx * dist - camera.position.x) * Math.min(1, dt * 8); camera.position.z += (p.z - fz * dist - camera.position.z) * Math.min(1, dt * 8);
   camera.position.y += (hgt + p.y - camera.position.y) * Math.min(1, dt * 4);
   if (p.y < -1) { const l = TR.loc(camera.position.x, camera.position.z); if (Math.abs(l.q) < TR.band + 0.5 && Math.abs(l.t) < TR.Ld + 0.6) camera.position.y = Math.min(camera.position.y, -1.25); else if (!TR.foot(camera.position.x, camera.position.z)) camera.position.y = Math.max(camera.position.y, 0.6); }
@@ -1815,7 +1869,7 @@ const MS = 150 / (2 * LIM + 60), mpx = v => 75 + v * MS;
 }
 function drawMinimap() {
   mctx.clearRect(0, 0, 150, 150); mctx.drawImage(mmBg, 0, 0);
-  mctx.save(); mctx.translate(mpx(player.x), mpx(player.z)); mctx.rotate(-player.h);
+  mctx.save(); mctx.translate(mpx(follow().x), mpx(follow().z)); mctx.rotate(-follow().h);
   mctx.fillStyle = '#ff5a3c'; mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.moveTo(0, -6); mctx.lineTo(4.5, 5); mctx.lineTo(-4.5, 5); mctx.closePath(); mctx.fill(); mctx.stroke(); mctx.restore();
 }
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
@@ -1825,13 +1879,13 @@ let last = performance.now(), hudT = 0, skidAccInit = 0, frameN = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
-  stepPlayer(dt); updateParts(dt); stepCamera(dt);
-  sun.position.set(player.x + SUN.x * 220, SUN.y * 220, player.z + SUN.z * 220); sun.target.position.set(player.x, 0, player.z); sun.target.updateMatrixWorld();
+  stepPlayer(dt); if (W.on) stepWalker(dt); updateParts(dt); stepCamera(dt);
+  { const f = follow(); sun.position.set(f.x + SUN.x * 220, SUN.y * 220, f.z + SUN.z * 220); sun.target.position.set(f.x, 0, f.z); } sun.target.updateMatrixWorld();
   sky.position.copy(camera.position); clouds.position.set(camera.position.x, 0, camera.position.z);
   hudT -= dt;
-  if (hudT <= 0) { hudT = 0.05; $('spd').textContent = Math.round(spdNow * 3.6); $('g').textContent = gearNow; $('rpmf').style.width = (rpmNow * 100) + '%'; drawMinimap(); $('coords').textContent = 'x ' + player.x.toFixed(0) + '  z ' + player.z.toFixed(0) + '  h ' + (((-player.h * 180 / Math.PI) % 360 + 360) % 360).toFixed(0) + '\u00b0'; }
+  if (hudT <= 0) { hudT = 0.05; $('spd').textContent = Math.round((W.on ? Math.hypot(W.vx, W.vz) : spdNow) * 2.237); $('g').textContent = gearNow; $('rpmf').style.width = (rpmNow * 100) + '%'; drawMinimap(); $('coords').textContent = 'x ' + follow().x.toFixed(0) + '  z ' + follow().z.toFixed(0) + '  h ' + (((-follow().h * 180 / Math.PI) % 360 + 360) % 360).toFixed(0) + '\u00b0'; }
   for (const gt of gates) {                                              // retractable bollards sink into the road as you approach, and rise again behind you
-    const want = Math.hypot(player.x - gt.x, player.z - gt.z) < 7 ? 1 : 0; gt.t += (want - gt.t) * Math.min(1, dt * 5);
+    const want = Math.hypot(follow().x - gt.x, follow().z - gt.z) < 7 ? 1 : 0; gt.t += (want - gt.t) * Math.min(1, dt * 5);
     for (const bo of gt.bollards) { bo.position.y = 0.5 - gt.t * 1.05; bo.visible = gt.t < 0.98; }
   }
   if ((frameN++ & 7) === 0) {                                            // parked-car LOD / distance culling
