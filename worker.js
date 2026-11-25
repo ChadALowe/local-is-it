@@ -14,8 +14,8 @@ export class Room {
     this.state.acceptWebSocket(server);
     server.serializeAttachment({ id, last: null });
     const players = socks.map(w => { try { return w.deserializeAttachment(); } catch (_) { return null; } }).filter(a => a && a.last).map(a => a.last);
-    const world = [...(await this.state.storage.list({ prefix: 'w:' })).values()], npc = await this.state.storage.get('npc'), wc = [...(await this.state.storage.list({ prefix: 'wc:' })).values()], kit = (await this.state.storage.get('kit')) || [], pool = await this.state.storage.get('pool');
-    server.send(JSON.stringify({ t: 'hi', id, players, world, npc, wc, kit, pool }));
+    const world = [...(await this.state.storage.list({ prefix: 'w:' })).values()], npc = await this.state.storage.get('npc'), wc = [...(await this.state.storage.list({ prefix: 'wc:' })).values()], kit = (await this.state.storage.get('kit')) || [], pool = await this.state.storage.get('pool'), darts = await this.state.storage.get('darts');
+    server.send(JSON.stringify({ t: 'hi', id, players, world, npc, wc, kit, pool, darts }));
     server.send(JSON.stringify(Object.assign({ t: 'lb' }, (await this.state.storage.get('lb')) || { money: [], drift: [] })));
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -32,7 +32,8 @@ export class Room {
     } else if (d.t === 'ev') {                          // world events: parked-car dents/poses, hits on other players
       d.id = a.id; this.others(ws, JSON.stringify(d));
       const st = this.state.storage;
-      if (d.e === 'pool' && d.a === 'state' && d.s && JSON.stringify(d.s).length < 4000) await st.put('pool', d.s);       // the pool game: seats, balls, turn
+      if (d.e === 'pub' && d.a === 'dstate' && d.s && JSON.stringify(d.s).length < 3000) await st.put('darts', d.s);    // darts game in The Pendulum
+      else if (d.e === 'pool' && d.a === 'state' && d.s && JSON.stringify(d.s).length < 4000) await st.put('pool', d.s);       // the pool game: seats, balls, turn
       else if (d.e === 'kit' && typeof d.id === 'string') {                  // lunches in the office fridge
         let kit = (await st.get('kit')) || []; if (d.a === 'put' && kit.length < 30) kit.push({ id: d.id.slice(0, 12), owner: String(d.owner || '').slice(0, 20) }); else if (d.a === 'take') kit = kit.filter(l => l.id !== d.id); await st.put('kit', kit);
       } else if (d.e === 'wc' && Number.isInteger(d.i) && d.i >= 0 && d.i < 8) {          // toilets: yellow water / poos stay until someone flushes
@@ -69,6 +70,8 @@ export class Room {
   async bye(ws) {
     const a = (() => { try { return ws.deserializeAttachment(); } catch (_) { return null; } })(); if (!a) return;
     const n = await this.state.storage.get('npc');                  // left while carrying the shoes: they drop them where they were
+    const dts = await this.state.storage.get('darts');                 // left the darts: free the seat
+    if (dts && dts.seats && dts.seats.some(s => s && s.id === a.id)) { dts.seats = dts.seats.map(s => s && s.id === a.id ? null : s); await this.state.storage.put('darts', dts); this.others(ws, JSON.stringify({ t: 'ev', e: 'pub', a: 'dfree', id: a.id })); }
     const pool = await this.state.storage.get('pool');                // left the pool table: free the seat
     if (pool && pool.seats && pool.seats.some(s => s && s.id === a.id)) { pool.seats = pool.seats.map(s => s && s.id === a.id ? null : s); await this.state.storage.put('pool', pool); this.others(ws, JSON.stringify({ t: 'ev', e: 'pool', a: 'free', id: a.id })); }
     if (n && n.s === 'carried' && n.by === a.id) { const f = a.last && a.last.f; if (f) await this.state.storage.put('npc', { s: 'down', x: f[0], z: f[2], h: 0 }); else await this.state.storage.delete('npc'); }
