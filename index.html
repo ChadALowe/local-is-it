@@ -1021,19 +1021,23 @@ function buildLInterior(b, door, wallH) {
     for (let k = 0; k <= 12; k += 1) pbox(chrome, 311, 82 - k * 3.6, 0.025 * mU, 0.025 * mV, 0.9, 0.2 * (k + 1), false);
     for (let k = 0; k < 12; k++) { const [a1, a2] = PG(311, 82 - k * 3.6), [b1, b2] = PG(311, 82 - (k + 1) * 3.6), L = Math.hypot(b1 - a1, b2 - a2), pitch = Math.atan2(0.2, L); chrome.add(new THREE.CylinderGeometry(0.022, 0.022, Math.hypot(L, 0.2) + 0.02, 8), mat4((a1 + b1) / 2, 0.2 * (k + 1) + 1.0, (a2 + b2) / 2, Math.atan2(b1 - a1, b2 - a2)).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2 - pitch))); } }
   // ---- tuck shop: a beech cupboard with wicker baskets of snacks by the green column, and a drinks fridge round the corner
-  { pbox(beech, 465, 190, 0.5 * mU, 1.3 * mV, 0.74, 0.07, true); for (const dy of [-0.32, 0.32]) pbox(handleM, 465 - 0.255 * mU, 190 + dy * mV, 0.01 * mU, 0.12 * mV, 0.015, 0.6, false);
+  { pbox(beech, 465, 186, 0.5 * mU, 1.3 * mV, 0.74, 0.07, true); for (const dy of [-0.32, 0.32]) pbox(handleM, 465 - 0.255 * mU, 186 + dy * mV, 0.01 * mU, 0.12 * mV, 0.015, 0.6, false);
     const wick = mg('wicker', lit({ map: mkTex(32, 32, (g, w, h) => { g.fillStyle = '#b07a3e'; g.fillRect(0, 0, w, h); g.strokeStyle = '#8a5a28'; for (let y = 0; y < h; y += 4) { g.beginPath(); g.moveTo(0, y); for (let x = 0; x < w; x += 4) g.lineTo(x + 2, y + ((x / 4) % 2 ? 2 : -1)); g.stroke(); } }) }, 0.38));
-    for (const dy of [-0.33, 0.33]) { const pyc = 190 + dy * mV; pbox(wick, 465, pyc, 0.42 * mU, 0.5 * mV, 0.02, 0.81, false); for (const [ox, oy, wx, wy] of [[-0.2, 0, 0.02, 0.5], [0.2, 0, 0.02, 0.5], [0, -0.24, 0.42, 0.02], [0, 0.24, 0.42, 0.02]]) pbox(wick, 465 + ox * mU, pyc + oy * mV, wx * mU, wy * mV, 0.2, 0.81, false); }
-    pbox(mg('fridgeBlack', lit({ color: 0x141517 }, 0.2)), 471, 214, 0.62 * mU, 0.62 * mV, 1.3, 0.07, true);
-    pbox(mg('fridgeGlass', new THREE.MeshStandardMaterial({ color: 0x9fc4d4, roughness: 0.05, transparent: true, opacity: 0.35, emissive: 0x18303a }), false, false), 471 - 0.315 * mU, 214, 0.01 * mU, 0.5 * mV, 1.05, 0.18, false);
-    pbox(mg('fridgeLight', new THREE.MeshBasicMaterial({ color: 0xe8f4ff }), false, false), 471 - 0.2 * mU, 214, 0.02 * mU, 0.48 * mV, 0.02, 1.25, false);
-    for (const y of [0.45, 0.8]) pbox(chrome, 471 - 0.06 * mU, 214, 0.45 * mU, 0.5 * mV, 0.01, y, false);
+    for (const dy of [-0.33, 0.33]) { const pyc = 186 + dy * mV; pbox(wick, 465, pyc, 0.42 * mU, 0.5 * mV, 0.02, 0.81, false); for (const [ox, oy, wx, wy] of [[-0.2, 0, 0.02, 0.5], [0.2, 0, 0.02, 0.5], [0, -0.24, 0.42, 0.02], [0, 0.24, 0.42, 0.02]]) pbox(wick, 465 + ox * mU, pyc + oy * mV, wx * mU, wy * mV, 0.09, 0.81, false); }
+    { const fb = mg('fridgeBlack', lit({ color: 0x141517 }, 0.2)), cx = 471, cy = 216;              // hollow cabinet so you can see the drinks through the glass
+      pbox(fb, cx + 0.29 * mU, cy, 0.04 * mU, 0.62 * mV, 1.3, 0.07, true); for (const s of [-1, 1]) pbox(fb, cx, cy + s * 0.29 * mV, 0.62 * mU, 0.04 * mV, 1.3, 0.07, true);
+      pbox(fb, cx, cy, 0.62 * mU, 0.62 * mV, 0.1, 1.27, false); pbox(fb, cx, cy, 0.62 * mU, 0.62 * mV, 0.11, 0.07, false); pbox(mg('fridgeIn', lit({ color: 0xdfe8ec }, 0.6)), cx + 0.26 * mU, cy, 0.01 * mU, 0.54 * mV, 1.05, 0.18, false);
+      pbox(fb, cx - 0.3 * mU, cy, 0.03 * mU, 0.62 * mV, 0.06, 0.18, false); pbox(fb, cx - 0.3 * mU, cy, 0.03 * mU, 0.62 * mV, 0.06, 1.2, false); for (const s of [-1, 1]) pbox(fb, cx - 0.3 * mU, cy + s * 0.28 * mV, 0.03 * mU, 0.06 * mV, 1.1, 0.14, false);
+      { const [x1, z1] = PG(cx - 0.31 * mU, cy - 0.31 * mV), [x2, z2] = PG(cx - 0.31 * mU, cy + 0.31 * mV); addSeg(x1, z1, x2, z2); } }
+    pbox(mg('fridgeGlass', new THREE.MeshStandardMaterial({ color: 0xbfe0ec, roughness: 0.05, transparent: true, opacity: 0.18, depthWrite: false }), false, false), 471 - 0.305 * mU, 216, 0.008 * mU, 0.5 * mV, 0.98, 0.21, false);
+    pbox(mg('fridgeLight', new THREE.MeshBasicMaterial({ color: 0xe8f4ff }), false, false), 471, 216, 0.4 * mU, 0.4 * mV, 0.02, 1.25, false);
+    for (const y of [0.45, 0.8]) pbox(chrome, 471, 216, 0.5 * mU, 0.52 * mV, 0.01, y, false);
     Object.assign(TUCK, { PG, mU, mV, yawU }); }
   LOBBY.spawn = PG(506, 262); LOBBY.look = PG(470, 243);
   pbox(pine, 507, 238, 0.5 * mU, 0.5 * mV, 0.03, 0.48, true); pbox(blackLeg, 507, 238, 0.06 * mU, 0.06 * mV, 0.48, 0, false); pbox(blackLeg, 507, 238, 0.36 * mU, 0.36 * mV, 0.02, 0, false);
   { const [px2, pz2] = PG(528, 268); pot.add(new THREE.CylinderGeometry(0.22, 0.18, 0.45, 10), mat4(px2, 0.27, pz2)); green.add(new THREE.IcosahedronGeometry(0.42, 1), mat4(px2, 0.9, pz2, 0, 1, 1.4, 1)); addCircle(px2, pz2, 0.3); }
   // main room: a couple of plants and a printer by the core
-  for (const [ppx, ppy] of [[370, 160], [470, 190], [295, 165]]) { const [px2, pz2] = PG(ppx, ppy); pot.add(new THREE.CylinderGeometry(0.25, 0.2, 0.5, 10), mat4(px2, 0.3, pz2)); green.add(new THREE.IcosahedronGeometry(0.5, 1), mat4(px2, 1.0, pz2, 0, 1, 1.4, 1)); addCircle(px2, pz2, 0.35); }
+  for (const [ppx, ppy] of [[370, 160], [295, 165]]) { const [px2, pz2] = PG(ppx, ppy); pot.add(new THREE.CylinderGeometry(0.25, 0.2, 0.5, 10), mat4(px2, 0.3, pz2)); green.add(new THREE.IcosahedronGeometry(0.5, 1), mat4(px2, 1.0, pz2, 0, 1, 1.4, 1)); addCircle(px2, pz2, 0.35); }
   pbox(white, 372, 100, 9, 11, 1.0, 0, true);
 }
 const STORE = {};
@@ -3257,11 +3261,11 @@ const TUCKSHOP = (() => {
   const at = (px, py, y, yaw = yawU, rx = 0) => { const [x, z] = PG(px, py); return { x, y, z, yaw, rx }; };
   const add = (k, p) => { const m = new THREE.Mesh(geos[TYPES[k][2]], mats[k]); m.position.set(p.x, p.y, p.z); m.rotation.set(p.rx, p.yaw, 0, 'YXZ'); m.castShadow = true; interiorGroup.add(m); const it = { k, m, i: items.length, gone: 0 }; m.userData.tuck = it; items.push(it); };
   // two wicker baskets on the cupboard (at plan x 465, centred on y 190 -/+ 0.33 m)
-  [['rs', 'co', 'sv', 'rs', 'co', 'sv'], ['ch', 'cw', 'fj', 'fg', 'cb', 'ch']].forEach((ks, bi) => { const pyc = 190 + (bi ? 0.33 : -0.33) * mV;
+  [['rs', 'co', 'sv', 'rs', 'co', 'sv'], ['ch', 'cw', 'fj', 'fg', 'cb', 'ch']].forEach((ks, bi) => { const pyc = 186 + (bi ? 0.33 : -0.33) * mV;
     ks.forEach((k, j) => { const col = j % 3, row = Math.floor(j / 3), py2 = pyc + (col - 1) * 0.13 * mV, px2 = 465 + (row - 0.5) * 0.16 * mU, t = TYPES[k][2];
-      add(k, at(px2, py2, t === 'pack' || t === 'bag' ? 0.92 : 0.84 + row * 0.03, yawU + Math.PI / 2, t === 'pack' || t === 'bag' ? -0.25 : 0)); }); });
+      add(k, at(px2, py2, t === 'pack' || t === 'bag' ? 0.93 : 0.86 + row * 0.03, yawU + Math.PI / 2, t === 'pack' || t === 'bag' ? (row ? -0.35 : 0.35) : 0)); }); });
   // drinks fridge: two shelves of cans and bottles behind the glass (door faces -plan x)
-  [['cola', 'diet', 'orng', 'lem'], ['nrg', 'wat', 'cola', 'wat']].forEach((ks, si) => ks.forEach((k, j) => { const t = TYPES[k][2]; add(k, at(471 - 0.12 * mU, 214 + (j - 1.5) * 0.12 * mV, (si ? 0.45 : 0.8) + (t === 'bottle' ? 0.11 : 0.06))); }));
+  [['cola', 'diet', 'orng', 'lem'], ['nrg', 'wat', 'cola', 'wat']].forEach((ks, si) => ks.forEach((k, j) => { const t = TYPES[k][2]; add(k, at(471 - 0.08 * mU, 216 + (j - 1.5) * 0.12 * mV, (si ? 0.46 : 0.81) + (t === 'bottle' ? 0.11 : 0.06))); }));
   const restock = []; let restockT = 0;
   function hide(it) { it.gone = 1; it.m.visible = false; restock.push({ it, t: 120 }); }
   return {
