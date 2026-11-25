@@ -983,14 +983,14 @@ function buildLInterior(b, door, wallH) {
   { const woodTex = mkTex(128, 64, (g, w, h) => { for (let r = 0; r < 8; r++) for (let c = 0; c < 4; c++) { const off = (r % 2) * 16, l = 150 + Math.random() * 40; g.fillStyle = `rgb(${l + 40},${l + 8},${l - 40})`; g.fillRect(c * 32 + off - 32, r * 8, 32, 8); g.fillRect(c * 32 + off, r * 8, 32, 8); g.fillStyle = 'rgba(90,60,30,.35)'; g.fillRect(c * 32 + off, r * 8, 1, 8); } g.fillStyle = 'rgba(90,60,30,.25)'; for (let r = 0; r < 8; r++) g.fillRect(0, r * 8, w, 1); });
     floorRect(mg('woodFloor', lit({ map: woodTex }, 0.4), false, true), 478, 533, 225, 275, 0.075, 1.6);
     paintWall(greenPaint, 478, 225, 533, 225, 1);
-    const sign = mkTex(512, 160, (g, w, h) => { g.clearRect(0, 0, w, h); g.fillStyle = '#e9ecef'; g.font = 'bold 92px Arial, sans-serif'; g.textAlign = 'center'; g.fillText('zeel solutions', w / 2, 92); g.font = 'italic 40px Georgia, serif'; g.fillText('two steps ahead', w / 2 + 70, 145); });
+    const sign = mkTex(512, 160, (g, w, h) => { g.clearRect(0, 0, w, h); g.fillStyle = '#e9ecef'; let fs = 92; do { g.font = `bold ${fs}px Arial, sans-serif`; fs -= 4; } while (g.measureText('zeel solutions').width > w - 30 && fs > 30); g.textAlign = 'center'; g.fillText('zeel solutions', w / 2, 92); g.font = 'italic 40px Georgia, serif'; g.fillText('two steps ahead', w / 2 + 70, 145); });
     const sm = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.6), new THREE.MeshBasicMaterial({ map: sign, transparent: true })), [sx, sz] = PG(506, 225 + 0.08 * mV); sm.position.set(sx, 1.75, sz); sm.rotation.y = yawOf(506, 225, 0, 1); interiorGroup.add(sm);
     const fabric = mg('tubGrey', lit({ color: 0x45494f, roughness: 1 }, 0.22)), leather = mg('tubBlack', lit({ color: 0x18191b, roughness: 0.4 }, 0.25));
     tubChair(495, 234, 1, 0.35, fabric); tubChair(517, 234, -1, 0.35, fabric); tubChair(527, 247, -1, 0, leather, false);
     roundTable(506, 231, 0.24, 1.0, mg('tableGrey', lit({ color: 0xc9ced2 }, 0.45)), chrome); roundTable(483, 264, 0.26, 0.52, glassTop, chrome);
     plant(482, 228.5, 1.2); plant(526, 230, 1.5);
     pbox(mg('doorMat', lit({ color: 0x6b4a2a }, 0.3)), 506, 268, 22, 11, 0.012, 0.076, false);
-    const [tx2, tz2] = PG(479, 252); blackLeg.add(new THREE.BoxGeometry(0.06, 0.4, 0.55), mat4(tx2 + 0.03, 1.7, tz2, yawU + Math.PI / 2)); screenM.add(new THREE.BoxGeometry(0.01, 0.34, 0.48), mat4(tx2 + 0.065, 1.7, tz2, yawU + Math.PI / 2)); }
+    }
   // ---- meeting rooms: light grey carpet tiles with a strip of green turf along the inside of the glass
   { const tileTex = mkTex(64, 64, (g, w, h) => { g.fillStyle = '#9a9ea2'; g.fillRect(0, 0, w, h); for (let i = 0; i < 600; i++) { g.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,.1)' : 'rgba(255,255,255,.12)'; g.fillRect(Math.random() * w, Math.random() * h, 1, 1); } g.strokeStyle = 'rgba(0,0,0,.12)'; g.strokeRect(0, 0, w, h); });
     floorRect(mg('meetCarpet', lit({ map: tileTex }, 0.42), false, true), 478, 533, 39, 225, 0.075, 0.6);
@@ -1020,19 +1020,20 @@ function buildLInterior(b, door, wallH) {
     for (let k = 0; k < 12; k++) pbox(nose, 299, 82 - k * 3.6 + 1.6, 22, 0.5, 0.036, 0.2 * (k + 1) - 0.035, false);
     for (let k = 0; k <= 12; k += 1) pbox(chrome, 311, 82 - k * 3.6, 0.025 * mU, 0.025 * mV, 0.9, 0.2 * (k + 1), false);
     for (let k = 0; k < 12; k++) { const [a1, a2] = PG(311, 82 - k * 3.6), [b1, b2] = PG(311, 82 - (k + 1) * 3.6), L = Math.hypot(b1 - a1, b2 - a2), pitch = Math.atan2(0.2, L); chrome.add(new THREE.CylinderGeometry(0.022, 0.022, Math.hypot(L, 0.2) + 0.02, 8), mat4((a1 + b1) / 2, 0.2 * (k + 1) + 1.0, (a2 + b2) / 2, Math.atan2(b1 - a1, b2 - a2)).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2 - pitch))); } }
-  // ---- tuck shop: a beech cupboard with wicker baskets of snacks by the green column, and a drinks fridge round the corner
-  { pbox(beech, 465, 186, 0.5 * mU, 1.3 * mV, 0.74, 0.07, true); for (const dy of [-0.32, 0.32]) pbox(handleM, 465 - 0.255 * mU, 186 + dy * mV, 0.01 * mU, 0.12 * mV, 0.015, 0.6, false);
+  // ---- tuck shop: a beech cupboard with wicker baskets of snacks at the end of the desks (facing the way in), and a drinks fridge round the corner facing the rug
+  { const TX = 455, TY = 126, FX = 449.5, FY = 140;                      // cupboard centre (long side along plan x, front towards -plan y); fridge centre (front towards +plan x)
+    pbox(beech, TX, TY, 1.3 * mU, 0.5 * mV, 0.74, 0.07, true); for (const da of [-0.32, 0.32]) pbox(handleM, TX + da * mU, TY - 0.255 * mV, 0.12 * mU, 0.01 * mV, 0.015, 0.6, false);
     const wick = mg('wicker', lit({ map: mkTex(32, 32, (g, w, h) => { g.fillStyle = '#b07a3e'; g.fillRect(0, 0, w, h); g.strokeStyle = '#8a5a28'; for (let y = 0; y < h; y += 4) { g.beginPath(); g.moveTo(0, y); for (let x = 0; x < w; x += 4) g.lineTo(x + 2, y + ((x / 4) % 2 ? 2 : -1)); g.stroke(); } }) }, 0.38));
-    for (const dy of [-0.33, 0.33]) { const pyc = 186 + dy * mV; pbox(wick, 465, pyc, 0.42 * mU, 0.5 * mV, 0.02, 0.81, false); for (const [ox, oy, wx, wy] of [[-0.2, 0, 0.02, 0.5], [0.2, 0, 0.02, 0.5], [0, -0.24, 0.42, 0.02], [0, 0.24, 0.42, 0.02]]) pbox(wick, 465 + ox * mU, pyc + oy * mV, wx * mU, wy * mV, 0.09, 0.81, false); }
-    { const fb = mg('fridgeBlack', lit({ color: 0x141517 }, 0.2)), cx = 471, cy = 216;              // hollow cabinet so you can see the drinks through the glass
-      pbox(fb, cx + 0.29 * mU, cy, 0.04 * mU, 0.62 * mV, 1.3, 0.07, true); for (const s of [-1, 1]) pbox(fb, cx, cy + s * 0.29 * mV, 0.62 * mU, 0.04 * mV, 1.3, 0.07, true);
-      pbox(fb, cx, cy, 0.62 * mU, 0.62 * mV, 0.1, 1.27, false); pbox(fb, cx, cy, 0.62 * mU, 0.62 * mV, 0.11, 0.07, false); pbox(mg('fridgeIn', lit({ color: 0xdfe8ec }, 0.6)), cx + 0.26 * mU, cy, 0.01 * mU, 0.54 * mV, 1.05, 0.18, false);
-      pbox(fb, cx - 0.3 * mU, cy, 0.03 * mU, 0.62 * mV, 0.06, 0.18, false); pbox(fb, cx - 0.3 * mU, cy, 0.03 * mU, 0.62 * mV, 0.06, 1.2, false); for (const s of [-1, 1]) pbox(fb, cx - 0.3 * mU, cy + s * 0.28 * mV, 0.03 * mU, 0.06 * mV, 1.1, 0.14, false);
-      { const [x1, z1] = PG(cx - 0.31 * mU, cy - 0.31 * mV), [x2, z2] = PG(cx - 0.31 * mU, cy + 0.31 * mV); addSeg(x1, z1, x2, z2); } }
-    pbox(mg('fridgeGlass', new THREE.MeshStandardMaterial({ color: 0xbfe0ec, roughness: 0.05, transparent: true, opacity: 0.18, depthWrite: false }), false, false), 471 - 0.305 * mU, 216, 0.008 * mU, 0.5 * mV, 0.98, 0.21, false);
-    pbox(mg('fridgeLight', new THREE.MeshBasicMaterial({ color: 0xe8f4ff }), false, false), 471, 216, 0.4 * mU, 0.4 * mV, 0.02, 1.25, false);
-    for (const y of [0.45, 0.8]) pbox(chrome, 471, 216, 0.5 * mU, 0.52 * mV, 0.01, y, false);
-    Object.assign(TUCK, { PG, mU, mV, yawU }); }
+    for (const da of [-0.33, 0.33]) { const bx = TX + da * mU; pbox(wick, bx, TY, 0.5 * mU, 0.42 * mV, 0.02, 0.81, false); for (const [oa, of, wa, wf] of [[-0.24, 0, 0.02, 0.42], [0.24, 0, 0.02, 0.42], [0, -0.2, 0.5, 0.02], [0, 0.2, 0.5, 0.02]]) pbox(wick, bx + oa * mU, TY + of * mV, wa * mU, wf * mV, 0.09, 0.81, false); }
+    const fb = mg('fridgeBlack', lit({ color: 0x141517 }, 0.2));          // hollow fridge so you can see the drinks through the glass
+    pbox(fb, FX - 0.29 * mU, FY, 0.04 * mU, 0.62 * mV, 1.3, 0.07, true); for (const s of [-1, 1]) pbox(fb, FX, FY + s * 0.29 * mV, 0.62 * mU, 0.04 * mV, 1.3, 0.07, true);
+    pbox(fb, FX, FY, 0.62 * mU, 0.62 * mV, 0.1, 1.27, false); pbox(fb, FX, FY, 0.62 * mU, 0.62 * mV, 0.11, 0.07, false); pbox(mg('fridgeIn', lit({ color: 0xdfe8ec }, 0.6)), FX - 0.26 * mU, FY, 0.01 * mU, 0.54 * mV, 1.05, 0.18, false);
+    pbox(fb, FX + 0.3 * mU, FY, 0.03 * mU, 0.62 * mV, 0.06, 0.18, false); pbox(fb, FX + 0.3 * mU, FY, 0.03 * mU, 0.62 * mV, 0.06, 1.2, false); for (const s of [-1, 1]) pbox(fb, FX + 0.3 * mU, FY + s * 0.28 * mV, 0.03 * mU, 0.06 * mV, 1.1, 0.14, false);
+    { const [x1, z1] = PG(FX + 0.31 * mU, FY - 0.31 * mV), [x2, z2] = PG(FX + 0.31 * mU, FY + 0.31 * mV); addSeg(x1, z1, x2, z2); }
+    pbox(mg('fridgeGlass', new THREE.MeshStandardMaterial({ color: 0xbfe0ec, roughness: 0.05, transparent: true, opacity: 0.18, depthWrite: false }), false, false), FX + 0.305 * mU, FY, 0.008 * mU, 0.5 * mV, 0.98, 0.21, false);
+    pbox(mg('fridgeLight', new THREE.MeshBasicMaterial({ color: 0xe8f4ff }), false, false), FX, FY, 0.4 * mU, 0.4 * mV, 0.02, 1.25, false);
+    for (const y of [0.45, 0.8]) pbox(chrome, FX, FY, 0.5 * mU, 0.52 * mV, 0.01, y, false);
+    Object.assign(TUCK, { PG, mU, mV, TX, TY, FX, FY, front: yawOf(TX, TY, 0, -1), fridgeFront: yawOf(FX, FY, 1, 0) }); }
   LOBBY.spawn = PG(506, 262); LOBBY.look = PG(470, 243);
   pbox(pine, 507, 238, 0.5 * mU, 0.5 * mV, 0.03, 0.48, true); pbox(blackLeg, 507, 238, 0.06 * mU, 0.06 * mV, 0.48, 0, false); pbox(blackLeg, 507, 238, 0.36 * mU, 0.36 * mV, 0.02, 0, false);
   { const [px2, pz2] = PG(528, 268); pot.add(new THREE.CylinderGeometry(0.22, 0.18, 0.45, 10), mat4(px2, 0.27, pz2)); green.add(new THREE.IcosahedronGeometry(0.42, 1), mat4(px2, 0.9, pz2, 0, 1, 1.4, 1)); addCircle(px2, pz2, 0.3); }
@@ -3250,7 +3251,7 @@ const WC = (() => {
 // ===== tuck shop: point at a snack or a drink and it's bought straight away (no till) =====
 const TUCKSHOP = (() => {
   if (!TUCK.PG) return { aim() { return null; }, buy() {}, onNet() {}, step() {} };
-  const { PG, mU, mV, yawU } = TUCK, items = [];
+  const { PG, mU, mV, TX, TY, FX, FY, front, fridgeFront } = TUCK, items = [];
   const label = (bg, fg, txt, w = 64, h = 96, stripe) => mkTex(w, h, (g) => { g.fillStyle = bg; g.fillRect(0, 0, w, h); if (stripe) { g.fillStyle = stripe; g.fillRect(0, h * 0.62, w, h * 0.14); } g.fillStyle = fg; g.font = `bold ${Math.round(w / 5.5)}px Arial, sans-serif`; g.textAlign = 'center'; txt.split(' ').forEach((t, i, a) => g.fillText(t, w / 2, h * 0.38 + (i - (a.length - 1) / 2) * w / 4.8)); });
   const TYPES = {
     rs: ['Ready Salted Crisps', 0.70, 'pack', '#d62828', '#fff'], co: ['Cheese & Onion Crisps', 0.70, 'pack', '#1f5fbf', '#fff'], sv: ['Salt & Vinegar Crisps', 0.70, 'pack', '#2a9d4b', '#fff'],
@@ -3258,14 +3259,14 @@ const TUCKSHOP = (() => {
     cola: ['Cola', 1.00, 'can', '#c8102e', '#fff'], diet: ['Diet Cola', 1.00, 'can', '#b9bec4', '#c8102e'], orng: ['Orange Fizz', 1.00, 'can', '#f28c1b', '#fff'], lem: ['Lemonade', 1.00, 'can', '#6fbf3a', '#fff'], nrg: ['Energy Drink', 1.50, 'can', '#1d3f8f', '#cfd8dc'], wat: ['Still Water', 0.80, 'bottle', '#bfe3f5', '#1f5fbf'] };
   const mats = {}; for (const k in TYPES) { const t = TYPES[k], tex = label(t[3], t[4], t[0].replace(' Crisps', '').replace('Milk ', ''), 64, t[2] === 'bar' ? 32 : 96); mats[k] = new THREE.MeshStandardMaterial({ map: tex, roughness: t[2] === 'can' ? 0.35 : 0.6, metalness: t[2] === 'can' ? 0.4 : 0, emissive: 0x111111 }); }
   const geos = { pack: new THREE.BoxGeometry(0.12, 0.17, 0.04), bar: new THREE.BoxGeometry(0.14, 0.022, 0.05), bag: new THREE.BoxGeometry(0.11, 0.15, 0.03), can: new THREE.CylinderGeometry(0.033, 0.033, 0.12, 14), bottle: new THREE.CylinderGeometry(0.034, 0.034, 0.22, 12) };
-  const at = (px, py, y, yaw = yawU, rx = 0) => { const [x, z] = PG(px, py); return { x, y, z, yaw, rx }; };
+  const at = (px, py, y, yaw = front, rx = 0) => { const [x, z] = PG(px, py); return { x, y, z, yaw, rx }; };
   const add = (k, p) => { const m = new THREE.Mesh(geos[TYPES[k][2]], mats[k]); m.position.set(p.x, p.y, p.z); m.rotation.set(p.rx, p.yaw, 0, 'YXZ'); m.castShadow = true; interiorGroup.add(m); const it = { k, m, i: items.length, gone: 0 }; m.userData.tuck = it; items.push(it); };
-  // two wicker baskets on the cupboard (at plan x 465, centred on y 190 -/+ 0.33 m)
-  [['rs', 'co', 'sv', 'rs', 'co', 'sv'], ['ch', 'cw', 'fj', 'fg', 'cb', 'ch']].forEach((ks, bi) => { const pyc = 186 + (bi ? 0.33 : -0.33) * mV;
-    ks.forEach((k, j) => { const col = j % 3, row = Math.floor(j / 3), py2 = pyc + (col - 1) * 0.13 * mV, px2 = 465 + (row - 0.5) * 0.16 * mU, t = TYPES[k][2];
-      add(k, at(px2, py2, t === 'pack' || t === 'bag' ? 0.93 : 0.86 + row * 0.03, yawU + Math.PI / 2, t === 'pack' || t === 'bag' ? (row ? -0.35 : 0.35) : 0)); }); });
-  // drinks fridge: two shelves of cans and bottles behind the glass (door faces -plan x)
-  [['cola', 'diet', 'orng', 'lem'], ['nrg', 'wat', 'cola', 'wat']].forEach((ks, si) => ks.forEach((k, j) => { const t = TYPES[k][2]; add(k, at(471 - 0.08 * mU, 216 + (j - 1.5) * 0.12 * mV, (si ? 0.46 : 0.81) + (t === 'bottle' ? 0.11 : 0.06))); }));
+  // two wicker baskets on the cupboard, snacks facing out to the front
+  [['rs', 'co', 'sv', 'rs', 'co', 'sv'], ['ch', 'cw', 'fj', 'fg', 'cb', 'ch']].forEach((ks, bi) => { const bx = TX + (bi ? 0.33 : -0.33) * mU;
+    ks.forEach((k, j) => { const col = j % 3, row = Math.floor(j / 3), t = TYPES[k][2], upright = t === 'pack' || t === 'bag';
+      add(k, at(bx + (col - 1) * 0.14 * mU, TY + (row - 0.5) * 0.17 * mV, upright ? 0.93 + row * 0.02 : 0.86 + row * 0.03, front, upright ? -0.3 : 0)); }); });
+  // drinks fridge: two shelves of cans and bottles behind the glass
+  [['cola', 'diet', 'orng', 'lem'], ['nrg', 'wat', 'cola', 'wat']].forEach((ks, si) => ks.forEach((k, j) => { const t = TYPES[k][2]; add(k, at(FX + 0.08 * mU, FY + (j - 1.5) * 0.12 * mV, (si ? 0.46 : 0.81) + (t === 'bottle' ? 0.11 : 0.06), fridgeFront)); }));
   const restock = []; let restockT = 0;
   function hide(it) { it.gone = 1; it.m.visible = false; restock.push({ it, t: 120 }); }
   return {
