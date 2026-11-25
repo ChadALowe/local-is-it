@@ -2566,6 +2566,20 @@ const RAG = (() => {
   const up = new THREE.Vector3(0, 1, 0), v = new THREE.Vector3(), q = new THREE.Quaternion(), mx = new THREE.Matrix4(), ax = new THREE.Vector3(), ay = new THREE.Vector3(), az = new THREE.Vector3();
   const place = (o, a, b) => { v.set(b.x - a.x, b.y - a.y, b.z - a.z); const L = v.length() || 1e-3; o.position.set(a.x, a.y, a.z); o.quaternion.setFromUnitVectors(up, v.multiplyScalar(1 / L)); o.scale.set(1, L, 1); };
   const ground = (x, z, y) => { if (!TR.foot(x, z, 0.5)) return 0; const l = TR.loc(x, z); if (Math.abs(l.q) > TR.band) return 0; return (Math.abs(l.t) < TR.Ld + 0.2 && y > -1) ? 0 : -TR.depth(l.t); };
+  const cross = (ax, az, bx, bz, cx, cz, dx, dz) => { const rx = bx - ax, rz = bz - az, sx = dx - cx, sz = dz - cz, den = rx * sz - rz * sx; if (Math.abs(den) < 1e-9) return -1;
+    const t = ((cx - ax) * sz - (cz - az) * sx) / den, u = ((cx - ax) * rz - (cz - az) * rx) / den; return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? t : -1; };
+  const sweep = (p, car) => {
+    if (p.y > p.gy + 2.4 && !inBuilding(p.x, p.z)) return;
+    let best = 2, bn = null; const seen = new Set();
+    for (const [qx, qz] of [[p.sx, p.sz], [p.x, p.z]]) { const list = cgrid.at(qx, qz); if (list) for (const c of list) { if (c.t !== 2 || seen.has(c)) continue; seen.add(c);
+      if (c.lv && (c.lv === 2) !== (p.y > -1)) continue; const t = cross(p.sx, p.sz, p.x, p.z, c.x0, c.z0, c.x1, c.z1); if (t >= 0 && t < best) { best = t; bn = c; } } }
+    if (bn) { let nx = -(bn.z1 - bn.z0), nz = bn.x1 - bn.x0; const L = Math.hypot(nx, nz) || 1; nx /= L; nz /= L; if ((p.sx - bn.x0) * nx + (p.sz - bn.z0) * nz < 0) { nx = -nx; nz = -nz; }
+      const hx = p.sx + (p.x - p.sx) * best, hz = p.sz + (p.z - p.sz) * best, vx = p.x - p.px, vz = p.z - p.pz, vn = vx * nx + vz * nz;
+      p.x = hx + nx * (p.r + 0.02); p.z = hz + nz * (p.r + 0.02);
+      const tx = (vx - vn * nx) * 0.6, tz = (vz - vn * nz) * 0.6, bx = -vn * 0.25;   // bounce off a little, scrub along the wall
+      p.px = p.x - (tx + bx * nx); p.pz = p.z - (tz + bx * nz); if (-vn > 0.04 && (o.t - (o.lastThud || 0)) > 0.2) { o.lastThud = o.t; thud(65, 0.3); shake = Math.max(shake, 0.4); } return; }
+    if (inBuilding(p.x, p.z) && !inBuilding(p.sx, p.sz)) { p.x = p.sx; p.z = p.sz; p.px = p.x; p.pz = p.z; }   // fallback: never end up inside a building
+  };
   const o = { g, P, I, rest: 0 };
   o.start = (x, y, z, h, vx, vy, vz, spin) => {           // stand the body at (x,y,z) facing h, pitched forward (diving out), moving at v and tumbling
     const c = Math.cos(h), s = Math.sin(h), pitch = 1.0, cp = Math.cos(pitch), sp = Math.sin(pitch);
@@ -2585,7 +2599,7 @@ const RAG = (() => {
     let maxV = 0, impact = 0;
     for (let it = 0; it < n; it++) {
       for (const p of P) { const onG = p.y - p.r <= p.gy + 0.03, fr = onG ? 0.8 : 0.999;
-        const vx = (p.x - p.px) * fr, vy = (p.y - p.py) * 0.999, vz = (p.z - p.pz) * fr; p.px = p.x; p.py = p.y; p.pz = p.z; p.x += vx; p.y += vy - 9.8 * h * h; p.z += vz; }
+        const vx = (p.x - p.px) * fr, vy = (p.y - p.py) * 0.999, vz = (p.z - p.pz) * fr; p.sx = p.x; p.sz = p.z; p.px = p.x; p.py = p.y; p.pz = p.z; p.x += vx; p.y += vy - 9.8 * h * h; p.z += vz; }
       for (let k = 0; k < 6; k++) {
         for (const c of S) { const dx = c.b.x - c.a.x, dy = c.b.y - c.a.y, dz = c.b.z - c.a.z, d = Math.hypot(dx, dy, dz) || 1e-4; if (c.min && d >= c.L) continue; const f = (d - c.L) / d * 0.5 * c.k;
           c.a.x += dx * f; c.a.y += dy * f; c.a.z += dz * f; c.b.x -= dx * f; c.b.y -= dy * f; c.b.z -= dz * f; }
@@ -2602,6 +2616,7 @@ const RAG = (() => {
           }
         }
       }
+      for (const p of P) sweep(p, car);                                      // no tunnelling: stop at any wall crossed this step
     }
     for (const p of P) maxV = Math.max(maxV, Math.hypot(p.x - p.px, p.y - p.py, p.z - p.pz) / h);
     if (impact > 3 && o.t - (o.lastThud || 0) > 0.25) { o.lastThud = o.t; thud(60 + Math.random() * 20, Math.min(0.35, impact * 0.04)); }
