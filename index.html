@@ -53,7 +53,7 @@
   #tBrake{right:calc(22px + var(--b)*1.25 + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom))}
   #tHand{right:calc(14px + env(safe-area-inset-right));bottom:calc(30px + var(--b)*1.25 + env(safe-area-inset-bottom))}
   .tsm{width:44px;height:44px;font-size:20px;top:calc(10px + env(safe-area-inset-top))}
-  #tReset{left:calc(50% - 74px)} #tColor{left:calc(50% - 22px)} #tCam{left:calc(50% + 30px)}
+  #tReset{left:calc(50% - 100px)} #tColor{left:calc(50% - 48px)} #tCam{left:calc(50% + 4px)} #tCar{left:calc(50% + 56px)}
   body.touch #tl{left:calc(12px + env(safe-area-inset-left));top:calc(8px + env(safe-area-inset-top))}
   body.touch #tl .val{font-size:26px} body.touch #tl .sub{font-size:12px}
   body.touch #mm{width:96px;height:96px;right:calc(12px + env(safe-area-inset-right));top:calc(8px + env(safe-area-inset-top))}
@@ -86,7 +86,7 @@
 </div>
 <div class="hud" id="hint">
   <kbd>W</kbd><kbd>S</kbd> gas / brake &nbsp; <kbd>A</kbd><kbd>D</kbd> steer<br>
-  <kbd>SPACE</kbd> handbrake to start a drift &nbsp; <kbd>C</kbd> car colour &nbsp; <kbd>V</kbd> camera &nbsp; <kbd>R</kbd> reset
+  <kbd>SPACE</kbd> handbrake to start a drift &nbsp; <kbd>C</kbd> car colour &nbsp; <kbd>B</kbd> change car &nbsp; <kbd>V</kbd> camera &nbsp; <kbd>R</kbd> reset
 </div>
 
 <div id="overlay">
@@ -114,6 +114,7 @@
   <div class="tb tsm" id="tReset" data-key="reset">&#8635;</div>
   <div class="tb tsm" id="tColor" data-key="color">&#9680;</div>
   <div class="tb tsm" id="tCam" data-key="cam">CAM</div>
+  <div class="tb tsm" id="tCar" data-key="car" style="font-size:11px">CAR</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1492,6 +1493,67 @@ function createCar(color) {
     carChunks.push({ ims, far, sph });
   }
 }
+// second player car: an original sporty supermini (rounded extruded body, blacked-out glasshouse and roof, black wheels)
+function createCar2(color) {
+  const grp = new THREE.Group(), body = new THREE.Group(); grp.add(body);
+  const M = o => new THREE.MeshStandardMaterial(Object.assign({ roughness: 0.4, metalness: 0, envMapIntensity: 1.0 }, o));
+  const paint = M({ color, roughness: 0.28, metalness: 0.55, envMapIntensity: 1.2 }), gloss = M({ color: 0x0d0f11, roughness: 0.18, metalness: 0.4, envMapIntensity: 1.2 }), matt = M({ color: 0x15171a, roughness: 0.8 });
+  const glass = M({ color: 0x0b1016, roughness: 0.05, metalness: 0.9, envMapIntensity: 1.5 }), lens = M({ color: 0xdfe8ef, emissive: 0x9aa8b4, roughness: 0.1 }), red = M({ color: 0xb3121a, emissive: 0x330000, roughness: 0.25 });
+  const plate = M({ color: 0xf1f1ea, roughness: 0.5 }), plateR = M({ color: 0xe9c61c, roughness: 0.5 }), tyre = M({ color: 0x141414, roughness: 0.95 }), rim = M({ color: 0x1a1c1f, roughness: 0.25, metalness: 0.7 });
+  const add = (g, m, x = 0, y = 0, z = 0, cast = true) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.castShadow = cast; o.receiveShadow = true; body.add(o); return o; };
+  const lerpT = (tab, z) => { for (let k = 0; k < tab.length - 1; k++) if (z <= tab[k + 1][0]) { const u = (z - tab[k][0]) / (tab[k + 1][0] - tab[k][0]); return tab[k][1] + (tab[k + 1][1] - tab[k][1]) * u; } return tab[tab.length - 1][1]; };
+  // smooth loft: rounded (superellipse) cross-sections along the length
+  const loft = (z0, z1, nz, fw, fb, ft, nP = 4) => {
+    const ring = 24, P = [], I = [];
+    for (let a = 0; a <= nz; a++) {
+      const z = z0 + (z1 - z0) * a / nz, w = fw(z), yb = fb(z), yt = ft(z), cy = (yb + yt) / 2, h = (yt - yb) / 2;
+      for (let k = 0; k < ring; k++) { const t = k / ring * Math.PI * 2, c = Math.cos(t), sn = Math.sin(t); P.push(Math.sign(c) * Math.pow(Math.abs(c), 2 / nP) * w, cy + Math.sign(sn) * Math.pow(Math.abs(sn), 2 / nP) * h, z); }
+    }
+    for (let a = 0; a < nz; a++) for (let k = 0; k < ring; k++) { const p = a * ring + k, q = a * ring + (k + 1) % ring; I.push(p, p + ring, q, q, p + ring, q + ring); }
+    const capC = [z0, z1].map((z, e) => { P.push(0, (fb(z) + ft(z)) / 2, z); return P.length / 3 - 1; });
+    for (let k = 0; k < ring; k++) { const q = (k + 1) % ring; I.push(capC[0], k, q); I.push(capC[1], nz * ring + q, nz * ring + k); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I); g.computeVertexNormals(); return g;
+  };
+  const zf = -1.25, zr = 1.22, R = 0.31;
+  const W = [[-2.0, 0.66], [-1.85, 0.8], [-1.5, 0.85], [1.55, 0.85], [1.88, 0.8], [1.98, 0.7]];
+  const T = [[-2.0, 0.6], [-1.9, 0.72], [-1.6, 0.82], [-0.8, 0.96], [1.0, 1.0], [1.8, 1.02], [1.98, 0.92]];
+  const B = [[-2.0, 0.34], [-1.7, 0.3], [1.7, 0.3], [2.0, 0.36]];
+  add(loft(-2.0, 1.98, 40, z => lerpT(W, z), z => lerpT(B, z), z => lerpT(T, z), 5), paint);
+  // glasshouse: narrower, tapering, blacked-out; gloss-black roof panel on top
+  const GW = [[-0.85, 0.74], [-0.2, 0.68], [1.4, 0.66], [1.75, 0.62]], GT = [[-0.85, 0.97], [-0.25, 1.36], [0.9, 1.42], [1.5, 1.34], [1.75, 1.12]];
+  add(loft(-0.85, 1.75, 20, z => lerpT(GW, z), z => 0.9, z => lerpT(GT, z), 3.2), glass);
+  add(loft(-0.2, 1.52, 14, z => lerpT(GW, z) * 0.93, z => lerpT(GT, z) - 0.06, z => lerpT(GT, z) + 0.025, 4), gloss);
+  add(new THREE.BoxGeometry(1.18, 0.05, 0.3), gloss, 0, 1.33, 1.6);                           // roof spoiler
+  for (const sx of [-1, 1]) {
+    add(new THREE.BoxGeometry(0.05, 0.36, 0.1), gloss, sx * 0.665, 1.13, 0.22);                 // B-pillar
+    add(new THREE.BoxGeometry(0.16, 0.1, 0.22), gloss, sx * 0.84, 1.0, -0.62);                  // mirrors
+    add(new THREE.BoxGeometry(0.05, 0.1, 1.9), gloss, sx * 0.86, 0.36, -0.02);                  // side skirts
+    for (const zc of [zf, zr]) { const arch = new THREE.TorusGeometry(0.41, 0.05, 6, 14, Math.PI); const m2 = add(arch, matt, sx * 0.84, R, zc); m2.rotation.y = Math.PI / 2; }   // black arch trims
+    add(new THREE.BoxGeometry(0.4, 0.08, 0.1), lens, sx * 0.5, 0.72, -1.93, false).rotation.y = sx * 0.3;    // slim LED headlights
+    add(new THREE.BoxGeometry(0.34, 0.12, 0.06), red, sx * 0.55, 0.9, 1.93, false);             // tail lamps
+    add(new THREE.BoxGeometry(0.18, 0.18, 0.06), matt, sx * 0.55, 0.44, -1.99, false);          // front corner intakes
+  }
+  add(new THREE.BoxGeometry(0.76, 0.035, 0.04), red, 0, 0.92, 1.96, false);                     // full-width light bar
+  add(new THREE.BoxGeometry(0.9, 0.17, 0.06), gloss, 0, 0.58, -1.98, false);                    // grille
+  add(new THREE.BoxGeometry(1.1, 0.1, 0.06), matt, 0, 0.38, -2.0, false);                       // lower intake
+  add(new THREE.BoxGeometry(1.1, 0.13, 0.06), gloss, 0, 0.38, 1.98, false);                     // rear diffuser
+  add(new THREE.BoxGeometry(0.5, 0.11, 0.02), plate, 0, 0.47, -2.04, false); add(new THREE.BoxGeometry(0.5, 0.11, 0.02), plateR, 0, 0.62, 2.0, false);
+  // wheels: black multi-spoke rims
+  const wheels = [], tg = new THREE.CylinderGeometry(R, R, 0.21, 20), rg = new THREE.CylinderGeometry(R * 0.72, R * 0.72, 0.215, 20), sg = new THREE.BoxGeometry(0.03, R * 1.3, 0.045);
+  for (const sx of [-1, 1]) for (const [z, front] of [[zf, true], [zr, false]]) {
+    const pivot = new THREE.Group(); pivot.position.set(0.74 * sx, R, z); const spin = new THREE.Group();
+    const t = new THREE.Mesh(tg, tyre); t.rotation.z = Math.PI / 2; t.castShadow = true; spin.add(t);
+    const r2 = new THREE.Mesh(rg, rim); r2.rotation.z = Math.PI / 2; spin.add(r2);
+    for (let k = 0; k < 5; k++) { const sp = new THREE.Mesh(sg, gloss); sp.position.x = sx * 0.11; sp.rotation.x = k / 5 * Math.PI; spin.add(sp); }
+    pivot.add(spin); body.add(pivot); wheels.push({ pivot, spin, front });
+  }
+  return { grp, body, wheels, red, paint };
+}
+let carModel = 0;
+function switchCar() {
+  const old = player.car; scene.remove(old.grp); carModel = (carModel + 1) % 2; const col = paintChoices[paintIdx];
+  player.car = carModel ? createCar2(col) : createCar(col); scene.add(player.car.grp);
+}
 const paintChoices = [0xa3161a, 0x1f4f9a, 0xe9e9e6, 0x2c2e31, 0x9aa0a6, 0x2f7d32, 0xe36f1c, 0x6c2a8a];
 let paintIdx = 0;
 const player = { x: spawn.x, z: spawn.z, y: 0, h: spawn.h, vx: 0, vz: 0, steer: 0, spin: 0, car: createCar(paintChoices[0]) };
@@ -1535,13 +1597,13 @@ function cycleColor() { paintIdx = (paintIdx + 1) % paintChoices.length; player.
 addEventListener('keydown', e => {
   if (keyMap[e.code]) { keys[keyMap[e.code]] = 1; e.preventDefault(); }
   if (e.code === 'Enter' && state === 'menu') start();
-  if (state === 'play') { if (e.code === 'KeyR') resetCar(); if (e.code === 'KeyC') cycleColor(); if (e.code === 'KeyV') camMode = (camMode + 1) % 2; }
+  if (state === 'play') { if (e.code === 'KeyR') resetCar(); if (e.code === 'KeyC') cycleColor(); if (e.code === 'KeyB') switchCar(); if (e.code === 'KeyV') camMode = (camMode + 1) % 2; }
 });
 addEventListener('keyup', e => { if (keyMap[e.code]) keys[keyMap[e.code]] = 0; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = 0; });
 document.querySelectorAll('.tb').forEach(b => {
   const k = b.dataset.key;
-  const down = e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (_) {} b.classList.add('on'); if (k === 'reset') resetCar(); else if (k === 'color') cycleColor(); else if (k === 'cam') camMode = (camMode + 1) % 2; else keys[k] = 1; };
+  const down = e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (_) {} b.classList.add('on'); if (k === 'reset') resetCar(); else if (k === 'color') cycleColor(); else if (k === 'car') switchCar(); else if (k === 'cam') camMode = (camMode + 1) % 2; else keys[k] = 1; };
   const up = e => { e.preventDefault(); b.classList.remove('on'); if (keys[k] !== undefined) keys[k] = 0; };
   b.addEventListener('pointerdown', down); b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
   b.addEventListener('contextmenu', e => e.preventDefault());
