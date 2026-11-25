@@ -578,7 +578,7 @@ for (const r of roads) for (let i = 0; i < r.p.length - 1; i++) {
 }
 // the L-shaped office you can walk into: find its entrance (the wall a service road dead-ends at)
 const isLB = b => b.cx > -485 && b.cx < -440 && b.cz > -290 && b.cz < -240 && Math.abs(b.area) > 250;
-let LD = null, LB = null; const LOBBY = {}, OFFICE_DESKS = [], WCS = [], WC_DOORS = [], TUCK = {}, KIT = {}; const DW = 0.82, DH = 2.35;
+let LD = null, LB = null; const LOBBY = {}, OFFICE_DESKS = [], WCS = [], WC_DOORS = [], TUCK = {}, KIT = {}, POOLSPOT = {}; const DW = 0.82, DH = 2.35;
 function findLDoor(b) {
   const n = b.p.length, sg = b.area >= 0 ? 1 : -1; let best = null;
   for (let i = 0; i < n; i++) {
@@ -1077,6 +1077,7 @@ function buildLInterior(b, door, wallH) {
       const m = new THREE.Mesh(new THREE.CircleGeometry(0.23, 24), new THREE.MeshBasicMaterial({ map: db })); m.position.set(x + Math.sin(yaw) * 0.03, FF + 1.73, z + Math.cos(yaw) * 0.03); m.rotation.y = yaw; interiorGroup.add(m); put(mg('dartBack', lit({ color: 0x1b1b1b }, 0.2)), new THREE.BoxGeometry(0.6, 0.6, 0.03), x, z, yaw, 0, FF + 1.73, 0.01); }
     { const [x, z] = PG(345, 96), yaw = yawOf(345, 96, 1, 0); put(mg('vend', lit({ color: 0xb3121f }, 0.35)), new THREE.BoxGeometry(0.9, 1.85, 0.8), x, z, yaw, 0, FF + 0.925, 0); put(mg('vendGlass', lit({ color: 0x9ec3d6, roughness: 0.1 }, 0.55)), new THREE.BoxGeometry(0.6, 1.2, 0.02), x, z, yaw, -0.08, FF + 1.15, 0.41); COLL_Y = { y0: 2.6 }; addCircle(x, z, 0.6); COLL_Y = { y1: 2.5 }; }
     plant(330, 270, 1.3); plant(528, 44, 1.5);
+    { const [x, z] = PG(430, 160); Object.assign(POOLSPOT, { x, z, y: FF, yaw: yawU }); COLL_Y = { y0: 2.6 }; for (const [a, b2, c, d] of [[-1.2, -0.65, 1.2, -0.65], [1.2, -0.65, 1.2, 0.65], [1.2, 0.65, -1.2, 0.65], [-1.2, 0.65, -1.2, -0.65]]) { const cu = Math.cos(yawU), su = -Math.sin(yawU), p = (u, v) => [x + u * cu - v * su * -1 * 0 + v * Math.sin(yawU), z + u * su + v * Math.cos(yawU)], A = p(a, b2), B = p(c, d); addSeg(A[0], A[1], B[0], B[1]); } COLL_Y = { y1: 2.5 }; }
     // walking: which floor you're on (ground, a stair, the landing, or upstairs), from plan position
     const toPlan = (x, z) => { const dx = x - PA[0], dz = z - PA[1]; return [288 + (dx * dU[0] + dz * dU[1]) / SU, 39 + (dx * dV[0] + dz * dV[1]) / SV]; };
     OFFICE_FLOOR = (x, z, y) => { const [px, py] = toPlan(x, z); let best = 0; const cand = h => { if (h <= y + 0.45 && h > best) best = h; };
@@ -2300,6 +2301,7 @@ const W = (() => {
 const follow = () => W.on ? W : player;
 function toggleFoot() {
   if (W.seated) { standUp(); return; }
+  if (POOL.mode) { POOL.leave(); return; }
   setTimeout(() => { document.body.classList.toggle('foot', W.on); window.__lockMouse && window.__lockMouse(W.on); }, 0);
   if (state !== 'play') return;
   if (!W.on) {
@@ -2427,7 +2429,7 @@ function updateWork(dt) {
 const aimRay = new THREE.Raycaster(); let aimT = null; const basket = [];
 const onTill = m => TILLS.some(T => T.belt.some(e => e.m === m) || T.scanned.some(e => e.m === m));
 function updateAim() {
-  aimT = null; $('tAct2').classList.remove('show'); if (!W.on || W.busy) { $('tAct').classList.remove('show'); $('xhair').classList.remove('on'); return; }
+  aimT = null; $('tAct2').classList.remove('show'); if (POOL.mode) { POOL.buttons(); return; } if (!W.on || W.busy) { $('tAct').classList.remove('show'); $('xhair').classList.remove('on'); return; }
   aimRay.setFromCamera({ x: 0, y: 0 }, camera); aimRay.far = 3.2;
   if (INSIDE === shopGroup) { const hits = aimRay.intersectObjects(SHOP_STOCK.filter(m => m.visible).concat(SHOP_ITEMS.filter(m => m.visible && !onTill(m)), TILLS.flatMap(T => T.hits)), false);
     for (const hit of hits) { const ud = hit.object.userData;
@@ -2435,8 +2437,9 @@ function updateAim() {
       if (hit.object.isInstancedMesh) { const it = hit.object.userData.items[hit.instanceId]; if (it && !basket.includes(it) && !it.mesh) aimT = { kind: 'item', it }; }
       break; } }
   else if (INSIDE === interiorGroup) {
-    const na = W.seated ? null : NPC.aim(aimRay), wa = W.seated || na ? null : WC.aim(aimRay), ta = W.seated || na || wa ? null : TUCKSHOP.aim(aimRay), ka = W.seated || na || wa || ta ? null : KITCHEN.aim(aimRay);
-    if (na) { if (na.kind !== 'holding') aimT = na; }
+    const pa = W.seated ? null : POOL.aim(aimRay), na = W.seated || pa ? null : NPC.aim(aimRay), wa = W.seated || na ? null : WC.aim(aimRay), ta = W.seated || na || wa ? null : TUCKSHOP.aim(aimRay), ka = W.seated || na || wa || ta ? null : KITCHEN.aim(aimRay);
+    if (pa) aimT = pa;
+    else if (na) { if (na.kind !== 'holding') aimT = na; }
     else if (wa) aimT = wa;
     else if (ta) aimT = ta;
     else if (ka) aimT = ka;
@@ -2446,11 +2449,12 @@ function updateAim() {
   const b = $('tAct'); b.classList.toggle('show', !!aimT); $('xhair').classList.toggle('on', !!aimT);
   if (aimT && aimT.kind === 'tuck') $('aimLbl').textContent = TUCKSHOP.label(aimT);
   if (aimT && aimT.kind === 'item') { b.textContent = 'PICK UP'; $('aimLbl').textContent = aimT.it.name + '  £' + aimT.it.price.toFixed(2); } else $('aimLbl').textContent = '';
-  if (aimT && aimT.kind !== 'item') b.textContent = aimT.kind === 'card' ? 'PAY £' + aimT.T.total.toFixed(2) : { car: 'GET IN', item: 'PICK UP', desk: 'SIT', kb: 'TYPE', belt: 'PLACE ITEM', scan: 'SCAN', shoes: 'TAKE SHOES', putshoes: 'PUT SHOES DOWN', wee: 'WEE', flush: 'FLUSH', tuck: 'BUY', kettle: 'MAKE A CUPPA', micro: 'HEAT FOOD', fridge: 'FRIDGE', kitwait: 'WAIT…' }[aimT.kind];
+  if (aimT && aimT.kind !== 'item') b.textContent = aimT.kind === 'card' ? 'PAY £' + aimT.T.total.toFixed(2) : { car: 'GET IN', item: 'PICK UP', desk: 'SIT', kb: 'TYPE', belt: 'PLACE ITEM', scan: 'SCAN', shoes: 'TAKE SHOES', putshoes: 'PUT SHOES DOWN', wee: 'WEE', flush: 'FLUSH', tuck: 'BUY', kettle: 'MAKE A CUPPA', micro: 'HEAT FOOD', fridge: 'FRIDGE', kitwait: 'WAIT…', pool: POOL.label() }[aimT.kind];
   const b2 = $('tAct2'), hd = KITCHEN.held(), canSip = !!hd && !W.seated && !(aimT && aimT.alt); b2.classList.toggle('show', !!(aimT && aimT.alt) || canSip); if (aimT && aimT.alt) b2.textContent = 'POO'; else if (canSip) b2.textContent = hd.kind === 'tea' ? 'SIP' : 'EAT';
 }
 function doAction2() { if (aimT && aimT.alt) { WC.act(aimT.alt); updateAim(); } else if (KITCHEN.held() && !W.seated) KITCHEN.sip(); }
 function doAction() {
+  if (POOL.mode) { POOL.press(); return; }
   if (!aimT) return;
   if (aimT.kind === 'car') { toggleFoot(); return; }
   if (aimT.kind === 'desk') { sitAt(aimT.d); updateAim(); return; }
@@ -2459,6 +2463,7 @@ function doAction() {
   if (aimT.kind === 'tuck') { TUCKSHOP.buy(aimT.it); updateAim(); return; }
   if (aimT.kind === 'kettle' || aimT.kind === 'micro' || aimT.kind === 'fridge') { KITCHEN.act(aimT); updateAim(); return; }
   if (aimT.kind === 'kitwait') return;
+  if (aimT.kind === 'pool') { POOL.act(); updateAim(); return; }
   if (aimT.kind === 'kb') { pressKeyboard(); return; }
   if (aimT.kind === 'belt') { const T = aimT.T, it = basket.shift(); if (!it) return; const m = it.makeMesh(); m.position.copy(T.start); m.rotation.y = T.yaw; T.belt.push({ it, m, t: 0 }); showBasket(); updateAim(); return; }
   if (aimT.kind === 'scan') { const T = aimT.T, e = T.belt.find(q => q.t >= 0.98) || T.belt[0]; if (!e) return; T.belt.splice(T.belt.indexOf(e), 1);
@@ -3425,6 +3430,163 @@ const KITCHEN = (() => {
   };
 })();
 window.__kitLabel = () => KITCHEN.label();
+// ===== pool: a 3D pub pool table upstairs. Two players take turns (or one plays both sides); everyone in the room can watch =====
+const POOL = (() => {
+  if (POOLSPOT.x == null) return { mode: false, aim() { return null; }, step() {}, onNet() {}, load() {}, buttons() {}, press() {}, camera() { return false; }, leave() {} };
+  const R = 0.026, HL = 1.0, HW = 0.5, BED = POOLSPOT.y + 0.8;            // ball radius, half length/width of the cloth, cloth height
+  const g = new THREE.Group(); g.position.set(POOLSPOT.x, BED, POOLSPOT.z); g.rotation.y = POOLSPOT.yaw; interiorGroup.add(g);
+  g.updateMatrixWorld(true);
+  const toW = (u, y, v) => new THREE.Vector3(u, y, v).applyMatrix4(g.matrixWorld), dirW = (du, dv) => new THREE.Vector3(du, 0, dv).applyQuaternion(g.quaternion);
+  const M = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.6 }, o));
+  // ---- the table
+  { const wood = M(0x5a2d16, { roughness: 0.45 }), baize = M(0x1d7a3c, { roughness: 0.95 }), cush = M(0x18693a, { roughness: 0.9 }), black = M(0x0b0b0b), brass = M(0xc9a13a, { metalness: 0.6, roughness: 0.3 });
+    const add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; g.add(o); return o; };
+    const cloth = add(new THREE.PlaneGeometry(2 * HL + 0.02, 2 * HW + 0.02), baize, 0, 0, 0); cloth.rotation.x = -Math.PI / 2;
+    add(new THREE.BoxGeometry(2 * HL + 0.02, 0.12, 2 * HW + 0.02), wood, 0, -0.065, 0);
+    for (const s of [-1, 1]) { add(new THREE.BoxGeometry(HL - 0.07, 0.04, 0.05), cush, s * (HL / 2 + 0.005), 0.02, HW + 0.025).position.x = s * HL / 2; add(new THREE.BoxGeometry(HL - 0.07, 0.04, 0.05), cush, s * HL / 2, 0.02, -HW - 0.025);
+      add(new THREE.BoxGeometry(0.05, 0.04, 2 * HW - 0.11), cush, s * (HL + 0.025), 0.02, 0);
+      add(new THREE.BoxGeometry(2 * HL + 0.3, 0.1, 0.11), wood, 0, 0.0, s * (HW + 0.1)); add(new THREE.BoxGeometry(0.11, 0.1, 2 * HW + 0.3), wood, s * (HL + 0.1), 0.0, 0); }
+    for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [0, 1]]) { const p = add(new THREE.CylinderGeometry(x ? 0.06 : 0.055, x ? 0.06 : 0.055, 0.02, 18), black, x * (HL + 0.01), 0.004, z * (HW + 0.012)); p.castShadow = false;
+      add(new THREE.CylinderGeometry(0.075, 0.075, 0.012, 18, 1, true), brass, x * (HL + 0.01), 0.045, z * (HW + 0.012)).material.side = THREE.DoubleSide; }
+    for (const [x, z] of [[-0.9, -0.42], [0.9, -0.42], [-0.9, 0.42], [0.9, 0.42], [0, -0.42], [0, 0.42]]) add(new THREE.BoxGeometry(0.13, 0.68, 0.13), wood, x, -0.46, z);
+    add(new THREE.BoxGeometry(1.4, 0.06, 0.4), M(0x1a1a1a), 0, 1.05, 0); add(new THREE.BoxGeometry(1.35, 0.01, 0.35), new THREE.MeshBasicMaterial({ color: 0xfff6d8 }), 0, 1.015, 0);   // lamp over the table
+    for (const s of [-0.6, 0.6]) add(new THREE.CylinderGeometry(0.005, 0.005, 1.0, 4), M(0x222222), s, 1.6, 0);
+    const spot = add(new THREE.CircleGeometry(0.008, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }), -0.5, 0.001, 0); spot.rotation.x = -Math.PI / 2;
+    // cue rack on the wall-side of the table
+    const rack = new THREE.Group(); rack.position.set(0, -0.5, -HW - 0.9); g.add(rack); }
+  // ---- balls (UK style: 7 reds, 7 yellows, the black, the white)
+  const COL = { w: 0xf6f3ea, r: 0xc8141e, y: 0xf2c418, b: 0x0d0d0d }, ballGeo = new THREE.SphereGeometry(R, 20, 14), balls = [];
+  const rackOrder = ['r', 'y', 'r', 'y', 'b', 'y', 'r', 'y', 'r', 'r', 'y', 'r', 'y', 'r', 'y'];
+  for (let i = 0; i < 16; i++) { const k = i === 0 ? 'w' : rackOrder[i - 1], m = new THREE.Mesh(ballGeo, M(COL[k], { roughness: 0.18, metalness: 0.05 })); m.castShadow = true; g.add(m); balls.push({ i, k, x: 0, z: 0, vx: 0, vz: 0, on: true, m, tx: 0, tz: 0 }); }
+  function rack() { balls[0].x = -0.5; balls[0].z = 0; let n = 1; for (let row = 0; row < 5; row++) for (let j = 0; j <= row; j++) { const b = balls[n++]; b.x = 0.5 + row * R * 2 * 0.87; b.z = (j - row / 2) * R * 2.02; } for (const b of balls) { b.vx = b.vz = 0; b.on = true; b.tx = b.x; b.tz = b.z; } }
+  // ---- cue, aim guide and power
+  const cue = new THREE.Group(); { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.013, 1.45, 10), M(0xd9b27a, { roughness: 0.5 })); c.rotation.z = Math.PI / 2; c.position.x = -0.725; cue.add(c);
+    const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.0062, 0.0062, 0.012, 8), M(0x3b6bd6)); tip.rotation.z = Math.PI / 2; tip.position.x = -0.006; cue.add(tip);
+    const butt = new THREE.Mesh(new THREE.CylinderGeometry(0.0125, 0.0135, 0.4, 10), M(0x1b1b1b)); butt.rotation.z = Math.PI / 2; butt.position.x = -1.25; cue.add(butt); } cue.visible = false; g.add(cue);
+  const guideGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()]), guide = new THREE.LineSegments(guideGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75 })); guide.visible = false; g.add(guide);
+  const ghost = new THREE.Mesh(new THREE.RingGeometry(R * 0.85, R, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6, side: THREE.DoubleSide })); ghost.rotation.x = -Math.PI / 2; ghost.visible = false; g.add(ghost);
+  const hitBox = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.0, 1.4), new THREE.MeshBasicMaterial({ visible: false })); hitBox.position.y = -0.3; g.add(hitBox);
+  // HUD
+  const hud = document.createElement('div'); hud.style.cssText = 'display:none;position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 116px);z-index:7;background:rgba(0,0,0,.6);color:#fff;font:600 13px/1.35 system-ui;padding:6px 12px;border-radius:10px;text-align:center;pointer-events:none;max-width:90vw'; document.body.appendChild(hud);
+  const pow = document.createElement('div'); pow.style.cssText = 'display:none;position:fixed;right:calc(18px + env(safe-area-inset-right));bottom:calc(46px + var(--b,64px)*1.4 + env(safe-area-inset-bottom));width:16px;height:160px;border-radius:8px;background:rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.6);z-index:7;overflow:hidden'; const powF = document.createElement('div'); powF.style.cssText = 'position:absolute;left:0;right:0;bottom:0;height:0;background:linear-gradient(#ff3b30,#ffcc00,#34c759)'; pow.appendChild(powF); document.body.appendChild(pow);
+  // ---- state (shared): seats, ball positions, whose turn, colours, winner
+  const P = { seats: [null, null], turn: 0, groups: [null, null], over: null, msg: 'Aim at the table to play pool', moving: false, shooter: null };
+  const myId = () => MP.id || 'me', mySeat = () => P.seats.findIndex(s => s && s.id === myId()), seatName = i => P.seats[i] ? P.seats[i].n : 'Player ' + (i + 1);
+  const _rq = new THREE.Quaternion(), _ra = new THREE.Vector3();
+  const L = { mode: false, aimA: 0, charging: false, power: 0, powT: 0, shotT: 0, firstHit: null, potted: [], cushionHit: false, sendT: 0, streamT: 0, remoteAim: null };
+  rack();
+  const myTurn = () => { if (P.over != null || P.moving) return false; const s = mySeat(); if (s < 0) return false; const other = P.seats[1 - s]; return P.turn === s || !other; };   // alone: you play both sides
+  const groupOf = k => k === 'r' ? 'Reds' : k === 'y' ? 'Yellows' : '';
+  function stateMsg() { return P.over != null ? '🏆 ' + seatName(P.over) + ' wins! Aim at the table to rack up again.' : (P.msg || ''); }
+  function drawHud() { const show = L.mode || (INSIDE === interiorGroup && W.y > 2 && Math.hypot(W.x - POOLSPOT.x, W.z - POOLSPOT.z) < 7); hud.style.display = show ? 'block' : 'none'; if (!show) return;
+    const tag = i => (P.seats[i] ? seatName(i) : '<span style="opacity:.6">(free)</span>') + (P.groups[i] ? ' · ' + groupOf(P.groups[i][0] === 'R' ? 'r' : 'y') : '');
+    const reds = balls.filter(b => b.on && b.k === 'r').length, yel = balls.filter(b => b.on && b.k === 'y').length;
+    hud.innerHTML = `🎱 ${P.turn === 0 && P.over == null ? '▶ ' : ''}${tag(0)} &nbsp;vs&nbsp; ${P.turn === 1 && P.over == null ? '▶ ' : ''}${tag(1)}<br><span style="opacity:.85;font-weight:500">🔴 ${reds} &nbsp; 🟡 ${yel} &nbsp;·&nbsp; ${stateMsg()}</span>`; }
+  const pack = () => ({ seats: P.seats, turn: P.turn, groups: P.groups, over: P.over, msg: P.msg, b: balls.map(b => [Math.round(b.x * 1000) / 1000, Math.round(b.z * 1000) / 1000, b.on ? 1 : 0]) });
+  function unpack(s) { if (!s) return; P.seats = s.seats || [null, null]; P.turn = s.turn || 0; P.groups = s.groups || [null, null]; P.over = s.over ?? null; P.msg = s.msg || ''; P.moving = false;
+    if (s.b) s.b.forEach((q, i) => { const b = balls[i]; b.x = b.tx = q[0]; b.z = b.tz = q[1]; b.on = !!q[2]; b.vx = b.vz = 0; }); }
+  const net = d => MP.poolEv(d);
+  // ---- sounds
+  const click = v => { if (!actx) return; const o = actx.createOscillator(), gn = actx.createGain(), t0 = actx.currentTime; o.type = 'triangle'; o.frequency.value = 1800 + Math.random() * 400; gn.gain.setValueAtTime(Math.min(0.4, v * 0.12), t0); gn.gain.exponentialRampToValueAtTime(0.001, t0 + 0.05); o.connect(gn); gn.connect(actx.destination); o.start(); o.stop(t0 + 0.06); };
+  const thunk = () => { if (!actx) return; const o = actx.createOscillator(), gn = actx.createGain(), t0 = actx.currentTime; o.frequency.setValueAtTime(220, t0); o.frequency.exponentialRampToValueAtTime(60, t0 + 0.2); gn.gain.setValueAtTime(0.35, t0); gn.gain.exponentialRampToValueAtTime(0.001, t0 + 0.25); o.connect(gn); gn.connect(actx.destination); o.start(); o.stop(t0 + 0.3); };
+  const near = () => INSIDE === interiorGroup && W.y > 2 && Math.hypot(W.x - POOLSPOT.x, W.z - POOLSPOT.z) < 9;
+  // ---- physics (in table coordinates, metres): rolling friction, ball-ball and cushion bounces, six pockets
+  const POCKETS = [[-HL, -HW, 0.06], [HL, -HW, 0.06], [-HL, HW, 0.06], [HL, HW, 0.06], [0, -HW - 0.015, 0.052], [0, HW + 0.015, 0.052]];
+  function physics(dt) {
+    const n = 8, h = dt / n; let any = false;
+    for (let s = 0; s < n; s++) {
+      for (const b of balls) { if (!b.on) continue; const sp = Math.hypot(b.vx, b.vz); if (sp < 0.008) { b.vx = b.vz = 0; continue; } any = true;
+        const dec = Math.max(0, sp - (0.45 + 0.18 * sp) * h) / sp; b.vx *= dec; b.vz *= dec; b.x += b.vx * h; b.z += b.vz * h;
+        const inCornerMouth = Math.abs(b.x) > HL - 0.075 && Math.abs(b.z) > HW - 0.075, inMidMouth = Math.abs(b.x) < 0.05;
+        if (!inCornerMouth) { if (b.x > HL - R) { b.x = HL - R; b.vx = -Math.abs(b.vx) * 0.78; click(Math.abs(b.vx)); L.cushionHit = true; } if (b.x < -HL + R) { b.x = -HL + R; b.vx = Math.abs(b.vx) * 0.78; click(Math.abs(b.vx)); L.cushionHit = true; } }
+        if (!inCornerMouth && !inMidMouth) { if (b.z > HW - R) { b.z = HW - R; b.vz = -Math.abs(b.vz) * 0.78; click(Math.abs(b.vz)); L.cushionHit = true; } if (b.z < -HW + R) { b.z = -HW + R; b.vz = Math.abs(b.vz) * 0.78; click(Math.abs(b.vz)); L.cushionHit = true; } }
+        for (const [px, pz, pr] of POCKETS) if (Math.hypot(b.x - px, b.z - pz) < pr || Math.abs(b.x) > HL + R || Math.abs(b.z) > HW + R) { b.on = false; b.vx = b.vz = 0; L.potted.push(b.k); if (near()) thunk(); break; } }
+      for (let i = 0; i < 16; i++) { const a = balls[i]; if (!a.on) continue; for (let j = i + 1; j < 16; j++) { const c = balls[j]; if (!c.on) continue;
+        const dx = c.x - a.x, dz = c.z - a.z, d = Math.hypot(dx, dz); if (d >= 2 * R || d < 1e-6) continue; const nx = dx / d, nz = dz / d, ov = 2 * R - d; a.x -= nx * ov / 2; a.z -= nz * ov / 2; c.x += nx * ov / 2; c.z += nz * ov / 2;
+        const rv = (a.vx - c.vx) * nx + (a.vz - c.vz) * nz; if (rv <= 0) continue; const j2 = rv * 0.96; a.vx -= j2 * nx; a.vz -= j2 * nz; c.vx += j2 * nx; c.vz += j2 * nz;
+        if (L.firstHit == null && (i === 0 || j === 0)) L.firstHit = (i === 0 ? c : a).k; if (near()) click(rv * 3); } }
+    }
+    return any;
+  }
+  // ---- rules once everything has stopped (UK 8-ball, simplified)
+  function judge() {
+    const s = P.turn, name = seatName(s), pot = L.potted, cueIn = pot.includes('w'), blackIn = pot.includes('b'), mineK = P.groups[s] ? (P.groups[s] === 'Reds' ? 'r' : 'y') : null;
+    let foul = cueIn || L.firstHit == null; if (mineK && L.firstHit && L.firstHit !== mineK && !(L.firstHit === 'b' && !balls.some(b => b.on && b.k === mineK))) foul = true;
+    if (!mineK && L.firstHit === 'b') foul = true;
+    let msg = '', keep = false;
+    if (blackIn) { const cleared = mineK && !balls.some(b => b.on && b.k === mineK); if (cleared && !foul) { P.over = s; msg = name + ' pots the black!'; } else { P.over = 1 - s; msg = name + ' potted the black too early!'; } }
+    else {
+      const colours = pot.filter(k => k === 'r' || k === 'y');
+      if (!P.groups[s] && colours.length && !foul) { const k = colours[0]; P.groups[s] = k === 'r' ? 'Reds' : 'Yellows'; P.groups[1 - s] = k === 'r' ? 'Yellows' : 'Reds'; msg = name + ' is on ' + P.groups[s] + '. '; }
+      const mk = P.groups[s] ? (P.groups[s] === 'Reds' ? 'r' : 'y') : null, good = colours.filter(k => k === mk).length;
+      if (foul) msg += cueIn ? 'Foul! ' + name + ' potted the white.' : L.firstHit == null ? 'Foul! Missed everything.' : 'Foul! Hit the wrong ball first.';
+      else if (good) { keep = true; msg += name + ' potted ' + good + (good > 1 ? ' balls' : ' ball') + '. Go again!'; }
+      else msg += colours.length ? name + ' potted the other colour.' : 'No pot.';
+      if (!keep) P.turn = 1 - s;
+    }
+    if (cueIn) { const w = balls[0]; w.on = true; w.x = -0.5; w.z = 0; w.vx = w.vz = 0; for (let k = 0; k < 20 && balls.some(b => b !== w && b.on && Math.hypot(b.x - w.x, b.z - w.z) < 2 * R); k++) w.z += 2.2 * R; }
+    P.msg = msg; P.moving = false; net({ a: 'state', s: pack() });
+  }
+  // ---- my shot
+  function shoot(power) { const sp = 0.4 + 4.6 * Math.pow(power, 1.25), w = balls[0]; w.vx = Math.cos(L.aimA) * sp; w.vz = Math.sin(L.aimA) * sp; P.moving = true; P.shooter = myId(); L.firstHit = null; L.potted = []; L.cushionHit = false; L.shotT = 0.25; L.streamT = 0;
+    click(3); net({ a: 'shot', ang: L.aimA, pow: power }); }
+  // aim direction in table coordinates from where the camera is facing
+  function aimFromCam() { const f = new THREE.Vector3(-Math.sin(W.h), 0, -Math.cos(W.h)), q = g.quaternion.clone().invert(); f.applyQuaternion(q); L.aimA = Math.atan2(f.z, f.x); }
+  function updateGuide() { const w = balls[0], dx = Math.cos(L.aimA), dz = Math.sin(L.aimA); let best = 9, hitB = null;
+    for (const b of balls) { if (b === w || !b.on) continue; const ox = b.x - w.x, oz = b.z - w.z, t = ox * dx + oz * dz; if (t <= 0) continue; const perp2 = ox * ox + oz * oz - t * t, r2 = 4 * R * R; if (perp2 > r2) continue; const tt = t - Math.sqrt(r2 - perp2); if (tt < best) { best = tt; hitB = b; } }
+    const tx = dx > 0 ? (HL - R - w.x) / dx : dx < 0 ? (-HL + R - w.x) / dx : 9, tz = dz > 0 ? (HW - R - w.z) / dz : dz < 0 ? (-HW + R - w.z) / dz : 9; if (!hitB) best = Math.min(tx, tz);
+    const ex = w.x + dx * best, ez = w.z + dz * best, pa = guideGeo.attributes.position; pa.setXYZ(0, w.x, R * 0.2, w.z); pa.setXYZ(1, ex, R * 0.2, ez);
+    if (hitB) { const nx = hitB.x - ex, nz = hitB.z - ez, l = Math.hypot(nx, nz) || 1; pa.setXYZ(2, hitB.x, R * 0.2, hitB.z); pa.setXYZ(3, hitB.x + nx / l * 0.25, R * 0.2, hitB.z + nz / l * 0.25); } else { pa.setXYZ(2, ex, R * 0.2, ez); pa.setXYZ(3, ex, R * 0.2, ez); }
+    pa.needsUpdate = true; guideGeo.computeBoundingSphere(); ghost.position.set(ex, R * 0.15, ez); ghost.visible = true; guide.visible = true; }
+  function placeCue(ang, pull) { const w = balls[0]; cue.visible = w.on; cue.position.set(w.x - Math.cos(ang) * (R + 0.01 + pull * 0.28), R * 1.2, w.z - Math.sin(ang) * (R + 0.01 + pull * 0.28)); cue.rotation.set(0, -ang, -0.07); }
+  // ---- joining / leaving
+  function join() { if (P.over != null) { rack(); P.over = null; P.turn = 0; P.groups = [null, null]; P.msg = 'New game. ' + seatName(0) + ' to break.'; }
+    let s = mySeat(); if (s < 0) { s = P.seats[0] ? (P.seats[1] ? -1 : 1) : 0; if (s < 0) { toast('Two people are already playing. Grab a sofa and watch!'); return; } P.seats[s] = { id: myId(), n: MP.name() }; }
+    if (!P.msg || P.msg.startsWith('Aim at')) P.msg = seatName(0) + ' to break.';
+    L.mode = true; W.busy = true; document.exitPointerLock && document.exitPointerLock(); window.__lockMouse && window.__lockMouse(true); $('tOut').textContent = 'LEAVE';
+    toast('🎱 You’re at the pool table. Look around to aim, press SHOOT to wind up and again to hit. LEAVE to step away.'); net({ a: 'state', s: pack() }); }
+  function leave() { const s = mySeat(); if (s >= 0) P.seats[s] = null; L.mode = false; L.charging = false; W.busy = false; cue.visible = guide.visible = ghost.visible = false; pow.style.display = 'none'; $('tOut').textContent = 'IN';
+    const st = standSpot(); W.x = st.x; W.z = st.z; W.pitch = 0; net({ a: 'state', s: pack() }); }
+  function standSpot() { const w = balls[0], ang = L.aimA, bx = w.x - Math.cos(ang) * 0.6, bz = w.z - Math.sin(ang) * 0.6; let u = bx, v = bz; const ku = Math.abs(u) / (HL + 0.45), kv = Math.abs(v) / (HW + 0.45);
+    if (ku < 1 && kv < 1) { if ((HL + 0.45 - Math.abs(u)) < (HW + 0.45 - Math.abs(v))) u = Math.sign(u || 1) * (HL + 0.45); else v = Math.sign(v || 1) * (HW + 0.45); } return toW(u, 0, v); }
+  // ---- per frame
+  function step(dt) {
+    if (L.shotT > 0) L.shotT -= dt;
+    const shooterIsMe = P.moving && P.shooter === myId();
+    if (shooterIsMe) { const any = physics(Math.min(dt, 1 / 30)); L.streamT -= dt; if (L.streamT <= 0) { L.streamT = 0.066; net({ a: 'pos', b: balls.map(b => [Math.round(b.x * 1000) / 1000, Math.round(b.z * 1000) / 1000, b.on ? 1 : 0]) }); } if (!any) judge(); for (const b of balls) { b.tx = b.x; b.tz = b.z; } }
+    else for (const b of balls) { const k = Math.min(1, dt * 14); b.x += (b.tx - b.x) * k; b.z += (b.tz - b.z) * k; }
+    for (const b of balls) { b.m.visible = b.on; if (b.on) { const dx = b.x - b.m.position.x, dz = b.z - b.m.position.z; b.m.position.set(b.x, R, b.z); const d = Math.hypot(dx, dz); if (d > 1e-5) b.m.quaternion.premultiply(_rq.setFromAxisAngle(_ra.set(dz / d, 0, -dx / d), d / R)); } }
+    // cue: mine while aiming, otherwise the other player's as they line up
+    if (L.mode && myTurn()) { aimFromCam(); updateGuide(); if (L.charging) { L.powT += dt; L.power = 0.5 - 0.5 * Math.cos(L.powT * 2.6); powF.style.height = (L.power * 100) + '%'; } placeCue(L.aimA, L.charging ? L.power : 0.05); pow.style.display = 'block';
+      L.sendT -= dt; if (L.sendT <= 0) { L.sendT = 0.1; net({ a: 'aim', ang: Math.round(L.aimA * 1000) / 1000, pow: L.charging ? Math.round(L.power * 100) / 100 : 0.05 }); }
+      const st = standSpot(); W.x = st.x; W.z = st.z; }
+    else { guide.visible = ghost.visible = false; pow.style.display = 'none'; if (L.shotT > 0) placeCue(L.lastAng ?? L.aimA, -0.2); else if (!P.moving && L.remoteAim && performance.now() - L.remoteAim.t < 1500) placeCue(L.remoteAim.ang, L.remoteAim.pow); else cue.visible = false;
+      if (L.mode) { const s = mySeat(), side = s === 1 ? 1 : -1, st = toW(-0.3 * side, 0, side * (HW + 0.6)); W.x = st.x; W.z = st.z; } }
+    drawHud();
+  }
+  return {
+    get mode() { return L.mode; },
+    aim(ray) { if (L.mode) return null; const h = ray.intersectObject(hitBox, false)[0]; if (!h || h.distance > 3) return null; return { kind: 'pool' }; },
+    label() { return P.over != null ? 'RACK UP' : (P.seats[0] && P.seats[1] && mySeat() < 0) ? 'WATCHING' : 'PLAY POOL'; },
+    act() { join(); },
+    leave,
+    buttons() { const b = $('tAct'); $('xhair').classList.remove('on'); $('aimLbl').textContent = ''; if (myTurn()) { b.textContent = L.charging ? 'HIT!' : 'SHOOT'; b.classList.add('show'); } else if (P.over != null) { b.textContent = 'RACK UP'; b.classList.add('show'); } else b.classList.remove('show'); },
+    press() { if (P.over != null) { join(); return; } if (!myTurn()) return; if (!L.charging) { L.charging = true; L.powT = 0; L.power = 0; } else { L.charging = false; L.lastAng = L.aimA; shoot(Math.max(0.05, L.power)); } },
+    camera() { if (!L.mode) return false; const w = balls[0], ang = myTurn() ? L.aimA : (L.remoteAim ? L.remoteAim.ang : L.aimA);
+      if (myTurn() || P.moving && P.shooter === myId()) { const back = toW(w.x - Math.cos(ang) * 0.75, 0.32, w.z - Math.sin(ang) * 0.75), look = toW(w.x + Math.cos(ang) * 0.5, 0, w.z + Math.sin(ang) * 0.5); camera.position.lerp(back, 0.25); camera.lookAt(look); }
+      else { const s = mySeat(), side = s === 1 ? 1 : -1, eye = toW(0, 1.25, side * (HW + 1.0)); camera.position.lerp(eye, 0.12); camera.lookAt(toW(0, -0.1, 0)); }
+      return true; },
+    onNet(d, from) {
+      if (d.a === 'state') { const keepMe = L.mode; unpack(d.s); if (keepMe && mySeat() < 0) { L.mode = false; W.busy = false; $('tOut').textContent = 'IN'; } }
+      else if (d.a === 'aim') L.remoteAim = { ang: d.ang, pow: d.pow, t: performance.now() };
+      else if (d.a === 'shot') { L.shotT = 0.25; L.lastAng = d.ang; P.moving = true; P.shooter = from; if (near()) click(3); }
+      else if (d.a === 'pos') d.b.forEach((q, i) => { const b = balls[i]; b.tx = q[0]; b.tz = q[1]; if (b.on && !q[2] && near()) thunk(); b.on = !!q[2]; });
+      else if (d.a === 'free') { P.seats = P.seats.map(s => s && s.id === d.id ? null : s); if (P.moving && P.shooter === d.id) { P.moving = false; for (const b of balls) { b.x = b.tx; b.z = b.tz; } } } },
+    load(s) { if (s) unpack(s); },
+    step
+  };
+})();
+
 // ===== multiplayer: everyone on the link shares one session (Cloudflare Durable Object room at /ws) =====
 const MP = (() => {
   const o = { ws: null, id: null, peers: new Map(), g: new THREE.Group(), tries: 0, sendT: 0, online: 1 };
@@ -3465,7 +3627,7 @@ const MP = (() => {
     o.ws = ws;
     ws.onopen = () => { o.tries = 0; lbSent = ''; hud(); setTimeout(sendScore, 1500); };
     ws.onmessage = e => { let d; try { d = JSON.parse(e.data); } catch (_) { return; }
-      if (d.t === 'hi') { o.id = d.id; for (const id of [...o.peers.keys()]) dropPeer(id, true); for (const s of d.players) if (s.id !== o.id) onState(s); if (d.world) onWorld(d.world); if (d.npc) NPC.onNet(Object.assign({ a: 'state' }, d.npc), null); if (d.wc) WC.load(d.wc); KITCHEN.load(d.kit); hud(); }
+      if (d.t === 'hi') { o.id = d.id; for (const id of [...o.peers.keys()]) dropPeer(id, true); for (const s of d.players) if (s.id !== o.id) onState(s); if (d.world) onWorld(d.world); if (d.npc) NPC.onNet(Object.assign({ a: 'state' }, d.npc), null); if (d.wc) WC.load(d.wc); KITCHEN.load(d.kit); POOL.load(d.pool); hud(); }
       else if (d.t === 'ev') onEv(d);
       else if (d.t === 's' && d.id !== o.id) onState(d);
       else if (d.t === 'bye') dropPeer(d.id);
@@ -3510,6 +3672,7 @@ const MP = (() => {
   o.wcEv = e => send(Object.assign({ t: 'ev', e: 'wc' }, e));
   o.tuckEv = e => send(Object.assign({ t: 'ev', e: 'tuck' }, e));
   o.kitEv = e => send(Object.assign({ t: 'ev', e: 'kit' }, e));
+  o.poolEv = e => send(Object.assign({ t: 'ev', e: 'pool' }, e));
   o.parkedDent = (c, wx, wz, inx, inz, s) => { const [lx, lz] = toL(c.yaw, wx - c.x, wz - c.z), [dx, dz] = toL(c.yaw, inx, inz);
     send({ t: 'ev', e: 'dent', k: c.key, x: r2(c.x), z: r2(c.z), y: r2(c.yaw), col: c.color, d: [r2(lx), 0.62, r2(lz), r2(dx), r2(dz), r2(s)] }); };
   const applyParkedDent = (c, d) => { const w = wreckOf(c); if (!w) return; const [ox, oz] = toW(c.yaw, d[0], d[2]), [ix, iz] = toW(c.yaw, d[3], d[4]); damageModel(w, c.x + ox, d[1], c.z + oz, ix, iz, d[5]); };
@@ -3519,6 +3682,7 @@ const MP = (() => {
     if (d.e === 'wc') { WC.onNet(d); return; }
     if (d.e === 'tuck') { TUCKSHOP.onNet(d); return; }
     if (d.e === 'kit') { KITCHEN.onNet(d); return; }
+    if (d.e === 'pool') { POOL.onNet(d, d.id); return; }
     if (d.e === 'npc') { if (d.a !== 'on') NPC.onNet(d, d.id); return; }
     if (d.e === 'dent') { const c = carByKey(d.k, d.x, d.z, d.y, d.col); if (c) { applyParkedDent(c, d.d); const [ox, oz] = toW(c.yaw, d.d[0], d.d[2]); if (camera.position.distanceTo(new THREE.Vector3(c.x + ox, 1, c.z + oz)) < 60) { spray(c.x + ox, 0.6, c.z + oz, 0, 0, d.d[5] * 0.6, c.paintMat || shardMat, d.d[5] > 7); thud(55, 0.25); } } }
     else if (d.e === 'pk') for (const q of d.l) { const c = carByKey(q[0], q[1], q[2], q[3], q[5]); if (c) posePark(c, q[1], q[2], q[3], q[4]); }
@@ -3620,6 +3784,7 @@ function stepCamera(dt) {
     const want = new THREE.Vector3(tx2 + Math.sin(W.h) * back, Math.max(ty, 0) + (down ? 3.0 : 2.0), tz2 + Math.cos(W.h) * back); camera.position.lerp(want, Math.min(1, dt * 4));
     camera.lookAt(tx2, ty, tz2); return;
   }
+  if (W.on && POOL.mode && POOL.camera()) return;
   if (W.on) {                                                            // first person: eyes of the walker, looking where they face
     const fx = -Math.sin(W.h), fz = -Math.cos(W.h), bob = Math.abs(W.vx) + Math.abs(W.vz) > 0.1 ? Math.sin(W.ph * 2) * 0.03 : 0;
     if (camera.near !== 0.05) { camera.near = 0.05; camera.updateProjectionMatrix(); }
@@ -3666,7 +3831,7 @@ let last = performance.now(), hudT = 0, skidAccInit = 0, frameN = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
-  stepPlayer(dt); if (W.on) stepWalker(dt); MP.step(dt); NPC.step(dt); WC.step(dt); TUCKSHOP.step(dt); KITCHEN.step(dt); updateWork(dt); updateTills(dt); stepCars(dt); stepFX(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
+  stepPlayer(dt); if (W.on) stepWalker(dt); MP.step(dt); NPC.step(dt); WC.step(dt); TUCKSHOP.step(dt); KITCHEN.step(dt); POOL.step(dt); updateWork(dt); updateTills(dt); stepCars(dt); stepFX(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
   { const f = follow(); sun.position.set(f.x + SUN.x * 220, SUN.y * 220, f.z + SUN.z * 220); sun.target.position.set(f.x, 0, f.z); } sun.target.updateMatrixWorld();
   sky.position.copy(camera.position); clouds.position.set(camera.position.x, 0, camera.position.z);
   hudT -= dt;
