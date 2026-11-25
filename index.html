@@ -577,7 +577,7 @@ for (const r of roads) for (let i = 0; i < r.p.length - 1; i++) {
 }
 // the L-shaped office you can walk into: find its entrance (the wall a service road dead-ends at)
 const isLB = b => b.cx > -485 && b.cx < -440 && b.cz > -290 && b.cz < -240 && Math.abs(b.area) > 250;
-let LD = null, LB = null; const LOBBY = {}, OFFICE_DESKS = [], WCS = [], WC_DOORS = [], TUCK = {}; const DW = 0.82, DH = 2.35;
+let LD = null, LB = null; const LOBBY = {}, OFFICE_DESKS = [], WCS = [], WC_DOORS = [], TUCK = {}, KIT = {}; const DW = 0.82, DH = 2.35;
 function findLDoor(b) {
   const n = b.p.length, sg = b.area >= 0 ? 1 : -1; let best = null;
   for (let i = 0; i < n; i++) {
@@ -1016,7 +1016,8 @@ function buildLInterior(b, door, wallH) {
     pbox(mg('dishwasher', lit({ color: 0x3b3d40 }, 0.28)), 296, 118 + 0.31 * mV, 0.6 * mU, 0.02 * mV, 0.82, 0.06, false);
     pbox(mg('fridgeW', lit({ color: 0xf2f2ef }, 0.5)), 326, 118 + 0.31 * mV, 0.6 * mU, 0.02 * mV, 0.82, 0.06, false);
     const mag = ['#e74c3c', '#f1c40f', '#3498db', '#9b59b6', '#2ecc71', '#e67e22']; for (let k = 0; k < 14; k++) pbox(mg('mag' + (k % 6), lit({ color: new THREE.Color(mag[k % 6]).getHex() }, 0.4)), 322 + (k % 5) * 1.7, 118 + 0.33 * mV, 0.05 * mU, 0.008 * mV, 0.05, 0.3 + Math.floor(k / 5) * 0.14 + (k % 2) * 0.04, false);
-    pbox(mg('bin', lit({ color: 0x7d8186 }, 0.3)), 292, 150, 0.35 * mU, 0.35 * mV, 0.65, 0.07, true); }
+    pbox(mg('bin', lit({ color: 0x7d8186 }, 0.3)), 292, 150, 0.35 * mU, 0.35 * mV, 0.65, 0.07, true);
+    Object.assign(KIT, { PG, mU, mV, out: yawOf(320, 118, 0, 1), kettle: PG(322, 115.6), micro: PG(304, 116.4 + 0.19 * mV), microC: PG(304, 116.4), fridge: PG(326, 118 + 0.33 * mV) }); }
   // ---- back room: blue-grey carpet, blue carpeted stairs with bright nosings and a steel balustrade
   { floorRect(mg('backCarpet', lit({ color: 0x4c5f6e }, 0.32), false, true), 288, 363, 39, 84, 0.075, 1);
     const stepM = mg('stairBlue', lit({ color: 0x3f5d7a }, 0.3)), nose = mg('nosing', lit({ color: 0x2e7fd6 }, 0.45));
@@ -2286,7 +2287,7 @@ function goThroughDoor(d, enter) {
 }
 // ===== office work: sit at a desk, wake the monitors, prompt the AI, earn while it works, apply the changes =====
 let money = 0; try { money = +localStorage.getItem('pd_money') || 0; } catch (_) {}
-const showMoney = () => { const m = $('money'); m.textContent = '£' + money.toFixed(2); m.classList.toggle('show', state === 'play' && (money > 0 || !!W.seated)); try { localStorage.setItem('pd_money', money.toFixed(2)); } catch (_) {} };
+const showMoney = () => { const m = $('money'); m.textContent = '£' + money.toFixed(2) + (W.seated && window.__kitLabel ? window.__kitLabel() : ''); m.classList.toggle('show', state === 'play' && (money > 0 || !!W.seated)); try { localStorage.setItem('pd_money', money.toFixed(2)); } catch (_) {} };
 const WORK = { st: 0, t: 0, prompt: '', typed: 0, lines: [], scroll: 0, earned: 0, applied: 0, scr: null, clickT: 0 };
 const PROMPTS = ['Add a lap timer to the drift game', 'Fix the bug where the car clips through kerbs', 'Make the minimap rotate with the car', 'Write tests for the score system', 'Speed up loading of the town map', 'Add a pause menu with a settings screen'];
 const WORDS = 'the function now checks each value before it updates state so the render loop stays smooth I have split the map loader into chunks and cached the results then added a guard for empty input and a small helper that returns early when nothing has changed next I updated the tests and ran them all passing'.split(' ');
@@ -2351,7 +2352,8 @@ function updateArms(dt) {
   if (mousing) ms.addScaledVector(r, Math.sin(t * 2.3) * 0.03).addScaledVector(f, Math.cos(t * 1.7) * 0.025);
   if (WORK.clickT > 0) { ms.y -= 0.008 * Math.sin(WORK.clickT * 20); WORK.clickT -= dt; }
   const wl = (typing ? kL.clone().setY(0.81 + Math.abs(Math.sin(t * 9)) * 0.015) : kL.clone()).addScaledVector(f, -0.13), wr = (typing ? kR.clone().setY(0.81 + Math.abs(Math.sin(t * 9 + 1.3)) * 0.015) : ms.clone()).addScaledVector(f, -0.12);
-  placeArm(ARMS.L, shL, wl, f, typing, t); placeArm(ARMS.R, shR, wr, f, typing, t);
+  const hh = KITCHEN.held(); if (hh && KITCHEN.S.sipT > 0) wl.copy(hh.m.position).add(new THREE.Vector3(0, 0.03, 0)).addScaledVector(f, -0.07);
+  placeArm(ARMS.L, shL, wl, f, typing && !(hh && KITCHEN.S.sipT > 0), t); placeArm(ARMS.R, shR, wr, f, typing, t);
 }
 function sitAt(d) { W.seated = d; W.x = d.chair.x + d.n.x * 0.04; W.z = d.chair.z + d.n.z * 0.04; W.h = Math.atan2(d.n.x, d.n.z); W.pitch = -0.2; WORK.st = 0; WORK.applied = 0; screensOn(d); redrawScreens(); $('tOut').textContent = 'STAND'; showMoney(); }
 function standUp() { const d = W.seated; if (!d) return; screensOff(); W.seated = null; ARMS.g.visible = false; W.x = d.chair.x + d.n.x * 0.7; W.z = d.chair.z + d.n.z * 0.7; W.pitch = 0; $('tOut').textContent = 'IN'; WORK.st = 0; showMoney(); }
@@ -2370,7 +2372,7 @@ function updateWork(dt) {
     if (Math.random() < dt * 7) { const code = Math.random() < 0.25, n = 4 + (Math.random() * 7 | 0); let t2 = ''; for (let k = 0; k < n; k++) t2 += WORDS[(Math.random() * WORDS.length) | 0] + ' ';
       WORK.lines.push({ t: code ? '  ' + ['const', 'if (', 'return', 'await', 'for (const'][(Math.random() * 5) | 0] + ' ' + t2.trim().split(' ').slice(0, 3).join('_') + (code ? ';' : '') : t2.trim(), code }); }
     WORK.scroll += ((Math.max(0, WORK.lines.length * 16 + 60 - 200)) - WORK.scroll) * Math.min(1, dt * 3);
-    const e = dt * 0.35; money += e; WORK.earned += e; if (Math.random() < dt * 4) showMoney();
+    const e = dt * 0.35 * KITCHEN.boost(); money += e; WORK.earned += e; if (Math.random() < dt * 4) showMoney();
     if (WORK.t > 9) { WORK.st = 4; showMoney(); }
   }
   workRedraw -= dt; if (workRedraw <= 0) { workRedraw = 0.08; redrawScreens(); }
@@ -2387,20 +2389,21 @@ function updateAim() {
       if (hit.object.isInstancedMesh) { const it = hit.object.userData.items[hit.instanceId]; if (it && !basket.includes(it) && !it.mesh) aimT = { kind: 'item', it }; }
       break; } }
   else if (INSIDE === interiorGroup) {
-    const na = W.seated ? null : NPC.aim(aimRay), wa = W.seated || na ? null : WC.aim(aimRay), ta = W.seated || na || wa ? null : TUCKSHOP.aim(aimRay);
+    const na = W.seated ? null : NPC.aim(aimRay), wa = W.seated || na ? null : WC.aim(aimRay), ta = W.seated || na || wa ? null : TUCKSHOP.aim(aimRay), ka = W.seated || na || wa || ta ? null : KITCHEN.aim(aimRay);
     if (na) { if (na.kind !== 'holding') aimT = na; }
     else if (wa) aimT = wa;
     else if (ta) aimT = ta;
+    else if (ka) aimT = ka;
     else if (W.seated) { aimRay.far = 1.6; if (aimRay.intersectObject(W.seated.hitKb, false)[0]) aimT = { kind: 'kb' }; }
     else { const hit = aimRay.intersectObjects(OFFICE_DESKS.filter(d => d !== NPC.d).flatMap(d => d.hitDesk), false)[0]; if (hit) aimT = { kind: 'desk', d: hit.object.userData.desk }; } }
   else if (!INSIDE) { aimRay.far = 4.5; const hit = aimRay.intersectObject(player.car.grp, true)[0]; if (hit) aimT = { kind: 'car' }; }
   const b = $('tAct'); b.classList.toggle('show', !!aimT); $('xhair').classList.toggle('on', !!aimT);
   if (aimT && aimT.kind === 'tuck') $('aimLbl').textContent = TUCKSHOP.label(aimT);
   if (aimT && aimT.kind === 'item') { b.textContent = 'PICK UP'; $('aimLbl').textContent = aimT.it.name + '  £' + aimT.it.price.toFixed(2); } else $('aimLbl').textContent = '';
-  if (aimT && aimT.kind !== 'item') b.textContent = aimT.kind === 'card' ? 'PAY £' + aimT.T.total.toFixed(2) : { car: 'GET IN', item: 'PICK UP', desk: 'SIT', kb: 'TYPE', belt: 'PLACE ITEM', scan: 'SCAN', shoes: 'TAKE SHOES', putshoes: 'PUT SHOES DOWN', wee: 'WEE', flush: 'FLUSH', tuck: 'BUY' }[aimT.kind];
-  const b2 = $('tAct2'); b2.classList.toggle('show', !!(aimT && aimT.alt)); if (aimT && aimT.alt) b2.textContent = 'POO';
+  if (aimT && aimT.kind !== 'item') b.textContent = aimT.kind === 'card' ? 'PAY £' + aimT.T.total.toFixed(2) : { car: 'GET IN', item: 'PICK UP', desk: 'SIT', kb: 'TYPE', belt: 'PLACE ITEM', scan: 'SCAN', shoes: 'TAKE SHOES', putshoes: 'PUT SHOES DOWN', wee: 'WEE', flush: 'FLUSH', tuck: 'BUY', kettle: 'MAKE A CUPPA', micro: 'HEAT FOOD', fridge: 'FRIDGE', kitwait: 'WAIT…' }[aimT.kind];
+  const b2 = $('tAct2'), hd = KITCHEN.held(), canSip = !!hd && !W.seated && !(aimT && aimT.alt); b2.classList.toggle('show', !!(aimT && aimT.alt) || canSip); if (aimT && aimT.alt) b2.textContent = 'POO'; else if (canSip) b2.textContent = hd.kind === 'tea' ? 'SIP' : 'EAT';
 }
-function doAction2() { if (aimT && aimT.alt) { WC.act(aimT.alt); updateAim(); } }
+function doAction2() { if (aimT && aimT.alt) { WC.act(aimT.alt); updateAim(); } else if (KITCHEN.held() && !W.seated) KITCHEN.sip(); }
 function doAction() {
   if (!aimT) return;
   if (aimT.kind === 'car') { toggleFoot(); return; }
@@ -2408,6 +2411,8 @@ function doAction() {
   if (aimT.kind === 'shoes' || aimT.kind === 'putshoes') { NPC.act(aimT); updateAim(); return; }
   if (aimT.kind === 'wee' || aimT.kind === 'flush') { WC.act(aimT); updateAim(); return; }
   if (aimT.kind === 'tuck') { TUCKSHOP.buy(aimT.it); updateAim(); return; }
+  if (aimT.kind === 'kettle' || aimT.kind === 'micro' || aimT.kind === 'fridge') { KITCHEN.act(aimT); updateAim(); return; }
+  if (aimT.kind === 'kitwait') return;
   if (aimT.kind === 'kb') { pressKeyboard(); return; }
   if (aimT.kind === 'belt') { const T = aimT.T, it = basket.shift(); if (!it) return; const m = it.makeMesh(); m.position.copy(T.start); m.rotation.y = T.yaw; T.belt.push({ it, m, t: 0 }); showBasket(); updateAim(); return; }
   if (aimT.kind === 'scan') { const T = aimT.T, e = T.belt.find(q => q.t >= 0.98) || T.belt[0]; if (!e) return; T.belt.splice(T.belt.indexOf(e), 1);
@@ -3284,6 +3289,94 @@ const TUCKSHOP = (() => {
     step(dt) { for (let i = restock.length - 1; i >= 0; i--) { const r = restock[i]; r.t -= dt; if (r.t <= 0) { r.it.gone = 0; r.it.m.visible = true; restock.splice(i, 1); } } }
   };
 })();
+// ===== kitchen: make a cuppa at the kettle, keep your lunch in the fridge (others can nick it), heat it in the microwave, then eat/drink at your desk to work faster =====
+const KITCHEN = (() => {
+  if (!KIT.PG) return { aim() { return null; }, act() {}, step() {}, onNet() {}, load() {}, held: () => null, boost: () => 1, sip() {} };
+  const { out } = KIT, V = (p, y) => new THREE.Vector3(p[0], y, p[1]);
+  const M = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.5 }, o));
+  const hitM = new THREE.MeshBasicMaterial({ visible: false }), box = (w, h, d, p, y) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), hitM); m.position.copy(V(p, y)); m.rotation.y = out; interiorGroup.add(m); return m; };
+  // kettle on the worktop
+  const kettle = new THREE.Group(); kettle.position.copy(V(KIT.kettle, 0.94)); kettle.rotation.y = out; interiorGroup.add(kettle);
+  { const w = M(0xf4f4f2, { roughness: 0.3 }), k = M(0x2a2c30); const body = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.09, 0.22, 18), w); body.position.y = 0.13; kettle.add(body);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.025, 18), k); base.position.y = 0.012; kettle.add(base);
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.02, 14), k); lid.position.y = 0.25; kettle.add(lid);
+    const hd = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.016, 6, 12, Math.PI), k); hd.position.set(0, 0.15, -0.09); hd.rotation.set(0, Math.PI / 2, Math.PI / 2); kettle.add(hd);
+    const sp = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.08, 8), w); sp.position.set(0, 0.2, 0.09); sp.rotation.x = 1.2; kettle.add(sp); }
+  const kLight = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.012, 0.01), new THREE.MeshBasicMaterial({ color: 0x333333 })); kLight.position.set(0.05, 0.06, 0.07); kettle.add(kLight);
+  const kettleHit = box(0.3, 0.35, 0.3, KIT.kettle, 1.1);
+  // microwave: door glow and a turning plate when it's on
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.18), new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0 })); glow.position.copy(V(KIT.micro, 1.09)).add(new THREE.Vector3(Math.sin(out) * 0.006, 0, Math.cos(out) * 0.006)); glow.rotation.y = out; interiorGroup.add(glow);
+  const microHit = box(0.52, 0.34, 0.42, KIT.microC, 1.09), fridgeHit = box(0.62, 0.8, 0.12, KIT.fridge, 0.45);
+  // things you can hold
+  const mug = () => { const g = new THREE.Group(), w = M(0xf7f6f2, { roughness: 0.25 }); const c = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.038, 0.095, 16, 1, true), w); c.material.side = THREE.DoubleSide; c.position.y = 0.048; g.add(c);
+    const bt = new THREE.Mesh(new THREE.CircleGeometry(0.038, 16), w); bt.rotation.x = -Math.PI / 2; bt.position.y = 0.002; g.add(bt);
+    const tea = new THREE.Mesh(new THREE.CircleGeometry(0.039, 16), M(0x8a5a32, { roughness: 0.2 })); tea.rotation.x = -Math.PI / 2; tea.position.y = 0.08; g.add(tea); g.userData.tea = tea;
+    const hd = new THREE.Mesh(new THREE.TorusGeometry(0.025, 0.008, 6, 12), w); hd.position.set(0.05, 0.05, 0); g.add(hd); return g; };
+  const lunch = hot => { const g = new THREE.Group(); if (!hot) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.07, 0.13), M(0xd8e8f0, { transparent: true, opacity: 0.8 })); b.position.y = 0.035; g.add(b); const l = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.015, 0.14), M(0x2f7fd6)); l.position.y = 0.075; g.add(l); const f = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.04, 0.1), M(0xd99a3a)); f.position.y = 0.03; g.add(f); }
+    else { const bw = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.055, 0.07, 18, 1, true), M(0xf3f1ea)); bw.material.side = THREE.DoubleSide; bw.position.y = 0.035; g.add(bw); const fd = new THREE.Mesh(new THREE.CircleGeometry(0.08, 18), M(0xc8602a, { roughness: 0.7 })); fd.rotation.x = -Math.PI / 2; fd.position.y = 0.06; g.add(fd); g.userData.tea = fd; } return g; };
+  // steam puffs
+  const steamM = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false }), puffs = [];
+  const puff = (p, s = 1) => { const m = new THREE.Mesh(new THREE.SphereGeometry(0.03 * s, 6, 4), steamM.clone()); m.position.copy(p); interiorGroup.add(m); puffs.push({ m, t: 0 }); };
+  // sounds
+  const noise = (dur, fn) => { if (!actx) return; const n = actx.sampleRate * dur, buf = actx.createBuffer(1, n, actx.sampleRate), d = buf.getChannelData(0); for (let k = 0; k < n; k++) d[k] = Math.random() * 2 - 1; const s = actx.createBufferSource(); s.buffer = buf; fn(s); s.start(); };
+  const boilSnd = () => noise(4.2, s => { const f = actx.createBiquadFilter(), g = actx.createGain(), t0 = actx.currentTime; f.type = 'bandpass'; f.frequency.setValueAtTime(300, t0); f.frequency.linearRampToValueAtTime(1600, t0 + 4); g.gain.setValueAtTime(0.02, t0); g.gain.linearRampToValueAtTime(0.25, t0 + 3.8); g.gain.linearRampToValueAtTime(0, t0 + 4.2); s.connect(f); f.connect(g); g.connect(actx.destination); });
+  const humSnd = dur => { if (!actx) return; const o = actx.createOscillator(), g = actx.createGain(), t0 = actx.currentTime; o.type = 'sawtooth'; o.frequency.value = 100; g.gain.setValueAtTime(0.05, t0); g.gain.setValueAtTime(0.05, t0 + dur - 0.1); g.gain.linearRampToValueAtTime(0, t0 + dur); const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 400; o.connect(f); f.connect(g); g.connect(actx.destination); o.start(); o.stop(t0 + dur); setTimeout(() => beep(1800, 0.12), dur * 1000); setTimeout(() => beep(1800, 0.12), dur * 1000 + 250); };
+  const slurp = () => noise(0.5, s => { const f = actx.createBiquadFilter(), g = actx.createGain(), t0 = actx.currentTime; f.type = 'bandpass'; f.frequency.setValueAtTime(900, t0); f.frequency.linearRampToValueAtTime(2500, t0 + 0.45); g.gain.setValueAtTime(0.0, t0); g.gain.linearRampToValueAtTime(0.12, t0 + 0.1); g.gain.linearRampToValueAtTime(0, t0 + 0.5); s.connect(f); f.connect(g); g.connect(actx.destination); });
+  // state
+  const S = { held: null, boilT: 0, microT: 0, sipT: 0, nextSip: 4, fridge: [] };       // fridge: [{ id, owner }]
+  const give = (kind, extra = {}) => { if (S.held) interiorGroup.remove(S.held.m); const m = kind === 'tea' ? mug() : lunch(!!extra.hot); interiorGroup.add(m); S.held = Object.assign({ kind, m, charge: kind === 'tea' ? 6 : 8, max: kind === 'tea' ? 6 : 8 }, extra); };
+  const drop = () => { if (S.held) interiorGroup.remove(S.held.m); S.held = null; showMoney(); };
+  const boost = () => { const h = S.held; if (!h || h.charge <= 0 || !W.seated) return 1; return h.kind === 'tea' ? 2 : h.hot ? 2.5 : 1.5; };
+  const label = () => { const h = S.held; if (!h) return ''; return h.kind === 'tea' ? ' ☕×2' : h.hot ? ' 🍲×2.5' : ' 🥪×1.5'; };
+  function sip() { if (!S.held || S.sipT > 0) return; S.sipT = 2.2; setTimeout(slurp, 700); }
+  // fridge panel
+  const panel = document.createElement('div'); panel.id = 'fridgePanel'; panel.style.cssText = 'display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;background:rgba(14,18,24,.94);color:#fff;padding:14px 16px;border-radius:14px;font:14px/1.5 system-ui;min-width:min(80vw,360px)'; document.body.appendChild(panel);
+  for (const ev of ['touchstart', 'touchend', 'mousedown', 'pointerdown']) panel.addEventListener(ev, x => x.stopPropagation(), { passive: true });
+  const btn = (txt, fn) => { const b = document.createElement('button'); b.className = 'mpb'; b.style.cssText = 'display:block;width:100%;margin:6px 0;padding:9px;font-size:14px;text-align:left'; b.textContent = txt; b.onclick = e => { e.stopPropagation(); fn(); }; return b; };
+  function openFridge() {
+    document.exitPointerLock && document.exitPointerLock(); panel.innerHTML = '<b>🧊 Office fridge</b><div style="opacity:.7;font-size:12px;margin-bottom:4px">Lunches inside: ' + (S.fridge.length || 'none') + '</div>'; const me = MP.name();
+    if (!S.held && !S.fridge.some(l => l.owner === me)) panel.appendChild(btn('🥪 Put my lunch in the fridge', () => { const id = Math.random().toString(36).slice(2, 8); S.fridge.push({ id, owner: me }); MP.kitEv({ a: 'put', id, owner: me }); toast('🥪 Your lunch is in the fridge. Hope nobody nicks it…'); closeFridge(); }));
+    for (const l of S.fridge) panel.appendChild(btn((l.owner === me ? '🥪 Take my lunch' : '😈 Nick ' + l.owner + '’s lunch'), () => takeLunch(l)));
+    if (S.held) panel.appendChild(Object.assign(document.createElement('div'), { textContent: 'Your hands are full.', style: 'opacity:.7;font-size:12px' }));
+    panel.appendChild(btn('Close', closeFridge)); panel.style.display = 'block'; }
+  const closeFridge = () => { panel.style.display = 'none'; };
+  function takeLunch(l) { if (S.held) { toast('Your hands are full.'); return; } S.fridge = S.fridge.filter(q => q.id !== l.id); give('lunch', { owner: l.owner, hot: false }); const me = MP.name();
+    MP.kitEv({ a: 'take', id: l.id, owner: l.owner, by: me }); toast(l.owner === me ? '🥪 Got your lunch. Heat it up in the microwave!' : '😈 You nicked ' + l.owner + '’s lunch!'); closeFridge(); }
+  return {
+    S, boost, label, sip, held: () => S.held,
+    aim(ray) { if (W.seated) return null; const h = ray.intersectObjects([kettleHit, microHit, fridgeHit], false)[0]; if (!h || h.distance > 2.2) return null;
+      if (h.object === kettleHit) return S.boilT > 0 ? { kind: 'kitwait' } : { kind: 'kettle' }; if (h.object === microHit) return S.microT > 0 ? { kind: 'kitwait' } : { kind: 'micro' }; return { kind: 'fridge' }; },
+    label2(a) { return { kettle: 'MAKE A CUPPA', micro: 'HEAT FOOD', fridge: 'FRIDGE', kitwait: 'WAIT…' }[a.kind]; },
+    act(a) {
+      if (a.kind === 'kettle') { if (S.held) { toast('Your hands are full.'); return; } S.boilT = 4.2; boilSnd(); toast('☕ Kettle on…'); }
+      else if (a.kind === 'micro') { if (!S.held || S.held.kind !== 'lunch') { toast('Get some food out of the fridge first.'); return; } if (S.held.hot) { toast('It’s already hot!'); return; }
+        S.microT = 6; S.microFood = S.held; interiorGroup.remove(S.held.m); S.held = null; humSnd(6); toast('🍲 Heating up…'); }
+      else if (a.kind === 'fridge') openFridge(); },
+    onNet(d) { if (d.a === 'put') { if (!S.fridge.some(l => l.id === d.id)) S.fridge.push({ id: d.id, owner: d.owner }); }
+      else if (d.a === 'take') { S.fridge = S.fridge.filter(l => l.id !== d.id); if (d.owner !== d.by) toast(d.owner === MP.name() ? '😡 ' + d.by + ' nicked YOUR lunch!' : '😈 ' + d.by + ' nicked ' + d.owner + '’s lunch!'); } },
+    load(list) { S.fridge = (list || []).map(l => ({ id: l.id, owner: l.owner })); },
+    step(dt) {
+      for (let i = puffs.length - 1; i >= 0; i--) { const p = puffs[i]; p.t += dt; p.m.position.y += dt * 0.3; p.m.scale.setScalar(1 + p.t * 2); p.m.material.opacity = 0.5 * (1 - p.t / 1.4); if (p.t > 1.4) { interiorGroup.remove(p.m); puffs.splice(i, 1); } }
+      if (S.boilT > 0) { S.boilT -= dt; kLight.material.color.set(0x3fa9ff); kettle.position.x += (Math.random() - 0.5) * 0.002 * (1 - S.boilT / 4.2);
+        if (Math.random() < dt * (12 - S.boilT * 2.5)) puff(new THREE.Vector3(0, 0.27, 0.1).applyMatrix4(kettle.matrixWorld));
+        if (S.boilT <= 0) { kLight.material.color.set(0x333333); kettle.position.copy(V(KIT.kettle, 0.94)); give('tea'); toast('☕ Here’s your cuppa. Take it to your desk: you’ll work twice as fast while you drink it!'); } }
+      if (S.microT > 0) { S.microT -= dt; glow.material.opacity = 0.75; if (S.microT <= 0) { glow.material.opacity = 0; const f = S.microFood; S.microFood = null; give('lunch', { owner: f.owner, hot: true }); toast('🍲 Piping hot! Eat it at your desk to earn faster.'); } }
+      const h = S.held; if (!h) return;
+      // where the item is: on your desk (left of the keyboard) when sitting, otherwise in your hand
+      if (W.seated) { const d = W.seated, f = d.n.clone().negate(), r = new THREE.Vector3(-f.z, 0, f.x), spot = d.kb.clone().addScaledVector(r, -0.36).addScaledVector(f, -0.02).setY(0.775);
+        if (S.sipT > 0) { const k = Math.sin(Math.min(1, (2.2 - S.sipT) / 2.2) * Math.PI), mouth = new THREE.Vector3(W.x, 1.1, W.z).addScaledVector(f, 0.2).addScaledVector(r, -0.05); h.m.position.lerpVectors(spot, mouth, k); h.m.rotation.set(0, 0, 0); h.m.rotateOnWorldAxis(r, -k * 0.9); }
+        else { h.m.position.copy(spot); h.m.rotation.set(0, Math.atan2(f.x, f.z), 0); }
+        S.nextSip -= dt; if (S.nextSip <= 0 && S.sipT <= 0) { S.nextSip = 6 + Math.random() * 3; sip(); } }
+      else { const cam = camera, f = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion), u = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion), r = new THREE.Vector3().crossVectors(f, u);
+        const k = S.sipT > 0 ? Math.sin(Math.min(1, (2.2 - S.sipT) / 2.2) * Math.PI) : 0;
+        h.m.position.copy(cam.position).addScaledVector(f, 0.42 - k * 0.2).addScaledVector(u, -0.24 + k * 0.17).addScaledVector(r, 0.17 - k * 0.15); h.m.quaternion.copy(cam.quaternion); h.m.rotateX(k * 0.7); }
+      if (h.hot || h.kind === 'tea') { if (Math.random() < dt * 3) puff(h.m.position.clone().add(new THREE.Vector3(0, 0.1, 0)), 0.6); }
+      if (S.sipT > 0) { S.sipT -= dt; if (S.sipT <= 0) { h.charge--; const e = h.m.userData.tea; if (e && h.kind === 'tea') e.position.y = 0.02 + 0.06 * (h.charge / h.max); if (e && h.kind !== 'tea') e.scale.setScalar(Math.max(0.2, h.charge / h.max));
+        if (h.charge <= 0) { toast(h.kind === 'tea' ? '☕ Finished your cuppa.' : '🍲 That was lovely. Finished!'); drop(); } else showMoney(); } }
+    }
+  };
+})();
+window.__kitLabel = () => KITCHEN.label();
 // ===== multiplayer: everyone on the link shares one session (Cloudflare Durable Object room at /ws) =====
 const MP = (() => {
   const o = { ws: null, id: null, peers: new Map(), g: new THREE.Group(), tries: 0, sendT: 0, online: 1 };
@@ -3324,7 +3417,7 @@ const MP = (() => {
     o.ws = ws;
     ws.onopen = () => { o.tries = 0; lbSent = ''; hud(); setTimeout(sendScore, 1500); };
     ws.onmessage = e => { let d; try { d = JSON.parse(e.data); } catch (_) { return; }
-      if (d.t === 'hi') { o.id = d.id; for (const id of [...o.peers.keys()]) dropPeer(id, true); for (const s of d.players) if (s.id !== o.id) onState(s); if (d.world) onWorld(d.world); if (d.npc) NPC.onNet(Object.assign({ a: 'state' }, d.npc), null); if (d.wc) WC.load(d.wc); hud(); }
+      if (d.t === 'hi') { o.id = d.id; for (const id of [...o.peers.keys()]) dropPeer(id, true); for (const s of d.players) if (s.id !== o.id) onState(s); if (d.world) onWorld(d.world); if (d.npc) NPC.onNet(Object.assign({ a: 'state' }, d.npc), null); if (d.wc) WC.load(d.wc); KITCHEN.load(d.kit); hud(); }
       else if (d.t === 'ev') onEv(d);
       else if (d.t === 's' && d.id !== o.id) onState(d);
       else if (d.t === 'bye') dropPeer(d.id);
@@ -3368,6 +3461,7 @@ const MP = (() => {
   o.stepBubbles = dt => { for (const P of o.peers.values()) if (P.bub) { P.bubT -= dt; const hd = P.lab ? P.lab.position : null; if (hd) P.bub.position.set(hd.x, hd.y + 0.55, hd.z); P.bub.visible = !!(P.lab && P.lab.visible); if (P.bubT <= 0) { o.g.remove(P.bub); P.bub = null; } } };
   o.wcEv = e => send(Object.assign({ t: 'ev', e: 'wc' }, e));
   o.tuckEv = e => send(Object.assign({ t: 'ev', e: 'tuck' }, e));
+  o.kitEv = e => send(Object.assign({ t: 'ev', e: 'kit' }, e));
   o.parkedDent = (c, wx, wz, inx, inz, s) => { const [lx, lz] = toL(c.yaw, wx - c.x, wz - c.z), [dx, dz] = toL(c.yaw, inx, inz);
     send({ t: 'ev', e: 'dent', k: c.key, x: r2(c.x), z: r2(c.z), y: r2(c.yaw), col: c.color, d: [r2(lx), 0.62, r2(lz), r2(dx), r2(dz), r2(s)] }); };
   const applyParkedDent = (c, d) => { const w = wreckOf(c); if (!w) return; const [ox, oz] = toW(c.yaw, d[0], d[2]), [ix, iz] = toW(c.yaw, d[3], d[4]); damageModel(w, c.x + ox, d[1], c.z + oz, ix, iz, d[5]); };
@@ -3376,6 +3470,7 @@ const MP = (() => {
   function onEv(d) {
     if (d.e === 'wc') { WC.onNet(d); return; }
     if (d.e === 'tuck') { TUCKSHOP.onNet(d); return; }
+    if (d.e === 'kit') { KITCHEN.onNet(d); return; }
     if (d.e === 'npc') { if (d.a !== 'on') NPC.onNet(d, d.id); return; }
     if (d.e === 'dent') { const c = carByKey(d.k, d.x, d.z, d.y, d.col); if (c) { applyParkedDent(c, d.d); const [ox, oz] = toW(c.yaw, d.d[0], d.d[2]); if (camera.position.distanceTo(new THREE.Vector3(c.x + ox, 1, c.z + oz)) < 60) { spray(c.x + ox, 0.6, c.z + oz, 0, 0, d.d[5] * 0.6, c.paintMat || shardMat, d.d[5] > 7); thud(55, 0.25); } } }
     else if (d.e === 'pk') for (const q of d.l) { const c = carByKey(q[0], q[1], q[2], q[3], q[5]); if (c) posePark(c, q[1], q[2], q[3], q[4]); }
@@ -3523,7 +3618,7 @@ let last = performance.now(), hudT = 0, skidAccInit = 0, frameN = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
-  stepPlayer(dt); if (W.on) stepWalker(dt); MP.step(dt); NPC.step(dt); WC.step(dt); TUCKSHOP.step(dt); updateWork(dt); updateTills(dt); stepCars(dt); stepFX(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
+  stepPlayer(dt); if (W.on) stepWalker(dt); MP.step(dt); NPC.step(dt); WC.step(dt); TUCKSHOP.step(dt); KITCHEN.step(dt); updateWork(dt); updateTills(dt); stepCars(dt); stepFX(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
   { const f = follow(); sun.position.set(f.x + SUN.x * 220, SUN.y * 220, f.z + SUN.z * 220); sun.target.position.set(f.x, 0, f.z); } sun.target.updateMatrixWorld();
   sky.position.copy(camera.position); clouds.position.set(camera.position.x, 0, camera.position.z);
   hudT -= dt;

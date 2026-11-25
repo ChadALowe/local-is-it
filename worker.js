@@ -14,8 +14,8 @@ export class Room {
     this.state.acceptWebSocket(server);
     server.serializeAttachment({ id, last: null });
     const players = socks.map(w => { try { return w.deserializeAttachment(); } catch (_) { return null; } }).filter(a => a && a.last).map(a => a.last);
-    const world = [...(await this.state.storage.list({ prefix: 'w:' })).values()], npc = await this.state.storage.get('npc'), wc = [...(await this.state.storage.list({ prefix: 'wc:' })).values()];
-    server.send(JSON.stringify({ t: 'hi', id, players, world, npc, wc }));
+    const world = [...(await this.state.storage.list({ prefix: 'w:' })).values()], npc = await this.state.storage.get('npc'), wc = [...(await this.state.storage.list({ prefix: 'wc:' })).values()], kit = (await this.state.storage.get('kit')) || [];
+    server.send(JSON.stringify({ t: 'hi', id, players, world, npc, wc, kit }));
     server.send(JSON.stringify(Object.assign({ t: 'lb' }, (await this.state.storage.get('lb')) || { money: [], drift: [] })));
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -32,7 +32,9 @@ export class Room {
     } else if (d.t === 'ev') {                          // world events: parked-car dents/poses, hits on other players
       d.id = a.id; this.others(ws, JSON.stringify(d));
       const st = this.state.storage;
-      if (d.e === 'wc' && Number.isInteger(d.i) && d.i >= 0 && d.i < 8) {          // toilets: yellow water / poos stay until someone flushes
+      if (d.e === 'kit' && typeof d.id === 'string') {                  // lunches in the office fridge
+        let kit = (await st.get('kit')) || []; if (d.a === 'put' && kit.length < 30) kit.push({ id: d.id.slice(0, 12), owner: String(d.owner || '').slice(0, 20) }); else if (d.a === 'take') kit = kit.filter(l => l.id !== d.id); await st.put('kit', kit);
+      } else if (d.e === 'wc' && Number.isInteger(d.i) && d.i >= 0 && d.i < 8) {          // toilets: yellow water / poos stay until someone flushes
         const key = 'wc:' + d.i, s = (await st.get(key)) || { i: d.i, y: 0, p: 0 };
         if (d.a === 'wee') s.y = 1; else if (d.a === 'poo') s.p = Math.min(6, s.p + 1); else if (d.a === 'flush') { s.y = 0; s.p = 0; }
         if (s.y || s.p) await st.put(key, s); else await st.delete(key);
