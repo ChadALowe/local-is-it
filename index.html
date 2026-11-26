@@ -779,7 +779,7 @@ const HEADS = [];
   // junction corners: footways are laid in pieces every few metres, so they stop short of the side road. Run both footways
   // right into the corner: from where each meets the other road's edge, 4.5 m back along its own road.
   const footCorner = (q, A, B) => {
-    for (const [X, Y, sd] of [[A, B, 1], [B, A, -1]]) {
+    for (const [X, Y, sd] of [[A, B, 1], [B, A, -1]]) { if (!hasFoot(X.r)) continue;   // the side road may have no footway of its own
       const ux = Math.cos(X.th), uz = Math.sin(X.th), nx = -uz * sd, nz = ux * sd, vy = Math.cos(Y.th), wy = Math.sin(Y.th), hY = Y.r.w / 2, i0 = X.r.w / 2 + vgOf(X.r), y0 = ROAD_Y[X.r.k] || 0.05;
       const P = (t, dd, yy) => [q[0] + ux * t + nx * dd, yy, q[1] + uz * t + nz * dd], dY = (t, dd) => Math.abs(vy * (q[1] + uz * t + nz * dd - q[1]) - wy * (q[0] + ux * t + nx * dd - q[0]));
       let t0 = 0; while (t0 < 30 && dY(t0, i0 + 1) < hY + 0.05) t0 += 0.1; if (t0 >= 30) continue;
@@ -790,7 +790,7 @@ const HEADS = [];
         cm.quad(P(t, i0, y0), P(t + 0.75, i0, y0), d, a, [0, 0], [1, 0], [1, 1], [0, 1], [-nx, 0, -nz]); }
     }
   };
-  jointGaps(hasFoot, footFill, JOINTS.values(), footCorner); jointGaps(hasFoot, footFill, footBends);
+  jointGaps(r => !r.c && r.p.length > 1, (q, A, B, t0, sw) => { if (hasFoot(A.r) && hasFoot(B.r)) footFill(q, A, B, t0, sw); }, JOINTS.values(), footCorner); jointGaps(hasFoot, footFill, footBends);
   for (const H of HEADS) { if (!hasFoot(H.r)) continue; const y0 = ROAD_Y[H.r.k] || 0.05, n = 44, P = (a, rr, yy) => [H.x + Math.cos(a) * rr, yy, H.z + Math.sin(a) * rr];   // footway round each turning head
     for (let k = 0; k < n; k++) { const a0 = k / n * TAU, a1 = (k + 1) / n * TAU, am = (a0 + a1) / 2; if (!ok(H.r, H.x + Math.cos(am) * (H.R + 1), H.z + Math.sin(am) * (H.R + 1))) continue;
       const i0 = P(a0, H.R, 0.13), i1 = P(a1, H.R, 0.13), o0 = P(a0, H.R + 2, 0.13), o1 = P(a1, H.R + 2, 0.13);
@@ -880,7 +880,7 @@ const inShop = (x, z) => x > -128 && x < -22 && z > 378 && z < 482;         // s
     const L0 = Math.hypot(best.cx - b.cx, best.cz - b.cz), ux = (best.cx - b.cx) / L0, uz = (best.cz - b.cz) / L0;
     garden(b, ux, uz);
     let s0 = 0; while (s0 < L0 && inPoly(b.cx + ux * s0, b.cz + uz * s0, p)) s0 += 0.2;
-    const s1 = L0 - best.h; if (s1 - s0 < 0.6 || s1 - s0 > 18) continue;
+    const s1 = L0 - best.h; if (s1 - s0 < 0.6 || s1 - s0 > 9) continue;              // a real driveway is a car's length or two
     let clear = true; for (let s = s0 + 0.6; s < s1; s += 1) if (inBuilding(b.cx + ux * s, b.cz + uz * s) || roadDist(b.cx + ux * s, b.cz + uz * s, -1, true) < -0.5) { clear = false; break; }
     if (!clear) continue;
     const hw = 1.4, nx = -uz * hw, nz = ux * hw, W0 = [b.cx + ux * s0, b.cz + uz * s0], E = [b.cx + ux * s1, b.cz + uz * s1];
