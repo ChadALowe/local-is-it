@@ -1,6 +1,9 @@
 // Pendeford Drift: serves the game and runs one shared multiplayer room (a Durable Object) that everyone on the link joins.
 // The room also remembers the shared world (parked cars that were pushed or dented) until the last player leaves.
 // Kept forever in the room's storage: the leaderboard ('lb') and every player's saved progress ('p:<save code>').
+// leaderboard entries are tied to a hash of the player's secret save code (the code itself is never sent to anyone)
+async function ownerOf(code) { const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('pd-lb:' + code))); return Array.from(h.slice(0, 8), b => b.toString(16).padStart(2, '0')).join(''); }
+const LB_SINCE = Date.parse('2026-11-26T10:00:00Z');        // saves written before the leaderboard money checks went live are trusted
 const TRADE_BASE = [10, 14, 18, 30, 45];                       // weed, speed, ecstasy, ketamine, cocaine: the dealer's usual prices
 export class Room {
   constructor(state) { this.state = state; }
@@ -67,8 +70,10 @@ export class Room {
     const a = ws.deserializeAttachment() || {};
     const CODE = /^[A-HJ-NP-Z2-9]{16}$/;                // save codes: 16 letters/digits, no 0/O/1/I
     if (d.t === 'load' && CODE.test(d.k)) {             // a player's saved progress: money, cars, stash, best scores, name
-      a.k = d.k; ws.serializeAttachment(a);
-      ws.send(JSON.stringify({ t: 'prof', p: (await this.state.storage.get('p:' + d.k)) || null })); return;
+      a.k = d.k; ws.serializeAttachment(a); const pf = (await this.state.storage.get('p:' + d.k)) || null;
+      const mk = 'lbm:' + await ownerOf(d.k);              // first visit since the money checks began: their starting point is what a save from before then held
+      if (!(await this.state.storage.get(mk))) { const m0 = pf && pf.t < LB_SINCE && pf.v ? +pf.v.pd_money : 0; await this.state.storage.put(mk, { m: isFinite(m0) && m0 > 0 ? m0 : 0, t: Date.now(), big: 0 }); }
+      ws.send(JSON.stringify({ t: 'prof', p: pf })); return;
     }
     if (d.t === 'peek' && CODE.test(d.k)) { ws.send(JSON.stringify({ t: 'peek', k: d.k, ok: !!(await this.state.storage.get('p:' + d.k)) })); return; }
     if (d.t === 'me' && typeof d.n === 'string') { a.n = d.n.slice(0, 20); ws.serializeAttachment(a); return; }   // my name, for tag scores
@@ -117,15 +122,23 @@ export class Room {
         for (const q of d.l) { if (!q[4] || typeof q[0] !== 'string') continue;   // only settled positions are kept
           const key = 'w:' + q[0], w = (await st.get(key)) || { k: q[0], x: q[1], z: q[2], y: q[3], col: q[5], d: [] }; w.p = [q[1], q[2], q[3]]; await st.put(key, w); }
       }
-    } else if (d.t === 'score' && typeof d.n === 'string') {          // leaderboard: top 10 for money and for best drift
-      const n = d.n.slice(0, 20), lb = (await this.state.storage.get('lb')) || { money: [], drift: [] }; let changed = false;
-      for (const [key, v] of [['money', +d.money], ['drift', +d.drift]]) { if (!isFinite(v) || v <= 0 || v > 1e9) continue; const list = lb[key], e = list.find(r => r.n === n);
-        if (e) { if (v > e[key]) { e[key] = v; changed = true; } } else { list.push({ n, [key]: v }); changed = true; }
+    } else if (d.t === 'score' && typeof d.n === 'string' && a.k) {  // leaderboard: top 10 for money and for best drift, one entry per save code
+      const n = d.n.slice(0, 20), own = await ownerOf(a.k), st = this.state.storage, lb = (await st.get('lb')) || { money: [], drift: [] }; let changed = false;
+      let money = +d.money; const now = Date.now(), mk = 'lbm:' + own, prev = await st.get(mk);
+      if (isFinite(money) && money > 0) {                              // money can't jump impossibly: at most one big win (x10, a long-odds all-in bet) a minute
+        const big = !prev || now - (prev.big || 0) > 60000, cap = !prev ? 50000 : prev.m + (big ? Math.max(prev.m, 1000) * 9 : 1500);
+        if (money > cap) { if (!prev) await st.put(mk, { m: cap, t: now, big: 0 }); money = 0; }   // ignored for now: not believable (a first-timer is started at the cap, so a real high score shows a minute later)
+        else if (!prev || money !== prev.m) await st.put(mk, { m: money, t: now, big: prev && money - prev.m > 1500 ? now : (prev ? prev.big || 0 : 0) });
+      }
+      for (const [key, v] of [['money', money], ['drift', +d.drift]]) { if (!isFinite(v) || v <= 0 || v > 1e9) continue; const list = lb[key];
+        const e = list.find(r => r.o === own) || list.find(r => !r.o && r.n === n);   // an entry from before save codes is claimed by the first code to send that name
+        if (e) { if (e.o !== own || e.n !== n) { e.o = own; e.n = n; changed = true; } if (v > e[key]) { e[key] = v; changed = true; } } else { list.push({ n, o: own, [key]: v }); changed = true; }
         list.sort((a, b) => b[key] - a[key]); if (list.length > 10) list.length = 10; }
       if (changed) { await this.state.storage.put('lb', lb); const out = JSON.stringify(Object.assign({ t: 'lb' }, lb)); for (const s of this.state.getWebSockets()) { try { s.send(out); } catch (_) {} } }
-    } else if (d.t === 'rtime' && typeof d.n === 'string' && isFinite(+d.time) && +d.time > 20) {   // fastest laps (lower is better)
-      const n = d.n.slice(0, 20), v = +d.time, lb = (await this.state.storage.get('lb')) || { money: [], drift: [] }; lb.race = lb.race || []; const e = lb.race.find(r => r.n === n); let changed = false;
-      if (e) { if (v < e.race) { e.race = v; changed = true; } } else { lb.race.push({ n, race: v }); changed = true; }
+    } else if (d.t === 'rtime' && typeof d.n === 'string' && a.k && isFinite(+d.time) && +d.time > 20) {   // fastest laps (lower is better)
+      const n = d.n.slice(0, 20), v = +d.time, own = await ownerOf(a.k), lb = (await this.state.storage.get('lb')) || { money: [], drift: [] }; lb.race = lb.race || []; let changed = false;
+      const e = lb.race.find(r => r.o === own) || lb.race.find(r => !r.o && r.n === n);
+      if (e) { if (e.o !== own || e.n !== n) { e.o = own; e.n = n; changed = true; } if (v < e.race) { e.race = v; changed = true; } } else { lb.race.push({ n, o: own, race: v }); changed = true; }
       lb.race.sort((a, b) => a.race - b.race); if (lb.race.length > 10) lb.race.length = 10;
       if (changed) { await this.state.storage.put('lb', lb); const out = JSON.stringify(Object.assign({ t: 'lb' }, lb)); for (const s of this.state.getWebSockets()) { try { s.send(out); } catch (_) {} } }
     } else if (d.t === 'chat' && typeof d.m === 'string') {
