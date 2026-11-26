@@ -4856,8 +4856,15 @@ const MP = (() => {
         if (E) { const r = EMO.pose(E.k, n, et, lx, ly, lz); if (r) [lx, ly, lz] = r; } }
       const q = P.I[n]; q.x = x + lx * c + lz * s; q.y = y + ly; q.z = z - lx * s + lz * c; }
   }
+  // you, as others see you: shown only while you do an emote on foot, with the camera swung round in front
+  let me0 = null;
+  o.selfEmote = k => { if (!me0) { me0 = { id: 'me', I: {}, fh: 0 }; for (const n of RAG.names) me0.I[n] = { x: 0, y: 0, z: 0 }; me0.fig = ragFigure(me0.I, TOPS[hash(o.id || 'me') % TOPS.length]); }
+    const E = EMO.LIST.find(q => q[0] === k); me0.emo = { k, t0: performance.now(), dur: E[3] * 1000 }; me0.fig.fresh = 1; };
+  o.selfShow = () => !!(me0 && W.on && EMO.active(me0));
+  function stepSelf() { if (!me0) return; const on = o.selfShow(); me0.fig.g.visible = on; if (!on) return;
+    me0.fh = W.h; walkPose(me0, W.x, W.y, W.z, W.h, 0, false, false); EMO.hand(me0, me0.fig); me0.fig.draw(); }
   o.step = dt => {
-    o.stepBubbles(dt); o.stepDrift();
+    o.stepBubbles(dt); o.stepDrift(); stepSelf();
     if (o.ws && o.ws.readyState === 1) sendParked(dt);
     o.sendT -= dt; if (o.ws && o.ws.readyState === 1 && o.sendT <= 0 && state === 'play') { o.sendT = W.fly ? 0.08 : 0.1; try { o.ws.send(JSON.stringify(snapshot())); } catch (_) {} }
     const now = performance.now(), myIn = INSIDE ? DOORS.findIndex(q => q.g === INSIDE) : -1, k = Math.min(1, dt * 10);
@@ -5033,7 +5040,8 @@ const EMO = (() => {
   o.key = code => { const m = /^Digit([1-9])$/.exec(code); if (m && o.isOpen() && LIST[+m[1] - 1]) { o.play(LIST[+m[1] - 1][0]); return true; } if (code === 'Escape' && o.isOpen()) { o.toggle(false); return true; } return false; };
   o.play = k => {
     const E = BY[k]; if (!E || state !== 'play') return; const t = performance.now(); if (t - last < 1200) return; last = t; o.toggle(false);
-    me.textContent = E.e; me.classList.remove('pop'); void me.offsetWidth; me.classList.add('pop');           // you see it pop up on your screen
+    if (W.on && !W.seated && !W.pubSeat && !W.loo && !W.fly && !POOL.mode && !PUB.darts) MP.selfEmote(k);   // on foot: watch yourself do it
+    else { me.textContent = E.e; me.classList.remove('pop'); void me.offsetWidth; me.classList.add('pop'); }    // in the car: it pops up on your screen
     if (MP.ws && MP.ws.readyState === 1) { try { MP.ws.send(JSON.stringify({ t: 'ev', e: 'emo', k })); } catch (_) {} }
   };
   o.onNet = d => { const P = MP.peers.get(d.id), E = BY[d.k]; if (!P || !E) return; P.emo = { k: E.k, t0: performance.now(), dur: E.d * 1000 };
@@ -5106,6 +5114,11 @@ function stepCamera(dt) {
     camera.lookAt(tx2, ty, tz2); return;
   }
   if (W.on && POOL.mode && POOL.camera()) return;
+  if (W.on && MP.selfShow()) {                                         // doing an emote: the camera swings round in front so you can see yourself
+    const fx = -Math.sin(W.h), fz = -Math.cos(W.h), tx = W.x + fx * 2.7 + fz * 0.5, tz = W.z + fz * 2.7 - fx * 0.5, k = Math.min(1, dt * 6);
+    camera.position.x += (tx - camera.position.x) * k; camera.position.z += (tz - camera.position.z) * k; camera.position.y += (W.y + 1.55 - camera.position.y) * k;
+    camera.lookAt(W.x, W.y + 1.3, W.z); return;
+  }
   if (W.on) {                                                            // first person: eyes of the walker, looking where they face
     const fx = -Math.sin(W.h), fz = -Math.cos(W.h), bob = Math.abs(W.vx) + Math.abs(W.vz) > 0.1 ? Math.sin(W.ph * 2) * 0.03 : 0;
     if (camera.near !== 0.05) { camera.near = 0.05; camera.updateProjectionMatrix(); }
