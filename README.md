@@ -19,6 +19,13 @@ The dealer cars are built in code from a few side-profile numbers as one low-pol
 with wheels), so they are cheap to draw. Parked cars switch to the full model only within 55 m, and to an
 ~80-triangle low-poly car beyond that.
 
+## Street trade
+A dealer in a grey hoodie hangs about in the footpath underpass under the Droveway (black dot on the minimap).
+Walk up to him and press **E** to buy weed, speed, ecstasy, ketamine or cocaine (prices change every couple of minutes,
+you can carry 30 bags). Houses with a spinning green diamond over the roof (green dots on the minimap) want a set
+amount of one thing and pay well over the odds: stop outside and press **E** to sell. Each sale has a small chance a
+neighbour calls the police, who take your whole stash and fine you up to £150. Your stash is kept in this browser.
+
 Open `index.html` in a browser (it loads three.js from a CDN, so it needs an internet connection).
 
 ## Controls

@@ -115,7 +115,7 @@
 </div>
 <div class="hud" id="hint">
   <kbd>W</kbd><kbd>S</kbd> gas / brake &nbsp; <kbd>A</kbd><kbd>D</kbd> steer<br>
-  <kbd>SPACE</kbd> handbrake to start a drift &nbsp; <kbd>B</kbd> switch your cars &nbsp; <kbd>E</kbd> car dealer / garage (paint &amp; tuning) &nbsp; <kbd>F</kbd> get out / in &nbsp; on foot: <kbd>SPACE</kbd> jump <kbd>SHIFT</kbd> run &nbsp; <kbd>V</kbd> camera &nbsp; <kbd>R</kbd> reset
+  <kbd>SPACE</kbd> handbrake to start a drift &nbsp; <kbd>B</kbd> switch your cars &nbsp; <kbd>E</kbd> use / buy / sell &nbsp; <kbd>F</kbd> get out / in &nbsp; on foot: <kbd>SPACE</kbd> jump <kbd>SHIFT</kbd> run &nbsp; <kbd>V</kbd> camera &nbsp; <kbd>R</kbd> reset
 </div>
 
 <div id="overlay">
@@ -2761,14 +2761,16 @@ const CM = (() => {
   o.step = dt => {
     if ((farT -= dt) <= 0) { farT = 0.5; const far = Math.hypot(camera.position.x + 25, camera.position.z + 20) > 170; for (const g of shown) g.visible = !far; }
     const f = follow(), inZ = Z => f.x > Z.x0 && f.x < Z.x1 && f.z > Z.z0 && f.z < Z.z1;
-    let z = null; if (state === 'play' && !o.open && !INSIDE && !(W.on && W.fly)) { if (inZ(SALES)) z = 'dealer'; else if (inZ(BAY)) z = 'garage'; }
+    let z = null; if (state === 'play' && !o.open && !INSIDE && !(W.on && W.fly)) { if (inZ(SALES)) z = 'dealer'; else if (inZ(BAY)) z = 'garage'; else { const ez = DRUGS.zone(); if (ez) { z = 'ext'; extZone = ez; } } }
     if (z && !W.on && spdNow > 2.5) z = null;
     o.zone = z; const b = $('zoneBtn');
     if (!z) { b.classList.remove('show'); return; }
-    const txt2 = z === 'dealer' ? '🚗 CAR DEALER' : W.on ? '🔧 Drive your car in here to tune it' : '🔧 GARAGE'; const k = isTouch ? '' : z === 'garage' && W.on ? '' : '  [E]';
+    const txt2 = z === 'ext' ? extZone.label : z === 'dealer' ? '🚗 CAR DEALER' : W.on ? '🔧 Drive your car in here to tune it' : '🔧 GARAGE'; const k = isTouch ? '' : z === 'garage' && W.on ? '' : '  [E]';
     if (b.dataset.t !== txt2 + k) { b.dataset.t = txt2 + k; b.textContent = txt2 + k; } b.classList.add('show');
   };
-  o.openZone = () => { if (o.zone === 'dealer') { openDealer(); return true; } if (o.zone === 'garage' && !W.on) { openGarage(); return true; } return false; };
+  let extZone = null, extFn = null, extKind = null;
+  o.openExt = (kind, html, fn) => { extFn = fn; extKind = kind; openP(kind, html); };          // menus from other features share this panel
+  o.openZone = () => { if (o.zone === 'ext' && extZone) { extZone.open(); return true; } if (o.zone === 'dealer') { openDealer(); return true; } if (o.zone === 'garage' && !W.on) { openGarage(); return true; } return false; };
   // ---- menus
   $('zoneBtn').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); o.openZone(); });
   const P = $('cmPanel');
@@ -2781,7 +2783,7 @@ const CM = (() => {
     return row('Top speed', (s.vT - 30) / 75, Math.round(s.vT * 2.237) + ' mph') + row('0-60', (14 - s.t60) / 12, s.t60.toFixed(1) + ' s') + row('Braking', (s.brk - 8) / 12, Math.round(26.8 * 26.8 / 2 / s.brk) + ' m') + row('Handling', (s.grip * s.steer - 0.75) / 0.85, Math.round(s.grip * s.steer * 100) + ''); };
   const openP = (kind, html) => { o.open = kind; P.innerHTML = html; P.style.display = 'block'; document.exitPointerLock && document.exitPointerLock(); for (const k in keys) keys[k] = 0; $('zoneBtn').classList.remove('show'); };
   o.close = () => { if (!o.open) return; const was = o.open; o.open = null; P.style.display = 'none'; PV.stop(); if (was === 'garage') GAR.save(); if (W.on) window.__lockMouse && window.__lockMouse(true); };
-  P.addEventListener('click', e => { const t = e.target.closest('[data-a]'); if (!t || t.disabled) return; e.stopPropagation(); act(t.dataset.a, t.dataset.v); });
+  P.addEventListener('click', e => { const t = e.target.closest('[data-a]'); if (!t || t.disabled) return; e.stopPropagation(); if (t.dataset.a === 'close') { o.close(); return; } if (extFn && o.open === extKind) extFn(t.dataset.a, t.dataset.v); else act(t.dataset.a, t.dataset.v); });
   let dTab = 1, dSel = null, gTab = 'perf';
   function openDealer() { if (!dSel) dSel = CATALOGUE.find(d => d.cat === dTab).id; drawDealer(); }
   function drawDealer() {
@@ -2877,6 +2879,80 @@ const CM = (() => {
   return o;
 })();
 player.spec = carSpec(GAR.cur());
+// ===== the street trade: a dealer in the underpass under the Droveway sells stock; houses marked green want to buy it =====
+const DRUGS = (() => {
+  const ITEMS = [['weed', 'Weed', '🌿', 10], ['speed', 'Speed', '⚡', 14], ['ecstasy', 'Ecstasy', '💊', 18], ['ket', 'Ketamine', '🐴', 30], ['coke', 'Cocaine', '❄️', 45]];   // [id, name, icon, base £]
+  const CAP = 30, BUYERS = 6, o = {};
+  let stash = {}; try { stash = JSON.parse(localStorage.getItem('pd_stash')) || {}; } catch (_) {}
+  const save = () => { try { localStorage.setItem('pd_stash', JSON.stringify(stash)); } catch (_) {} };
+  const held = () => ITEMS.reduce((a, it) => a + (stash[it[0]] || 0), 0);
+  // the dealer: a hooded figure leaning on the cutting wall, just short of the bridge
+  const t0 = -7, q0 = TR.band - 0.75, [dx, dz] = TR.pt(t0, q0), [cx0, cz0] = TR.pt(t0, 0), dy = -TR.depth(t0);
+  const fig = new THREE.Group(), M = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 }), hood = M(0x1b1d22), jeans = M(0x2b3442), skin = M(0x8d5a3b);
+  const add = (g, m, x, y, z) => { const k = new THREE.Mesh(g, m); k.position.set(x, y, z); k.castShadow = true; fig.add(k); return k; };
+  for (const sx of [-0.1, 0.1]) add(new THREE.CylinderGeometry(0.075, 0.07, 0.88, 8), jeans, sx, 0.44, 0);
+  add(new THREE.CylinderGeometry(0.21, 0.19, 0.62, 10), hood, 0, 1.2, 0).scale.set(1, 1, 0.72);
+  add(new THREE.SphereGeometry(0.115, 12, 10), skin, 0, 1.62, -0.02);
+  add(new THREE.SphereGeometry(0.15, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.62), hood, 0, 1.63, 0.02);
+  for (const sx of [-0.2, 0.2]) add(new THREE.CylinderGeometry(0.06, 0.055, 0.55, 8), hood, sx, 1.13, -0.06).rotation.x = -0.5;   // hands in the hoodie pocket
+  fig.position.set(dx, dy, dz); fig.rotation.y = Math.atan2(-(cx0 - dx), -(cz0 - dz)); scene.add(fig); addCircle(dx, dz, 0.3);
+  // prices move every couple of minutes
+  let mkt = {}, mktT = 0;
+  const roll = () => { for (const [id, , , b] of ITEMS) mkt[id] = Math.max(1, Math.round(b * (0.7 + Math.random() * 0.6))); };
+  roll();
+  // customers: ordinary houses within reach of the underpass
+  const houses = builds.filter(b => b.c === 0 && b.h >= 4 && b.h <= 10 && Math.abs(b.area) > 30 && Math.abs(b.area) < 300 && Math.hypot(b.cx - dx, b.cz - dz) < 650 && Math.abs(b.cx) < LIM - 20 && Math.abs(b.cz) < LIM - 20);
+  const mkGeo = new THREE.OctahedronGeometry(0.55), mkMat = new THREE.MeshStandardMaterial({ color: 0x35e06b, emissive: 0x1fa84a, roughness: 0.4 });
+  const buyers = [];
+  const newBuyer = () => {
+    for (let k = 0; k < 40; k++) {
+      const b = houses[(Math.random() * houses.length) | 0]; if (!b || buyers.some(q => q.b === b || Math.hypot(q.b.cx - b.cx, q.b.cz - b.cz) < 60)) continue;
+      const it = ITEMS[Math.random() < 0.45 ? (Math.random() * 3) | 0 : (Math.random() * ITEMS.length) | 0], n = 1 + ((Math.random() * (it[3] > 25 ? 3 : 6)) | 0);
+      const m = new THREE.Mesh(mkGeo, mkMat); m.position.set(b.cx, b.h + 3.2, b.cz); scene.add(m);
+      buyers.push({ b, it, n, pay: Math.round(it[3] * (1.7 + Math.random() * 0.9)), m, r: Math.max(b.x1 - b.x0, b.z1 - b.z0) / 2 + 5 }); return;
+    }
+  };
+  for (let k = 0; k < BUYERS; k++) newBuyer();
+  let respawn = [];
+  // ---- zones for the shared menu / button
+  o.zone = () => {
+    const f = follow();
+    if (W.on && Math.hypot(f.x - dx, f.z - dz) < 2.6 && Math.abs(f.y - dy) < 1.5) return { label: '🧥 DEALER', open: openDealer };
+    for (const q of buyers) if (Math.hypot(f.x - q.b.cx, f.z - q.b.cz) < q.r) return { label: '🏠 ' + q.n + ' × ' + q.it[1] + ' wanted', open: () => openBuyer(q) };
+    return null;
+  };
+  const fmt = v => '£' + v.toFixed(0);
+  const stashLine = () => { const h = ITEMS.filter(it => stash[it[0]]).map(it => it[2] + ' ' + stash[it[0]]).join('  '); return `<div class="cmSmall">You have <b class="cmMoney">£${money.toFixed(2)}</b> · carrying ${held()}/${CAP}${h ? ': ' + h : ''}</div>`; };
+  function openDealer() {
+    const rows = ITEMS.map(([id, n, ic]) => `<div class="cmRow" style="cursor:default"><span style="font-size:18px">${ic}</span><span class="cmName"><b>${n}</b><br><span class="cmSmall">${fmt(mkt[id])} a bag · you have ${stash[id] || 0}</span></span>
+      <button class="cmBtn alt" data-a="buy" data-v="${id}|1" ${money < mkt[id] || held() >= CAP ? 'disabled' : ''}>Buy 1</button><button class="cmBtn alt" data-a="buy" data-v="${id}|5" ${money < mkt[id] * 5 || held() + 5 > CAP ? 'disabled' : ''}>Buy 5</button></div>`).join('');
+    CM.openExt('dealer2', `<div class="cmHead"><h3>🧥 The underpass</h3><button class="cmX" data-a="close">✕</button></div><div class="cmSmall" style="margin:2px 0 6px">“What you after?” Prices change every couple of minutes. Green diamonds over houses are your customers.</div>${stashLine()}${rows}<div style="margin-top:8px"><button class="cmBtn alt" data-a="close">Leave</button></div>`, act);
+  }
+  function openBuyer(q) {
+    const have = stash[q.it[0]] || 0, k = Math.min(have, q.n);
+    CM.openExt('buyer', `<div class="cmHead"><h3>🏠 Knock knock</h3><button class="cmX" data-a="close">✕</button></div><div style="margin:6px 0">They want <b>${q.n} × ${q.it[2]} ${q.it[1]}</b> and pay <b>${fmt(q.pay)}</b> a bag (${fmt(q.pay * q.n)} for the lot).</div>${stashLine()}
+      <div style="margin-top:8px">${k ? `<button class="cmBtn" data-a="sell" data-v="${buyers.indexOf(q)}">Sell ${k} for ${fmt(q.pay * k)}</button>` : `<span class="cmSmall">You haven’t got any ${q.it[1]}. The dealer’s in the underpass under the Droveway.</span>`} <button class="cmBtn alt" data-a="close">Leave</button></div>`, act);
+  }
+  function act(a, v) {
+    if (a === 'buy') { const [id, nS] = v.split('|'), n = +nS, c = mkt[id] * n; if (money < c || held() + n > CAP) return; money -= c; showMoney(); stash[id] = (stash[id] || 0) + n; save(); beep(900, 0.05); openDealer(); return; }
+    if (a === 'sell') { const q = buyers[+v]; if (!q) return; const id = q.it[0], k = Math.min(stash[id] || 0, q.n); if (!k) return;
+      stash[id] -= k; q.n -= k; save(); CM.close();
+      if (Math.random() < 0.06) {                                            // a neighbour saw it all
+        const fine = Math.min(money, 150); money -= fine; showMoney(); for (const it of ITEMS) stash[it[0]] = 0; save(); beep(330, 0.4); setTimeout(() => beep(260, 0.5), 300);
+        toast('🚔 A neighbour called the police! They took your whole stash' + (fine ? ' and fined you £' + fine.toFixed(0) : '') + '.'); }
+      else { const got = q.pay * k; money += got; showMoney(); beep(1400, 0.08); setTimeout(() => beep(2100, 0.1), 110); toast('💷 Sold ' + k + ' × ' + q.it[1] + ' for £' + got + (q.n ? ' (' + q.n + ' more wanted)' : '')); }
+      if (!q.n) { scene.remove(q.m); buyers.splice(buyers.indexOf(q), 1); respawn.push(20 + Math.random() * 25); } return; }
+  }
+  o.step = dt => {
+    if ((mktT += dt) > 120) { mktT = 0; roll(); }
+    for (let i = respawn.length - 1; i >= 0; i--) if ((respawn[i] -= dt) <= 0) { respawn.splice(i, 1); newBuyer(); }
+    const t = performance.now() / 1000; for (const q of buyers) { q.m.rotation.y = t * 1.5; q.m.position.y = q.b.h + 3.2 + Math.sin(t * 2 + q.b.cx) * 0.25; q.m.visible = !INSIDE; }
+    fig.visible = !INSIDE; fig.rotation.z = Math.sin(t * 0.8) * 0.015;
+  };
+  o.mini = g => { g.fillStyle = '#35e06b'; g.strokeStyle = '#0b3a1a'; g.lineWidth = 1.2; for (const q of buyers) { g.beginPath(); g.arc(mpx(q.b.cx), mpx(q.b.cz), 3.2, 0, 7); g.fill(); g.stroke(); }
+    g.fillStyle = '#1b1d22'; g.strokeStyle = '#fff'; g.beginPath(); g.arc(mpx(dx), mpx(dz), 4, 0, 7); g.fill(); g.stroke(); };
+  return o;
+})();
 function toggleFoot() {
   if (W.seated) { standUp(); return; }
   if (POOL.mode) { POOL.leave(); return; }
@@ -4654,6 +4730,7 @@ function drawMinimap() {
   mctx.clearRect(0, 0, 150, 150); mctx.drawImage(mmBg, 0, 0);
   { const c = RACE.next(); if (c) { mctx.fillStyle = '#ffd400'; mctx.strokeStyle = '#000'; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.arc(mpx(c.x), mpx(c.z), 5, 0, 7); mctx.fill(); mctx.stroke(); } }
   mctx.font = 'bold 10px system-ui'; mctx.textAlign = 'center'; mctx.textBaseline = 'middle'; mctx.fillStyle = '#1f5c3a'; mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.arc(mpx(-25), mpx(-20), 6, 0, 7); mctx.fill(); mctx.stroke(); mctx.fillStyle = '#fff'; mctx.fillText('£', mpx(-25), mpx(-20) + 0.5);
+  DRUGS.mini(mctx);
   for (const P of MP.peers.values()) { const d = P.s; if (!d) continue; const on = d.m && d.f, x = on ? d.f[0] : d.x, z = on ? d.f[2] : d.z; mctx.fillStyle = '#3cc8ff'; mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.2; mctx.beginPath(); mctx.arc(mpx(x), mpx(z), 3.6, 0, 7); mctx.fill(); mctx.stroke(); }
   mctx.save(); mctx.translate(mpx(follow().x), mpx(follow().z)); mctx.rotate(-follow().h);
   mctx.fillStyle = '#ff5a3c'; mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.moveTo(0, -6); mctx.lineTo(4.5, 5); mctx.lineTo(-4.5, 5); mctx.closePath(); mctx.fill(); mctx.stroke(); mctx.restore();
@@ -4665,7 +4742,7 @@ let last = performance.now(), hudT = 0, skidAccInit = 0, frameN = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
-  if (RACE.frozen()) { player.vx = player.vz = 0; } stepPlayer(dt); if (W.on) stepWalker(dt); MP.step(dt); RACE.step(dt); NPC.step(dt); WC.step(dt); TUCKSHOP.step(dt); KITCHEN.step(dt); POOL.step(dt); PUB.step(dt); updateWork(dt); updateTills(dt); stepCars(dt); CM.step(dt); CM.PV.step(dt); stepFX(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
+  if (RACE.frozen()) { player.vx = player.vz = 0; } stepPlayer(dt); if (W.on) stepWalker(dt); MP.step(dt); RACE.step(dt); NPC.step(dt); WC.step(dt); TUCKSHOP.step(dt); KITCHEN.step(dt); POOL.step(dt); PUB.step(dt); updateWork(dt); updateTills(dt); stepCars(dt); DRUGS.step(dt); CM.step(dt); CM.PV.step(dt); stepFX(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
   { const f = follow(); sun.position.set(f.x + SUN.x * 220, SUN.y * 220, f.z + SUN.z * 220); sun.target.position.set(f.x, 0, f.z); } sun.target.updateMatrixWorld();
   sky.position.copy(camera.position); clouds.position.set(camera.position.x, 0, camera.position.z);
   hudT -= dt;
