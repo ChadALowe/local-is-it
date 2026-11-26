@@ -41,6 +41,11 @@ Roads, buildings and green areas come from OpenStreetMap, projected to metres ar
 
 Map data (c) OpenStreetMap contributors, available under the Open Database Licence (ODbL): https://www.openstreetmap.org/copyright
 
+## Streets
+Road pieces join with curved corners, footways run round corners and into junctions, dead-end closes finish in turning
+heads, and footpaths are Pendeford's red-brown tarmac. Every building has concrete round it; houses have a driveway
+(grey concrete or red block paving) and a fenced back garden with a patio, panel fences between neighbours and some sheds.
+
 ## Saved progress
 Each browser gets a secret 16-character save code. Money, owned cars and upgrades, the stash, best drift, best lap
 and name are saved to the multiplayer room's storage on Cloudflare (`p:<code>`) about every 8 seconds and when the

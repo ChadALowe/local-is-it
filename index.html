@@ -173,6 +173,9 @@ const MAP = {"o":[52.6261,-2.1459],"r":[{"c":0,"w":80,"k":4,"b":0,"p":[5746,-388
 const LIM = 700;                                   // playable half-size in metres
 const toPts = a => { const o = []; for (let i = 0; i < a.length; i += 2) o.push([a[i] * 0.1, a[i + 1] * 0.1]); return o; };
 const roads = MAP.r.map((r, id) => ({ id, c: r.c, w: r.w / 10, k: r.k, p: toPts(r.p) }));
+// Pendeford Motors: a car dealer and a tuning garage on the edge of the park by the spawn street (kept clear of trees, lamps and parked cars)
+const LOT = { x0: -44, x1: -6, z0: -34, z1: -6, dx0: -59, dx1: -44, dz0: -17, dz1: -10 };
+const inLot = (x, z, m = 0) => (x > LOT.x0 - m && x < LOT.x1 + m && z > LOT.z0 - m && z < LOT.z1 + m) || (x > LOT.dx0 - m && x < LOT.dx1 + m && z > LOT.dz0 - m && z < LOT.dz1 + m);
 // Wobaston Road between the Droveway roundabout and Pendeford Business Park: hedged both sides, wide verges, set-back cycle path, no kerbside pavement
 const HEDGE_RD = new Set([145, 17, 22, 153]), inHedgeRun = (x, z) => x > -520 && x < 300 && z > -430 && z < -380;
 const RBT = { x: 289, z: -400 };                                     // Droveway / Wobaston Road roundabout centre
@@ -456,7 +459,11 @@ const solarMat = stdMat({ color: 0x141c30, roughness: 0.85, metalness: 0, side: 
 const redAsphaltMat = stdMat({ color: 0x93564f, roughness: 0.9, side: DS });
 const shingleMats = [stdMat({ map: shingleTex, side: DS }), stdMat({ map: shingleTex, color: 0x9aa0a8, side: DS }), stdMat({ map: shingleTex, color: 0x6a7480, side: DS })];
 const asphaltMat = stdMat({ map: asphaltTex, roughness: 0.82, side: DS });
-const pathMat = stdMat({ map: sidewalkTex, side: DS });
+const redPathTex = mkTex(256, 256, (g, w, h) => { g.fillStyle = '#7d4d40'; g.fillRect(0, 0, w, h); speckle(g, w, h, 0.035, 70, 120, 0); });   // Pendeford's footpaths are red-brown tarmac
+const pathMat = stdMat({ map: redPathTex, color: 0xd9b3a6, roughness: 0.9, side: DS });
+const lawnMat = stdMat({ map: grassTex, color: 0xbcd8a0, side: DS });
+const fenceTex = mkTex(64, 64, (g, w, h) => { g.fillStyle = '#7a5636'; g.fillRect(0, 0, w, h); for (let x = 0; x < w; x += 8) { g.fillStyle = `rgba(${40 + Math.random() * 30},${25 + Math.random() * 15},10,.35)`; g.fillRect(x, 0, 1.5, h); } g.fillStyle = 'rgba(30,18,8,.5)'; g.fillRect(0, 2, w, 3); g.fillRect(0, h - 5, w, 3); });
+const fenceMat = stdMat({ map: fenceTex, roughness: 0.95, side: DS }), shedMats = [stdMat({ color: 0x6b4a2e, roughness: 0.9 })], feltMat = stdMat({ color: 0x2a2b2e, roughness: 0.95 });
 const blockRoadTex = mkTex(64, 64, (g, w, h) => {                   // grey herringbone block paving
   g.fillStyle = '#4a4744'; g.fillRect(0, 0, w, h);
   const cols = ['#76716b', '#6c6762', '#7e7973', '#686460'];
@@ -649,10 +656,10 @@ function roadMiters(p, w) {
 // arms, a road that changes name on a bend) there is a wedge-shaped hole on the outside of the turn, and very sharp bends
 // leave a notch where the mitre is limited. At each such point the arms leaving it are sorted by direction, and the
 // gap between neighbouring arms' facing edges is swept with a fan whose radius blends from one arm's width to the other's.
-const JOINTS = new Map();
+const JOINTS = new Map(), ROAD_ENDS = new Map(), roadEndKey = (c, q) => (c ? 'c' : 'r') + Math.round(q[0] * 5) + ',' + Math.round(q[1] * 5);
 {
   const key = (c, q) => (c ? 'c' : 'r') + Math.round(q[0] * 5) + ',' + Math.round(q[1] * 5), arm = (r, q, to) => ({ r, th: Math.atan2(to[1] - q[1], to[0] - q[0]) });
-  const ends = new Map();
+  const ends = ROAD_ENDS;
   for (const r of roads) if (r.p.length > 1) for (const [q, to] of [[r.p[0], r.p[1]], [r.p[r.p.length - 1], r.p[r.p.length - 2]]]) { if (Math.hypot(to[0] - q[0], to[1] - q[1]) < 0.05) continue; const k = key(r.c, q); let j = ends.get(k); if (!j) ends.set(k, j = { q, arms: [] }); j.arms.push(arm(r, q, to)); }
   const vtx = new Map(); for (const r of roads) for (let i = 1; i < r.p.length - 1; i++) { const k = key(r.c, r.p[i]); if (!vtx.has(k)) vtx.set(k, []); vtx.get(k).push([r, i]); }
   for (const [k, j] of ends) for (const [r, i] of vtx.get(k) || []) j.arms.push(arm(r, j.q, r.p[i - 1]), arm(r, j.q, r.p[i + 1]));   // T-junction: a road ending on the middle of another
@@ -701,6 +708,24 @@ jointGaps(r => !!r.sm, (q, A, B, t0, sw) => {                             // fil
     const P = [q[0] + Math.cos(a0) * r0, y, q[1] + Math.sin(a0) * r0], Q = [q[0] + Math.cos(a1) * r1, y, q[1] + Math.sin(a1) * r1];
     m.tri([q[0], y, q[1]], P, Q, [q[0] / 6, q[1] / 6], [P[0] / 6, P[2] / 6], [Q[0] / 6, Q[2] / 6], UP); }
 });
+// Cul-de-sac turning heads: dead-end residential roads end in a round tarmac bulb, service roads in a smaller one
+// (as in the aerial photos). Added to the road index so footways, trees and parked cars keep off them and cars grip on them.
+const HEADS = [];
+{
+  const inBiz = (x, z) => (x > -500 && x < -240 && z > -410 && z < -135) || (x > -128 && x < -22 && z > 378 && z < 482);
+  for (const r of roads) { if (r.c || !r.sm || (r.k !== 6 && r.k !== 8) || r.p.length < 2) continue;
+    for (const [q, to] of [[r.p[0], r.p[1]], [r.p[r.p.length - 1], r.p[r.p.length - 2]]]) {
+      const j = ROAD_ENDS.get(roadEndKey(r.c, q)); if (!j || j.arms.length !== 1) continue;
+      const L = Math.hypot(q[0] - to[0], q[1] - to[1]); if (L < 8) continue;
+      const R = r.k === 6 ? 6.5 : 5, dx = (q[0] - to[0]) / L, dz = (q[1] - to[1]) / L, cx = q[0] + dx * R * 0.35, cz = q[1] + dz * R * 0.35;
+      if (Math.abs(cx) > LIM - R || Math.abs(cz) > LIM - R || inBiz(cx, cz) || inLot(cx, cz, R) || TR.foot(cx, cz, R) || roadDist(cx, cz, r.id, false) < R + 1 || HEADS.some(h => Math.hypot(h.x - cx, h.z - cz) < h.R + R + 2)) continue;
+      let clear = !inBuilding(cx, cz); for (let k = 0; k < 16 && clear; k++) { const a = k / 16 * TAU; if (inBuilding(cx + Math.cos(a) * (R + 1), cz + Math.sin(a) * (R + 1))) clear = false; } if (!clear) continue;
+      const n = 22, y = r.sy; for (let k = 0; k < n; k++) { const a0 = k / n * TAU, a1 = (k + 1) / n * TAU, P = [cx + Math.cos(a0) * R, y, cz + Math.sin(a0) * R], Q = [cx + Math.cos(a1) * R, y, cz + Math.sin(a1) * R];
+        r.sm.tri([cx, y, cz], Q, P, [cx / 6, cz / 6], [Q[0] / 6, Q[2] / 6], [P[0] / 6, P[2] / 6], UP); }
+      rgrid.ins({ id: -10 - r.id, c: 0, w: R * 2, x0: cx, z0: cz, x1: cx + 0.01, z1: cz }, cx - R - 3, cx + R + 3, cz - R - 3, cz + R + 3);
+      HEADS.push({ x: cx, z: cz, R, r });
+    } }
+}
 // pavements and kerbs
 {
   const pm = mg('pave', paveMat, false, true), cm = mg('curb', curbMat, false, true), step0 = isTouch ? 5 : 3;
@@ -755,6 +780,11 @@ jointGaps(r => !!r.sm, (q, A, B, t0, sw) => {                             // fil
     }
   };
   jointGaps(hasFoot, footFill, JOINTS.values(), footCorner); jointGaps(hasFoot, footFill, footBends);
+  for (const H of HEADS) { if (!hasFoot(H.r)) continue; const y0 = ROAD_Y[H.r.k] || 0.05, n = 44, P = (a, rr, yy) => [H.x + Math.cos(a) * rr, yy, H.z + Math.sin(a) * rr];   // footway round each turning head
+    for (let k = 0; k < n; k++) { const a0 = k / n * TAU, a1 = (k + 1) / n * TAU, am = (a0 + a1) / 2; if (!ok(H.r, H.x + Math.cos(am) * (H.R + 1), H.z + Math.sin(am) * (H.R + 1))) continue;
+      const i0 = P(a0, H.R, 0.13), i1 = P(a1, H.R, 0.13), o0 = P(a0, H.R + 2, 0.13), o1 = P(a1, H.R + 2, 0.13);
+      pm.quad(i0, o0, o1, i1, [i0[0] / 2.5, i0[2] / 2.5], [o0[0] / 2.5, o0[2] / 2.5], [o1[0] / 2.5, o1[2] / 2.5], [i1[0] / 2.5, i1[2] / 2.5], UP);
+      cm.quad(P(a0, H.R, y0), P(a1, H.R, y0), i1, i0, [0, 0], [1, 0], [1, 1], [0, 1], [-Math.cos(am), 0, -Math.sin(am)]); } }
 }
 // building meshes
 const hashN = (x, z) => Math.abs(Math.floor(x * 13.7 + z * 7.3)) % 1000;
@@ -788,7 +818,38 @@ const inShop = (x, z) => x > -128 && x < -22 && z > 378 && z < 482;         // s
 {
   const cm2 = mg('pave', paveMat, false, true), uv = (x, z) => [x / 2.5, z / 2.5];
   const q4 = (a, b, c, d, y) => cm2.quad([a[0], y, a[1]], [b[0], y, b[1]], [c[0], y, c[1]], [d[0], y, d[1]], uv(a[0], a[1]), uv(b[0], b[1]), uv(c[0], c[1]), uv(d[0], d[1]), UP);
-  const dRoads = roads.filter(r => !r.c && r.p.length > 1 && r.k <= 8 && r.id !== 21 && r.id !== 171);
+  const dRoads = roads.filter(r => !r.c && r.p.length > 1 && r.k <= 8 && r.id !== 21 && r.id !== 171), blockM = mg('paving', pavingMat, false, true);
+  // Back gardens: behind each house (the side away from its road) a lawn with a patio by the back wall, panel fences round it and
+  // between neighbours (a plot every ~5 m along a terrace or pair of semis), and a shed in some. Stops short of roads, paths and
+  // other buildings, and halfway to the house behind.
+  const lawn = mg('lawn', lawnMat, false, true), fence = mg('fence', fenceMat, false, true), felt = mg('shedRoof', feltMat), sheds = [mg('shed0', shedMats[0])];
+  const vq = (m, a, b2, h, y0 = 0.02) => { const n = [-(b2[1] - a[1]), 0, b2[0] - a[0]], l = Math.hypot(n[0], n[2]) || 1; m.quad([a[0], y0, a[1]], [b2[0], y0, b2[1]], [b2[0], h, b2[1]], [a[0], h, a[1]], [0, 0], [Math.hypot(b2[0] - a[0], b2[1] - a[1]) / 2, 0], [Math.hypot(b2[0] - a[0], b2[1] - a[1]) / 2, 1], [0, 1], [n[0] / l, 0, n[2] / l]); };
+  const box = (m, top, cx, cz, tx, tz, w, d, h, h2) => { const nx = -tz, nz = tx, P = (u, v) => [cx + tx * u + nx * v, cz + tz * u + nz * v];
+    const c = [P(-w / 2, -d / 2), P(w / 2, -d / 2), P(w / 2, d / 2), P(-w / 2, d / 2)], hh = [h2, h2, h, h];
+    for (let i = 0; i < 4; i++) { const a = c[i], b2 = c[(i + 1) % 4], e = [b2[0] - a[0], b2[1] - a[1]], l = Math.hypot(e[0], e[1]); m.quad([a[0], 0.03, a[1]], [b2[0], 0.03, b2[1]], [b2[0], hh[(i + 1) % 4], b2[1]], [a[0], hh[i], a[1]], [0, 0], [1, 0], [1, 1], [0, 1], [e[1] / l, 0, -e[0] / l]); }
+    const r = (v, k) => [v[0], hh[k] + 0.06, v[1]]; top.quad(r(c[0], 0), r(c[1], 1), r(c[2], 2), r(c[3], 3), [0, 0], [1, 0], [1, 1], [0, 1], UP); };
+  function garden(b, ux, uz) {
+    let best = 0, ang = 0;
+    for (let i = 0; i < b.p.length; i++) { const a = b.p[i], c = b.p[(i + 1) % b.p.length], l = Math.hypot(c[0] - a[0], c[1] - a[1]); if (l > best) { best = l; ang = Math.atan2(c[1] - a[1], c[0] - a[0]); } }
+    const o = obb(b.p, ang), cs = Math.cos(ang), sn = Math.sin(ang), C = [o.cu * cs - o.cv * sn, o.cu * sn + o.cv * cs];
+    const ax = [[cs, sn, o.a, o.b], [-sn, cs, o.b, o.a]];               // [dir x, dir z, half-depth along dir, half-width across]
+    let f = null, fd = -2; for (const [dx, dz, hd, hw] of ax) for (const sg of [1, -1]) { const d = (dx * ux + dz * uz) * sg; if (d > fd) { fd = d; f = [dx * sg, dz * sg, hd, hw]; } }
+    const rx = -f[0], rz = -f[1], hd = f[2], hw = f[3] + 0.15, tx = -rz, tz = rx, G = [C[0] + rx * hd, C[1] + rz * hd];
+    const at = (d, u) => [G[0] + rx * d + tx * u, G[1] + rz * d + tz * u], us = [-hw + 0.3, -hw / 2, 0, hw / 2, hw - 0.3];
+    let D = 0;
+    for (let d = 0.5; d <= 12; d += 0.5) { if (us.some(u => { const [x, z] = at(d, u); return roadDist(x, z, -1, false) < 2.4 || inBuilding(x, z) || inLot(x, z, 1) || Math.abs(x) > LIM || Math.abs(z) > LIM || TR.foot(x, z, 1); })) break; D = d; }
+    for (let d = 1; d <= 24; d += 1) if (us.some(u => { const [x, z] = at(d, u); return inBuilding(x, z); })) { D = Math.min(D, d / 2 - 0.2); break; }   // meet the house behind halfway
+    if (D < 3) return;
+    const y = 0.026, L4 = (a, b2, c, d2, m, yy, s) => m.quad([a[0], yy, a[1]], [b2[0], yy, b2[1]], [c[0], yy, c[1]], [d2[0], yy, d2[1]], [a[0] / s, a[1] / s], [b2[0] / s, b2[1] / s], [c[0] / s, c[1] / s], [d2[0] / s, d2[1] / s], UP);
+    L4(at(0, -hw), at(0, hw), at(D, hw), at(D, -hw), lawn, y, 8);
+    const pd = Math.min(2.6, D * 0.35); L4(at(0, -hw), at(0, hw), at(pd, hw), at(pd, -hw), mg('pave'), 0.033, 2.5);    // patio slabs by the back wall
+    const H = 1.75; vq(fence, at(D, -hw), at(D, hw), H); vq(fence, at(0, -hw), at(D, -hw), H); vq(fence, at(0, hw), at(D, hw), H);
+    const bk = [at(D, -hw), at(D, hw), at(0, -hw), at(0, hw)]; addSeg(bk[0][0], bk[0][1], bk[1][0], bk[1][1]); addSeg(bk[2][0], bk[2][1], bk[0][0], bk[0][1]); addSeg(bk[3][0], bk[3][1], bk[1][0], bk[1][1]);
+    const n = Math.max(1, Math.round(hw * 2 / 5.2)), pw = hw * 2 / n, hs = hashN(b.cx, b.cz);
+    for (let k = 1; k < n; k++) vq(fence, at(pd * 0.5, -hw + k * pw), at(D, -hw + k * pw), H);   // between neighbours
+    if (D >= 6) for (let k = 0; k < n; k++) { if ((hs + k * 7) % 5 > 1) continue;                     // a shed at the bottom of some gardens
+      const u = -hw + k * pw + (k % 2 ? pw - 1.3 : 1.3), [sx, sz] = at(D - 1.1, u), m = sheds[0]; box(m, felt, sx, sz, tx, tz, 2.0, 1.6, 2.1, 1.9); }
+  }
   for (const b of builds) {
     const A = Math.abs(b.area); if (A < 12) continue;
     const house = b.c === 0 && A < 300 && !inPark(b.cx, b.cz) && !inShop(b.cx, b.cz), w = house ? 1.0 : A > 800 ? 3.0 : 2.2, p = b.p, n = p.length, sg = b.area >= 0 ? 1 : -1, y = 0.031, N = [];
@@ -804,12 +865,14 @@ const inShop = (x, z) => x > -128 && x < -22 && z > 378 && z < 482;         // s
       if (!best || d < best.d) best = { d, cx, cz, h: r.w / 2 }; }
     if (!best || best.d > 24) continue;
     const L0 = Math.hypot(best.cx - b.cx, best.cz - b.cz), ux = (best.cx - b.cx) / L0, uz = (best.cz - b.cz) / L0;
+    garden(b, ux, uz);
     let s0 = 0; while (s0 < L0 && inPoly(b.cx + ux * s0, b.cz + uz * s0, p)) s0 += 0.2;
     const s1 = L0 - best.h; if (s1 - s0 < 0.6 || s1 - s0 > 18) continue;
     let clear = true; for (let s = s0 + 0.6; s < s1; s += 1) if (inBuilding(b.cx + ux * s, b.cz + uz * s) || roadDist(b.cx + ux * s, b.cz + uz * s, -1, true) < -0.5) { clear = false; break; }
     if (!clear) continue;
     const hw = 1.4, nx = -uz * hw, nz = ux * hw, W0 = [b.cx + ux * s0, b.cz + uz * s0], E = [b.cx + ux * s1, b.cz + uz * s1];
-    q4([W0[0] + nx, W0[1] + nz], [W0[0] - nx, W0[1] - nz], [E[0] - nx, E[1] - nz], [E[0] + nx, E[1] + nz], 0.037);
+    const hs = hashN(b.cx, b.cz), dm = hs % 5 < 2 ? cm2 : blockM, uvs = hs % 5 < 2 ? 2.5 : 1.6, Q = (a) => [a[0], 0.037, a[1]], uv2 = a => [a[0] / uvs, a[1] / uvs];   // driveways: grey concrete or red block paving
+    const D1 = [W0[0] + nx, W0[1] + nz], D2 = [W0[0] - nx, W0[1] - nz], D3 = [E[0] - nx, E[1] - nz], D4 = [E[0] + nx, E[1] + nz]; dm.quad(Q(D1), Q(D2), Q(D3), Q(D4), uv2(D1), uv2(D2), uv2(D3), uv2(D4), UP);
   }
 }
 // Hipped roof for any footprint: inset the outline by d and cap it. d follows the narrowest part of the building.
@@ -1564,9 +1627,6 @@ for (const b of builds) {
     for (const [i, j, k] of tr) { const A = b.p[i], B = b.p[j], C = b.p[k]; rm.tri([A[0], wallH + 0.05, A[1]], [B[0], wallH + 0.05, B[1]], [C[0], wallH + 0.05, C[1]], U(A), U(B), U(C), UP); }
   }
 }
-// Pendeford Motors: a car dealer and a tuning garage on the edge of the park by the spawn street (kept clear of trees, lamps and parked cars)
-const LOT = { x0: -44, x1: -6, z0: -34, z1: -6, dx0: -59, dx1: -44, dz0: -17, dz1: -10 };
-const inLot = (x, z, m = 0) => (x > LOT.x0 - m && x < LOT.x1 + m && z > LOT.z0 - m && z < LOT.z1 + m) || (x > LOT.dx0 - m && x < LOT.dx1 + m && z > LOT.dz0 - m && z < LOT.dz1 + m);
 // trees, lamps, parked cars
 const trunkGeo = new THREE.CylinderGeometry(0.22, 0.32, 2.4, 6); trunkGeo.translate(0, 1.2, 0);
 const blobA = new THREE.IcosahedronGeometry(1.7, 0), blobB = new THREE.IcosahedronGeometry(1.2, 0);
