@@ -4541,7 +4541,7 @@ const MP = (() => {
     P.fig = ragFigure(P.I, TOPS[hash(id) % TOPS.length]); scene.remove(P.fig.g); o.g.add(P.fig.g); P.fig.g.visible = false;
     o.peers.set(id, P); return P;
   }
-  function dropPeer(id, quiet) { const P = o.peers.get(id); if (!P) return; if (P.s && P.s.f) NPC.dropIfCarrier(id, P.s.f[0], P.s.f[2]); if (P.pair) o.g.remove(P.pair); if (P.stream) interiorGroup.remove(P.stream); if (P.car) o.g.remove(P.car.grp); o.g.remove(P.fig.g); if (P.lab) o.g.remove(P.lab); o.peers.delete(id); o.online = o.peers.size + 1; hud(); if (!quiet && P.n) toast('👋 ' + P.n + ' left'); }
+  function dropPeer(id, quiet) { const P = o.peers.get(id); if (!P) return; if (P.s && P.s.f) NPC.dropIfCarrier(id, P.s.f[0], P.s.f[2]); if (P.pair) o.g.remove(P.pair); if (P.stream) interiorGroup.remove(P.stream); if (P.car) o.g.remove(P.car.grp); o.g.remove(P.fig.g); if (P.lab) o.g.remove(P.lab); if (P.dTag) o.g.remove(P.dTag); o.peers.delete(id); o.online = o.peers.size + 1; hud(); if (!quiet && P.n) toast('👋 ' + P.n + ' left'); }
   function onState(d) {
     let P = o.peers.get(d.id); const isNew = !P; if (!P) P = makePeer(d.id);
     P.s = d; P.seen = performance.now();
@@ -4593,6 +4593,13 @@ const MP = (() => {
     const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false, transparent: true })); s.scale.set(2.6, 0.65, 1); s.renderOrder = 6; return s; };
   o.say = m => { m = (m || '').trim().slice(0, 140); if (!m) return; if (o.ws && o.ws.readyState === 1) send({ t: 'chat', n: name, m }); else toast('💬 ' + name + ': ' + m + ' (offline)'); };
   o.bubble = bubble;
+  const driftTag = () => { const c = document.createElement('canvas'); c.width = 256; c.height = 64; const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false, transparent: true })); s.scale.set(2.6, 0.65, 1); s.renderOrder = 6; s.userData.c = c; s.userData.v = -1; return s; };
+  const drawDrift = (s, v) => { if (s.userData.v === v) return; s.userData.v = v; const g = s.userData.c.getContext('2d'); g.clearRect(0, 0, 256, 64); g.font = '900 40px system-ui,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineWidth = 7; g.strokeStyle = 'rgba(0,0,0,.65)'; const txt = '🔥 ' + v.toLocaleString(); g.strokeText(txt, 128, 34); g.fillStyle = '#ffd23a'; g.fillText(txt, 128, 34); s.material.map.needsUpdate = true; };
+  o.stepDrift = () => { for (const P of o.peers.values()) { const v = P.s && P.s.dp > 0 && P.car && P.car.grp.visible ? P.s.dp : 0;
+    if (v) { if (!P.dTag) { P.dTag = driftTag(); o.g.add(P.dTag); } P.dTag.visible = true; drawDrift(P.dTag, Math.round(v / 10) * 10); P.dTag.position.set(P.x, P.y + 3.35 + (P.bub ? 0.8 : 0), P.z); }
+    else if (P.dTag) P.dTag.visible = false; } };
   function onChat(d) { toast('💬 ' + d.n + ': ' + d.m); const P = o.peers.get(d.id); if (P) { if (P.bub) o.g.remove(P.bub); P.bub = bubble(d.m); P.bubT = 7; o.g.add(P.bub); } }
   // ---- leaderboard: best money and best drift, kept on the server
   o.lb = null; let lbSent = '';
@@ -4644,7 +4651,7 @@ const MP = (() => {
     if (l.length) send({ t: 'ev', e: 'pk', l: l.slice(0, 30) });
   }
   function snapshot() {
-    const d = { t: 's', n: name, x: r2(player.x), y: r2(player.y), z: r2(player.z), h: r2(player.h), k: carModel, c: paintIdx, cv: GAR.cv(), s: r2(player.steer), v: r2(spdNow), w: player.wrecked ? 1 : 0,
+    const d = { t: 's', n: name, x: r2(player.x), y: r2(player.y), z: r2(player.z), h: r2(player.h), k: carModel, c: paintIdx, cv: GAR.cv(), dp: drift.on && !W.on ? Math.round(drift.pts) : 0, s: r2(player.steer), v: r2(spdNow), w: player.wrecked ? 1 : 0,
       i: INSIDE ? DOORS.findIndex(q => q.g === INSIDE) : -1, m: W.on ? (W.fly ? 2 : 1) : 0 };
     if (player.car !== lastCar) { lastCar = player.car; carGen++; myDents = []; myDentN = 0; } d.g = carGen; if (myDents.length) { d.dn = myDents; d.dc = myDentN; }
     if (W.on) d.f = [r2(W.x), r2(W.y), r2(W.z), r2(W.h), r2(Math.hypot(W.vx, W.vz)), W.seated || W.loo || W.pubSeat ? 1 : 0, WC.me.act === 'wee' ? WC.me.T.i + 1 : 0];
@@ -4663,7 +4670,7 @@ const MP = (() => {
       const q = P.I[n]; q.x = x + lx * c + lz * s; q.y = y + ly; q.z = z - lx * s + lz * c; }
   }
   o.step = dt => {
-    o.stepBubbles(dt);
+    o.stepBubbles(dt); o.stepDrift();
     if (o.ws && o.ws.readyState === 1) sendParked(dt);
     o.sendT -= dt; if (o.ws && o.ws.readyState === 1 && o.sendT <= 0 && state === 'play') { o.sendT = W.fly ? 0.08 : 0.1; try { o.ws.send(JSON.stringify(snapshot())); } catch (_) {} }
     const now = performance.now(), myIn = INSIDE ? DOORS.findIndex(q => q.g === INSIDE) : -1, k = Math.min(1, dt * 10);
