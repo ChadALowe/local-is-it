@@ -855,7 +855,9 @@ const inShop = (x, z) => x > -128 && x < -22 && z > 378 && z < 482;         // s
     L4(at(0, -hw), at(0, hw), at(D, hw), at(D, -hw), lawn, y, 8);
     const pd = Math.min(2.6, D * 0.35); L4(at(0, -hw), at(0, hw), at(pd, hw), at(pd, -hw), mg('pave'), 0.033, 2.5);    // patio slabs by the back wall
     const H = 1.75; vq(fence, at(D, -hw), at(D, hw), H); vq(fence, at(0, -hw), at(D, -hw), H); vq(fence, at(0, hw), at(D, hw), H);
-    const bk = [at(D, -hw), at(D, hw), at(0, -hw), at(0, hw)]; addSeg(bk[0][0], bk[0][1], bk[1][0], bk[1][1]); addSeg(bk[2][0], bk[2][1], bk[0][0], bk[0][1]); addSeg(bk[3][0], bk[3][1], bk[1][0], bk[1][1]);
+    const bk = [at(D, -hw), at(D, hw), at(0, -hw), at(0, hw)], gd = [bk[2], bk[0], bk[1], bk[3]];   // gd: the garden, so a car that somehow ends up inside can drive out
+    const fs = (A2, B2) => cgrid.ins(Object.assign({ t: 2, x0: A2[0], z0: A2[1], x1: B2[0], z1: B2[1], lv: 0, gd }, COLL_Y), Math.min(A2[0], B2[0]) - 1.3, Math.max(A2[0], B2[0]) + 1.3, Math.min(A2[1], B2[1]) - 1.3, Math.max(A2[1], B2[1]) + 1.3);
+    fs(bk[0], bk[1]); fs(bk[2], bk[0]); fs(bk[3], bk[1]);
     const n = Math.max(1, Math.round(hw * 2 / 5.2)), pw = hw * 2 / n, hs = hashN(b.cx, b.cz);
     for (let k = 1; k < n; k++) vq(fence, at(pd * 0.5, -hw + k * pw), at(D, -hw + k * pw), H);   // between neighbours
     if (D >= 6) for (let k = 0; k < n; k++) { if ((hs + k * 7) % 5 > 1) continue;                     // a shed at the bottom of some gardens
@@ -3914,6 +3916,7 @@ function stepPlayer(dt) {
     for (const c of list) {
       if (c.lv && (c.lv === 2) !== (p.y > -1)) continue;                 // underpass: cutting walls (below) vs railings (above)
       if (c.car) { if (!c.car.dyn && Math.hypot(px - c.x, pz - c.z) < R + c.r) wakeCar(c.car); continue; }   // parked cars are pushable bodies
+      if (c.gd && inPoly(p.x, p.z, c.gd)) continue;                     // garden fences only keep cars out, never in
       let nx, nz, ov;
       if (c.t === 0) { const dx = px - c.x, dz = pz - c.z, d = Math.hypot(dx, dz); if (d >= R + c.r || d < 1e-4) continue; nx = dx / d; nz = dz / d; ov = R + c.r - d; }
       else {
