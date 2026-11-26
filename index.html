@@ -645,6 +645,31 @@ function roadMiters(p, w) {
   }
   return out;
 }
+// Corner fillers. Each road piece is a strip with square-cut ends, so where pieces meet at an angle (junctions, roundabout
+// arms, a road that changes name on a bend) there is a wedge-shaped hole on the outside of the turn, and very sharp bends
+// leave a notch where the mitre is limited. At each such point the arms leaving it are sorted by direction, and the
+// gap between neighbouring arms' facing edges is swept with a fan whose radius blends from one arm's width to the other's.
+const JOINTS = new Map();
+{
+  const key = (c, q) => (c ? 'c' : 'r') + Math.round(q[0] * 5) + ',' + Math.round(q[1] * 5), arm = (r, q, to) => ({ r, th: Math.atan2(to[1] - q[1], to[0] - q[0]) });
+  const ends = new Map();
+  for (const r of roads) if (r.p.length > 1) for (const [q, to] of [[r.p[0], r.p[1]], [r.p[r.p.length - 1], r.p[r.p.length - 2]]]) { if (Math.hypot(to[0] - q[0], to[1] - q[1]) < 0.05) continue; const k = key(r.c, q); let j = ends.get(k); if (!j) ends.set(k, j = { q, arms: [] }); j.arms.push(arm(r, q, to)); }
+  const vtx = new Map(); for (const r of roads) for (let i = 1; i < r.p.length - 1; i++) { const k = key(r.c, r.p[i]); if (!vtx.has(k)) vtx.set(k, []); vtx.get(k).push([r, i]); }
+  for (const [k, j] of ends) for (const [r, i] of vtx.get(k) || []) j.arms.push(arm(r, j.q, r.p[i - 1]), arm(r, j.q, r.p[i + 1]));   // T-junction: a road ending on the middle of another
+  let n = 0; for (const j of ends.values()) if (j.arms.length >= 2) JOINTS.set('e' + n++, j);
+  for (const r of roads) for (let i = 1; i < r.p.length - 1; i++) {                       // sharp bends inside one piece
+    const a = r.p[i - 1], q = r.p[i], c = r.p[i + 1]; if (Math.abs(angDiff(Math.atan2(c[1] - q[1], c[0] - q[0]), Math.atan2(q[1] - a[1], q[0] - a[0]))) < 1.9) continue;
+    JOINTS.set('b' + n++, { q, arms: [arm(r, q, a), arm(r, q, c)] });
+  }
+}
+// call fn(q, A, B, t0, sweep) for every outside corner: from arm A's left edge (angle t0) round to arm B's right edge
+function jointGaps(use, fn, list = JOINTS.values(), inner = null) {    // inner(q, A, B, angle): called for the corners between arms less than 180° apart
+  for (const j of list) {
+    const arms = j.arms.filter(a => use(a.r)).sort((a, b) => a.th - b.th); if (arms.length < 2) continue;
+    for (let i = 0; i < arms.length; i++) { const A = arms[i], B = arms[(i + 1) % arms.length]; let d = B.th - A.th; if (i === arms.length - 1) d += TAU;
+      const sweep = d - Math.PI; if (sweep > 0.02) fn(j.q, A, B, A.th + Math.PI / 2, sweep); else if (inner && d > 0.15 && d < Math.PI - 0.1) inner(j.q, A, B, d); }
+  }
+}
 for (const r of roads) {
   if (r.p.length < 2) continue;
   const redRd = !r.c && r.p.some(q => Math.hypot(q[0] + 420, q[1] + 165) < 32);        // red-surfaced estate road
@@ -659,6 +684,7 @@ for (const r of roads) {
     const u = r.w / 6;
     m.quad(A, B, C, D, [0, s / 6], [u, s / 6], [u, (s + L) / 6], [0, (s + L) / 6], UP); s += L;
   }
+  if (rp === r.p && r.id !== 172) { r.sm = m; r.sy = y; }                  // strips that get corner fillers (not the bridge or the underpass path, which change height)
   if (!r.c && r.k >= 3 && r.k <= 5 && r.w >= 6.5) {                       // dashed centre line
     const dm = mg('dash', dashMat, false, true);
     walk(r.p, 9, (x, z, tx, tz) => {
@@ -669,6 +695,12 @@ for (const r of roads) {
     });
   }
 }
+jointGaps(r => !!r.sm, (q, A, B, t0, sw) => {                             // fill the road corners
+  const n = Math.max(2, Math.ceil(sw / 0.2)), hA = A.r.w / 2, hB = B.r.w / 2, m = A.r.sm, y = Math.max(A.r.sy, B.r.sy) - 0.001;
+  for (let k = 0; k < n; k++) { const a0 = t0 + sw * k / n, a1 = t0 + sw * (k + 1) / n, r0 = hA + (hB - hA) * k / n, r1 = hA + (hB - hA) * (k + 1) / n;
+    const P = [q[0] + Math.cos(a0) * r0, y, q[1] + Math.sin(a0) * r0], Q = [q[0] + Math.cos(a1) * r1, y, q[1] + Math.sin(a1) * r1];
+    m.tri([q[0], y, q[1]], P, Q, [q[0] / 6, q[1] / 6], [P[0] / 6, P[2] / 6], [Q[0] / 6, Q[2] / 6], UP); }
+});
 // pavements and kerbs
 {
   const pm = mg('pave', paveMat, false, true), cm = mg('curb', curbMat, false, true), step0 = isTouch ? 5 : 3;
@@ -692,6 +724,37 @@ for (const r of roads) {
       });
     }
   }
+  // footway and kerb round the outside of the same corners (only the parts not on a road or in a building)
+  const hasFoot = r => !r.c && r.k >= 4 && r.k <= 7 && r.w >= 5 && r.id !== 21 && r.id !== 171 && r.id !== 170 && !BR.ids.has(r.id);
+  const vgOf = r => [149, 326, 444, 443, 328].includes(r.id) ? 3.4 : 0, y0f = r => ROAD_Y[r.k] || 0.05;
+  const ok = (r, x, z) => !((HEDGE_RD.has(r.id) || Math.hypot(r.p[0][0] - RBT.x, r.p[0][1] - RBT.z) < 30) && inHedgeRun(x, z)) && Math.hypot(x - RBT.x, z - RBT.z) >= 40 && roadDist(x, z, -1, true) >= 0.3 && !inBuilding(x, z) && Math.abs(x) <= LIM && Math.abs(z) <= LIM;
+  const footBends = [];                                                  // footways also notch on gentler bends (they're sampled every few metres)
+  for (const r of roads) if (hasFoot(r)) for (let i = 1; i < r.p.length - 1; i++) { const a = r.p[i - 1], q = r.p[i], c = r.p[i + 1], d = Math.abs(angDiff(Math.atan2(c[1] - q[1], c[0] - q[0]), Math.atan2(q[1] - a[1], q[0] - a[0])));
+    if (d >= 0.35 && d < 1.9) footBends.push({ q, arms: [{ r, th: Math.atan2(a[1] - q[1], a[0] - q[0]) }, { r, th: Math.atan2(c[1] - q[1], c[0] - q[0]) }] }); }
+  const footFill = (q, A, B, t0, sw) => {
+    const n = Math.max(2, Math.ceil(sw / 0.15)), iA = A.r.w / 2 + vgOf(A.r), iB = B.r.w / 2 + vgOf(B.r), y0 = Math.max(y0f(A.r), y0f(B.r));
+    const P = (ang, rr, yy) => [q[0] + Math.cos(ang) * rr, yy, q[1] + Math.sin(ang) * rr];
+    for (let k = 0; k < n; k++) { const a0 = t0 + sw * k / n, a1 = t0 + sw * (k + 1) / n, r0 = iA + (iB - iA) * k / n, r1 = iA + (iB - iA) * (k + 1) / n, am = (a0 + a1) / 2, rm = (r0 + r1) / 2;
+      if (!ok(A.r, q[0] + Math.cos(am) * (rm + 1), q[1] + Math.sin(am) * (rm + 1))) continue;
+      const i0 = P(a0, r0, 0.13), i1 = P(a1, r1, 0.13), o0 = P(a0, r0 + 2, 0.13), o1 = P(a1, r1 + 2, 0.13);
+      pm.quad(i0, o0, o1, i1, [i0[0] / 2.5, i0[2] / 2.5], [o0[0] / 2.5, o0[2] / 2.5], [o1[0] / 2.5, o1[2] / 2.5], [i1[0] / 2.5, i1[2] / 2.5], UP);
+      cm.quad(P(a0, r0, y0), P(a1, r1, y0), i1, i0, [0, 0], [1, 0], [1, 1], [0, 1], [-Math.cos(am), 0, -Math.sin(am)]); }
+  };
+  // junction corners: footways are laid in pieces every few metres, so they stop short of the side road. Run both footways
+  // right into the corner: from where each meets the other road's edge, 4.5 m back along its own road.
+  const footCorner = (q, A, B) => {
+    for (const [X, Y, sd] of [[A, B, 1], [B, A, -1]]) {
+      const ux = Math.cos(X.th), uz = Math.sin(X.th), nx = -uz * sd, nz = ux * sd, vy = Math.cos(Y.th), wy = Math.sin(Y.th), hY = Y.r.w / 2, i0 = X.r.w / 2 + vgOf(X.r), y0 = ROAD_Y[X.r.k] || 0.05;
+      const P = (t, dd, yy) => [q[0] + ux * t + nx * dd, yy, q[1] + uz * t + nz * dd], dY = (t, dd) => Math.abs(vy * (q[1] + uz * t + nz * dd - q[1]) - wy * (q[0] + ux * t + nx * dd - q[0]));
+      let t0 = 0; while (t0 < 30 && dY(t0, i0 + 1) < hY + 0.05) t0 += 0.1; if (t0 >= 30) continue;
+      for (let t = t0; t < t0 + 4.5; t += 0.75) { const m = P(t + 0.375, i0 + 1, 0); if (!ok(X.r, m[0], m[2]) && roadDist(m[0], m[2], -1, true) < 0) continue;
+        if (inBuilding(m[0], m[2]) || Math.hypot(m[0] - RBT.x, m[2] - RBT.z) < 40) continue;
+        const a = P(t, i0, 0.13), b2 = P(t, i0 + 2, 0.13), c = P(t + 0.75, i0 + 2, 0.13), d = P(t + 0.75, i0, 0.13);
+        pm.quad(a, b2, c, d, [a[0] / 2.5, a[2] / 2.5], [b2[0] / 2.5, b2[2] / 2.5], [c[0] / 2.5, c[2] / 2.5], [d[0] / 2.5, d[2] / 2.5], UP);
+        cm.quad(P(t, i0, y0), P(t + 0.75, i0, y0), d, a, [0, 0], [1, 0], [1, 1], [0, 1], [-nx, 0, -nz]); }
+    }
+  };
+  jointGaps(hasFoot, footFill, JOINTS.values(), footCorner); jointGaps(hasFoot, footFill, footBends);
 }
 // building meshes
 const hashN = (x, z) => Math.abs(Math.floor(x * 13.7 + z * 7.3)) % 1000;
@@ -720,6 +783,35 @@ function pitchedRoof(b, wallH, fi, hsh) {
 // Pendeford Business Park zone (game metres, matched to the real site from a satellite screenshot)
 const inPark = (x, z) => x > -500 && x < -240 && z > -410 && z < -135;
 const inShop = (x, z) => x > -128 && x < -22 && z > 378 && z < 482;         // supermarket and its car park (west of the store)
+// Concrete round every building (a narrow strip round houses, a wider apron round flats, offices and the L-shaped blocks)
+// and a driveway from each house to the nearest road. Laid just above the grass, so roads, footways and car parks cover it.
+{
+  const cm2 = mg('pave', paveMat, false, true), uv = (x, z) => [x / 2.5, z / 2.5];
+  const q4 = (a, b, c, d, y) => cm2.quad([a[0], y, a[1]], [b[0], y, b[1]], [c[0], y, c[1]], [d[0], y, d[1]], uv(a[0], a[1]), uv(b[0], b[1]), uv(c[0], c[1]), uv(d[0], d[1]), UP);
+  const dRoads = roads.filter(r => !r.c && r.p.length > 1 && r.k <= 8 && r.id !== 21 && r.id !== 171);
+  for (const b of builds) {
+    const A = Math.abs(b.area); if (A < 12) continue;
+    const house = b.c === 0 && A < 300 && !inPark(b.cx, b.cz) && !inShop(b.cx, b.cz), w = house ? 1.0 : A > 800 ? 3.0 : 2.2, p = b.p, n = p.length, sg = b.area >= 0 ? 1 : -1, y = 0.031, N = [];
+    for (let i = 0; i < n; i++) { const a = p[i], c = p[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]) || 1; N.push([sg * (c[1] - a[1]) / L, -sg * (c[0] - a[0]) / L]); }
+    for (let i = 0; i < n; i++) { const a = p[i], c = p[(i + 1) % n], o = N[i]; q4(a, c, [c[0] + o[0] * w, c[1] + o[1] * w], [a[0] + o[0] * w, a[1] + o[1] * w], y);
+      const pv = N[(i + n - 1) % n], cr = pv[0] * o[1] - pv[1] * o[0];      // outside corner: fill the wedge between the two strips
+      if (cr * -sg > 1e-4) { const e = [a[0] + pv[0] * w, a[1] + pv[1] * w], f = [a[0] + o[0] * w, a[1] + o[1] * w]; cm2.tri([a[0], y, a[1]], [e[0], y, e[1]], [f[0], y, f[1]], uv(a[0], a[1]), uv(e[0], e[1]), uv(f[0], f[1]), UP); } }
+    if (!house) continue;
+    let best = null;                                                    // driveway to the nearest road
+    for (const r of dRoads) for (let i = 0; i < r.p.length - 1; i++) { const [x0, z0] = r.p[i], [x1, z1] = r.p[i + 1];
+      if (Math.min(x0, x1) - 30 > b.cx || Math.max(x0, x1) + 30 < b.cx || Math.min(z0, z1) - 30 > b.cz || Math.max(z0, z1) + 30 < b.cz) continue;
+      const dx = x1 - x0, dz = z1 - z0, t = clamp(((b.cx - x0) * dx + (b.cz - z0) * dz) / (dx * dx + dz * dz || 1), 0, 1), cx = x0 + dx * t, cz = z0 + dz * t, d = Math.hypot(cx - b.cx, cz - b.cz) - r.w / 2;
+      if (!best || d < best.d) best = { d, cx, cz, h: r.w / 2 }; }
+    if (!best || best.d > 24) continue;
+    const L0 = Math.hypot(best.cx - b.cx, best.cz - b.cz), ux = (best.cx - b.cx) / L0, uz = (best.cz - b.cz) / L0;
+    let s0 = 0; while (s0 < L0 && inPoly(b.cx + ux * s0, b.cz + uz * s0, p)) s0 += 0.2;
+    const s1 = L0 - best.h; if (s1 - s0 < 0.6 || s1 - s0 > 18) continue;
+    let clear = true; for (let s = s0 + 0.6; s < s1; s += 1) if (inBuilding(b.cx + ux * s, b.cz + uz * s) || roadDist(b.cx + ux * s, b.cz + uz * s, -1, true) < -0.5) { clear = false; break; }
+    if (!clear) continue;
+    const hw = 1.4, nx = -uz * hw, nz = ux * hw, W0 = [b.cx + ux * s0, b.cz + uz * s0], E = [b.cx + ux * s1, b.cz + uz * s1];
+    q4([W0[0] + nx, W0[1] + nz], [W0[0] - nx, W0[1] - nz], [E[0] - nx, E[1] - nz], [E[0] + nx, E[1] + nz], 0.037);
+  }
+}
 // Hipped roof for any footprint: inset the outline by d and cap it. d follows the narrowest part of the building.
 function insetRoof(b, wallH, o) {
   const p = [];
