@@ -81,7 +81,7 @@ export class Room {
       const T = await this.trade(), now = Date.now(); let res = null, msg = null;
       if (d.a === 'sell') { const i = T.buyers.findIndex(b => b.id === d.b && b.at <= now + 1500), k = Math.floor(+d.k);
         if (i < 0 || !(k > 0)) res = { t: 'trade', a: 'res', b: d.b, k: 0 };
-        else { const b = T.buyers[i], n = Math.min(k, b.n), risk = isFinite(+d.r) ? Math.min(0.45, Math.max(0.02, +d.r)) : 0.06, bust = Math.random() < risk;   // risk: the seller's police heat b.n -= n; if (!b.n) T.buyers[i] = this.newBuyer(T, now, 20000 + Math.random() * 25000);
+        else { const b = T.buyers[i], n = Math.min(k, b.n), risk = isFinite(+d.r) ? Math.min(0.45, Math.max(0.02, +d.r)) : 0.06, bust = Math.random() < risk;   /* risk: the seller's police heat */ b.n -= n; if (!b.n) T.buyers[i] = this.newBuyer(T, now, 20000 + Math.random() * 25000);
           res = { t: 'trade', a: 'res', b: d.b, k: n, it: b.it, pay: b.pay, bust }; if (bust) msg = '🚔 ' + String(d.n || 'Someone').slice(0, 20) + ' just got raided by the police!'; }
         await this.state.storage.put('trade', T); }
       if (res) ws.send(JSON.stringify(res));
