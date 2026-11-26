@@ -12,7 +12,7 @@ export class Room {
     const socks = this.state.getWebSockets();
     if (socks.length >= 40) return new Response('Room full', { status: 503 });
     if (!socks.length) {                                               // first one in: fresh world. Only the world's own keys are cleared:
-      const st = this.state.storage, keys = ['npc', 'kit', 'pool', 'darts', 'tag'];   // the leaderboard and players' saves are never touched
+      const st = this.state.storage, keys = ['npc', 'kit', 'pool', 'darts', 'tag', 'fb']; this.fb = null;   // the leaderboard and players' saves are never touched
       for (const pre of ['w:', 'wc:']) keys.push(...(await st.list({ prefix: pre })).keys());
       for (let i = 0; i < keys.length; i += 100) await st.delete(keys.slice(i, i + 100));
     }
@@ -22,7 +22,7 @@ export class Room {
     server.serializeAttachment({ id, last: null });
     const players = socks.map(w => { try { return w.deserializeAttachment(); } catch (_) { return null; } }).filter(a => a && a.last).map(a => a.last);
     const world = [...(await this.state.storage.list({ prefix: 'w:' })).values()], npc = await this.state.storage.get('npc'), wc = [...(await this.state.storage.list({ prefix: 'wc:' })).values()], kit = (await this.state.storage.get('kit')) || [], pool = await this.state.storage.get('pool'), darts = await this.state.storage.get('darts');
-    server.send(JSON.stringify({ t: 'hi', id, players, world, npc, wc, kit, pool, darts, trade: await this.trade(), tag: await this.tagState(), now: Date.now() }));
+    server.send(JSON.stringify({ t: 'hi', id, players, world, npc, wc, kit, pool, darts, trade: await this.trade(), tag: await this.tagState(), fb: await this.fbState(), now: Date.now() }));
     server.send(JSON.stringify(Object.assign({ t: 'lb' }, (await this.state.storage.get('lb')) || { money: [], drift: [] })));
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -62,6 +62,18 @@ export class Room {
     else return;
     await st.put('tag', T); this.all(JSON.stringify({ t: 'tag', s: T, now }));
   }
+  // ---- football: whoever touched the ball last runs it; a touch from anyone else takes it over (a tackle). Goals are
+  // only accepted from whoever has it, at most one every 4 s; the score is kept until the room empties.
+  async fbState() { if (!this.fb) this.fb = (await this.state.storage.get('fb')) || { s: null, by: null, q: 0, sc: [0, 0], goalAt: 0 }; return { s: this.fb.s, by: this.fb.by, q: this.fb.q, sc: this.fb.sc }; }
+  async fbMsg(ws, a, d) {
+    await this.fbState(); const F = this.fb, ok = s => Array.isArray(s) && s.length === 6 && s.every(v => isFinite(+v) && Math.abs(+v) < 5000);
+    if (d.a === 'touch' && ok(d.s)) { F.s = d.s.map(Number); F.by = a.id; F.q++; this.all(JSON.stringify({ t: 'fb', a: 'touch', s: F.s, by: a.id, q: F.q })); return; }
+    if (d.a === 'upd' && ok(d.s) && F.by === a.id) { F.s = d.s.map(Number); F.q++; this.others(ws, JSON.stringify({ t: 'fb', a: 'upd', s: F.s, by: a.id, q: F.q })); return; }
+    if (d.a === 'goal' && F.by === a.id && (d.side === 0 || d.side === 1) && Date.now() - F.goalAt > 4000) {
+      F.goalAt = Date.now(); F.sc[d.side]++; F.by = null; F.q++; if (ok(d.c)) F.s = d.c.map(Number);
+      await this.state.storage.put('fb', F); this.all(JSON.stringify({ t: 'fb', a: 'goal', side: d.side, by: a.id, n: String(d.n || 'Someone').slice(0, 20), sc: F.sc, s: F.s, q: F.q }));
+    }
+  }
   others(ws, out) { for (const w of this.state.getWebSockets()) if (w !== ws) { try { w.send(out); } catch (_) {} } }
   async webSocketMessage(ws, msg) {
     if (typeof msg !== 'string' || msg.length > 24000) return;
@@ -88,6 +100,7 @@ export class Room {
       this.all(JSON.stringify({ t: 'trade', s: T, now, msg })); return;
     }
     if (d.t === 'tag') { await this.tagMsg(ws, a, d); return; }
+    if (d.t === 'fb') { await this.fbMsg(ws, a, d); return; }
     if (d.t === 'save') {                               // only for the code this connection loaded, at most every 2 s, up to 20 kB
       const now = Date.now(); if (d.k !== a.k || !d.p || typeof d.p !== 'object' || now - (a.sv || 0) < 2000) return;
       const v = {}; for (const [k, x] of Object.entries(d.p)) if (/^[A-Za-z_]{2,24}$/.test(k) && typeof x === 'string') v[k] = x;

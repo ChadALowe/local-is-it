@@ -46,6 +46,9 @@
   :root{--b:84px}
   .tb{position:fixed;width:var(--b);height:var(--b);border-radius:50%;border:2px solid rgba(255,255,255,.75);background:rgba(20,28,36,.38);color:#fff;font:700 12px "Segoe UI",system-ui,Arial,sans-serif;letter-spacing:.08em;display:flex;align-items:center;justify-content:center;text-align:center;touch-action:none;z-index:4;line-height:1.1;backdrop-filter:blur(2px)}
   .tb.on{background:rgba(255,255,255,.4)}
+  body.touch #fbHud{top:calc(70px + env(safe-area-inset-top));font-size:14px}
+  #fbHud{display:none;position:fixed;left:50%;transform:translateX(-50%);top:calc(14px + env(safe-area-inset-top));z-index:6;font:800 16px system-ui,sans-serif;color:#fff;background:rgba(15,70,35,.85);padding:6px 14px;border-radius:10px;pointer-events:none;white-space:nowrap}
+  #fbBar{display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:calc(120px + env(safe-area-inset-bottom));width:180px;height:12px;border-radius:6px;background:rgba(0,0,0,.5);overflow:hidden;z-index:6;pointer-events:none} #fbBar i{display:block;height:100%;background:linear-gradient(90deg,#7dffa0,#ffd23a,#ff4d4d)}
   body:not(.playing) #mpBtns, body:not(.playing) #mpMenu{display:none!important}
   #mpMenu{display:none;position:fixed;top:calc(env(safe-area-inset-top,0px) + 200px);left:10px;z-index:7}
   body.touch #mpMenu{display:block} body.touch #mpBtns{display:none!important} body.touch.mpOpen #mpBtns{display:grid!important;grid-template-columns:1fr 1fr;gap:8px;top:calc(env(safe-area-inset-top,0px) + 232px)!important;background:rgba(10,14,20,.88);padding:8px;border-radius:12px;z-index:13}
@@ -2185,12 +2188,14 @@ for (const r of roads) {
     const m = pt(0, 0); mg('bridgeLamp', stdMat({ color: 0xfff3c4, emissive: 0xffe9a0, emissiveIntensity: 0.8 }), false, false).add(new THREE.BoxGeometry(0.6, 0.06, 0.25), mat4(m[0], -0.95, m[1])); }
 }
 // ===== football pitches south of Wobaston Road (OSM pitch areas): line markings, goals, a few floodlights =====
+const PITCHES = [];
 {
   const lm = mg('pitchLine', stdMat({ color: 0xf4f4ee, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2 }), false, true), gm = mg('goalPost', stdMat({ color: 0xf6f6f2, roughness: 0.5 })), net = mg('goalNet', stdMat({ color: 0xffffff, transparent: true, opacity: 0.25, side: DS }), false, false);
   const y = 0.032;
   const seg = (a, b, w = 0.12) => { const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1, nx = -dz / L * w / 2, nz = dx / L * w / 2; lm.quad([a[0] - nx, y, a[1] - nz], [a[0] + nx, y, a[1] + nz], [b[0] + nx, y, b[1] + nz], [b[0] - nx, y, b[1] - nz], [0, 0], [1, 0], [1, 1], [0, 1], UP); };
   const pitch = (cx, cz, ux, uz, L, W) => {                            // u = long axis
     const vx = -uz, vz = ux, P = (a, b) => [cx + ux * a + vx * b, cz + uz * a + vz * b], hl = L / 2, hw = W / 2;
+    PITCHES.push({ cx, cz, ux, uz, hl, hw, gwid: Math.min(7.3, W * 0.17), gh: W > 40 ? 2.44 : 1.9 });
     const rect = (a0, a1, b0, b1) => { seg(P(a0, b0), P(a1, b0)); seg(P(a1, b0), P(a1, b1)); seg(P(a1, b1), P(a0, b1)); seg(P(a0, b1), P(a0, b0)); };
     rect(-hl, hl, -hw, hw); seg(P(0, -hw), P(0, hw));
     const r = Math.min(9.15, W * 0.13); for (let k = 0; k < 20; k++) seg(P(Math.cos(k / 20 * 6.283) * r, Math.sin(k / 20 * 6.283) * r), P(Math.cos((k + 1) / 20 * 6.283) * r, Math.sin((k + 1) / 20 * 6.283) * r));
@@ -3355,16 +3360,17 @@ function updateAim() {
     else if (ka) aimT = ka;
     else if (W.seated) { aimRay.far = 1.6; if (aimRay.intersectObject(W.seated.hitKb, false)[0]) aimT = { kind: 'kb' }; }
     else { const hit = aimRay.intersectObjects(OFFICE_DESKS.filter(d => d !== NPC.d).flatMap(d => d.hitDesk), false)[0]; if (hit) aimT = { kind: 'desk', d: hit.object.userData.desk }; } }
-  else if (!INSIDE) { aimRay.far = 4.5; const hit = aimRay.intersectObject(player.car.grp, true)[0]; if (hit) aimT = { kind: 'car' }; }
+  else if (!INSIDE) { if (FB.near()) aimT = { kind: 'ball' }; else { aimRay.far = 4.5; const hit = aimRay.intersectObject(player.car.grp, true)[0]; if (hit) aimT = { kind: 'car' }; } }
   const b = $('tAct'); b.classList.toggle('show', !!aimT); $('xhair').classList.toggle('on', !!aimT);
   if (aimT && aimT.kind === 'tuck') $('aimLbl').textContent = TUCKSHOP.label(aimT);
   if (aimT && aimT.kind === 'item') { b.textContent = 'PICK UP'; $('aimLbl').textContent = aimT.it.name + '  £' + aimT.it.price.toFixed(2); } else $('aimLbl').textContent = '';
-  if (aimT && aimT.kind !== 'item') b.textContent = aimT.kind === 'card' ? 'PAY £' + aimT.T.total.toFixed(2) : { car: 'GET IN', item: 'PICK UP', desk: 'SIT', kb: 'TYPE', belt: 'PLACE ITEM', scan: 'SCAN', shoes: 'TAKE SHOES', putshoes: 'PUT SHOES DOWN', wee: 'WEE', flush: 'FLUSH', tuck: 'BUY', kettle: 'MAKE A CUPPA', micro: 'HEAT FOOD', fridge: 'FRIDGE', kitwait: 'WAIT…', pool: POOL.label(), pubbar: 'ORDER', pubwait: 'COMING…', pubtv: 'BET', pubseat: 'SIT', pubdarts: PUB.label({ kind: 'pubdarts' }) }[aimT.kind];
+  if (aimT && aimT.kind !== 'item') b.textContent = aimT.kind === 'card' ? 'PAY £' + aimT.T.total.toFixed(2) : { ball: 'KICK', car: 'GET IN', item: 'PICK UP', desk: 'SIT', kb: 'TYPE', belt: 'PLACE ITEM', scan: 'SCAN', shoes: 'TAKE SHOES', putshoes: 'PUT SHOES DOWN', wee: 'WEE', flush: 'FLUSH', tuck: 'BUY', kettle: 'MAKE A CUPPA', micro: 'HEAT FOOD', fridge: 'FRIDGE', kitwait: 'WAIT…', pool: POOL.label(), pubbar: 'ORDER', pubwait: 'COMING…', pubtv: 'BET', pubseat: 'SIT', pubdarts: PUB.label({ kind: 'pubdarts' }) }[aimT.kind];
   const b2 = $('tAct2'), hd = KITCHEN.held() || (INSIDE === pubGroup && PUB.held()), canSip = !!hd && !W.seated && !(aimT && aimT.alt); b2.classList.toggle('show', !!(aimT && aimT.alt) || canSip); if (aimT && aimT.alt) b2.textContent = 'POO'; else if (canSip) b2.textContent = hd.kind === 'tea' || hd.kind === 'pint' || hd.kind === 'soft' ? (hd.kind === 'pint' ? 'SUP' : 'SIP') : 'EAT';
 }
 function doAction2() { if (aimT && aimT.alt) { WC.act(aimT.alt); updateAim(); } else if (KITCHEN.held() && !W.seated) KITCHEN.sip(); else if (INSIDE === pubGroup && PUB.held()) PUB.sip(); }
 
 function doAction() {
+  if (aimT && aimT.kind === 'ball') { FB.press(); return; }
   if (POOL.mode) { POOL.press(); return; }
   if (PUB.darts) { PUB.press(); return; }
   if (CM.zone && CM.openZone()) return;
@@ -3579,12 +3585,12 @@ addEventListener('keydown', e => {
   if (e.code === 'Enter' && state === 'menu') start();
   if (state === 'play') { if (e.code === 'KeyR') resetCar(); if (e.code === 'KeyB') switchCar(); if (e.code === 'KeyH') HORN.honk(); if (e.code === 'KeyF') toggleFoot(); if (e.code === 'KeyE') doAction(); if (e.code === 'KeyQ') doAction2(); if (e.code === 'Space' && W.on && !e.repeat) jump(); if (e.code === 'KeyV') camMode = (camMode + 1) % 2; if (e.code === 'KeyT') { e.preventDefault(); openChat(); return; } if (e.code === 'KeyN') { document.exitPointerLock && document.exitPointerLock(); keys.up = keys.down = keys.left = keys.right = 0; MP.rename(); } }
 });
-addEventListener('keyup', e => { if (keyMap[e.code]) keys[keyMap[e.code]] = 0; });
+addEventListener('keyup', e => { if (keyMap[e.code]) keys[keyMap[e.code]] = 0; if (e.code === 'KeyE') FB.release(); });
 addEventListener('blur', () => { for (const k in keys) keys[k] = 0; });
 document.querySelectorAll('.tb').forEach(b => {
   const k = b.dataset.key;
   const down = e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (_) {} b.classList.add('on'); if (k === 'reset') resetCar(); else if (k === 'car') switchCar(); else if (k === 'horn') HORN.honk(); else if (k === 'out') toggleFoot(); else if (k === 'act') doAction(); else if (k === 'act2') doAction2(); else if (k === 'jump') jump(); else if (k === 'cam') camMode = (camMode + 1) % 2; else keys[k] = 1; };
-  const up = e => { e.preventDefault(); b.classList.remove('on'); if (keys[k] !== undefined) keys[k] = 0; };
+  const up = e => { e.preventDefault(); b.classList.remove('on'); if (keys[k] !== undefined) keys[k] = 0; if (k === 'act') FB.release(); };
   b.addEventListener('pointerdown', down); b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
   b.addEventListener('contextmenu', e => e.preventDefault());
 });
@@ -4794,7 +4800,7 @@ const MP = (() => {
     o.ws = ws;
     ws.onopen = () => { o.tries = 0; lbSent = ''; hud(); setTimeout(sendScore, 1500); send({ t: 'me', n: name }); SAVE.onOpen(); };
     ws.onmessage = e => { let d; try { d = JSON.parse(e.data); } catch (_) { return; }
-      if (d.t === 'hi') { o.id = d.id; if (d.trade) DRUGS.onNet({ s: d.trade, now: d.now }); TAG.onNet({ s: d.tag || null, now: d.now, hi: 1 }); for (const id of [...o.peers.keys()]) dropPeer(id, true); for (const s of d.players) if (s.id !== o.id) onState(s); if (d.world) onWorld(d.world); if (d.npc) NPC.onNet(Object.assign({ a: 'state' }, d.npc), null); if (d.wc) WC.load(d.wc); KITCHEN.load(d.kit); POOL.load(d.pool); PUB.load(d.darts); hud(); }
+      if (d.t === 'hi') { o.id = d.id; if (d.fb) FB.onNet(Object.assign({ hi: 1 }, d.fb)); if (d.trade) DRUGS.onNet({ s: d.trade, now: d.now }); TAG.onNet({ s: d.tag || null, now: d.now, hi: 1 }); for (const id of [...o.peers.keys()]) dropPeer(id, true); for (const s of d.players) if (s.id !== o.id) onState(s); if (d.world) onWorld(d.world); if (d.npc) NPC.onNet(Object.assign({ a: 'state' }, d.npc), null); if (d.wc) WC.load(d.wc); KITCHEN.load(d.kit); POOL.load(d.pool); PUB.load(d.darts); hud(); }
       else if (d.t === 'ev') onEv(d);
       else if (d.t === 's' && d.id !== o.id) onState(d);
       else if (d.t === 'bye') dropPeer(d.id);
@@ -4802,7 +4808,8 @@ const MP = (() => {
       else if (d.t === 'lb') o.onLB(d);
       else if (d.t === 'prof' || d.t === 'saved' || d.t === 'peek') SAVE.onNet(d);
       else if (d.t === 'trade') DRUGS.onNet(d);
-      else if (d.t === 'tag') TAG.onNet(d); };
+      else if (d.t === 'tag') TAG.onNet(d);
+      else if (d.t === 'fb') FB.onNet(d); };
     ws.onclose = () => { o.ws = null; for (const id of [...o.peers.keys()]) dropPeer(id, true); o.online = 1; hud(); retry(); };
     ws.onerror = () => { try { ws.close(); } catch (_) {} };
   }
@@ -5136,6 +5143,123 @@ $('emoBtn').addEventListener('click', e => { e.stopPropagation(); EMO.toggle(); 
 $('mpMenu').addEventListener('click', e => { e.stopPropagation(); document.body.classList.toggle('mpOpen'); });
 $('mpBtns').addEventListener('click', () => document.body.classList.remove('mpOpen'), true);   // capture: the buttons stop their own clicks
 addEventListener('touchstart', e => { if (!e.target.closest || !e.target.closest('#mpBtns,#mpMenu')) document.body.classList.remove('mpOpen'); }, { passive: true });
+// ===== football: a ball on the pitch nearest the start. On foot, run into it to dribble, E (or KICK) to kick, hold for a
+// harder, higher shot (look up to chip it). Cars can hit it too. Whoever touched it last runs it and tells everyone, so
+// running into it while someone else has it is a tackle. The room keeps the score and checks each goal.
+const FB = (() => {
+  const o = {};
+  const PT = PITCHES.slice().sort((a, b) => Math.hypot(a.cx - spawn.x, a.cz - spawn.z) - Math.hypot(b.cx - spawn.x, b.cz - spawn.z))[0];
+  if (!PT) { o.step = () => {}; o.onNet = () => {}; o.near = () => false; o.press = () => {}; o.release = () => {}; o.mini = () => {}; return o; }
+  const R = 0.2, vx0 = -PT.uz, vz0 = PT.ux;                                 // u: along the pitch (goals at u = ±hl), v: across
+  const toU = (x, z) => [(x - PT.cx) * PT.ux + (z - PT.cz) * PT.uz, (x - PT.cx) * vx0 + (z - PT.cz) * vz0];
+  const fromU = (u, v) => [PT.cx + PT.ux * u + vx0 * v, PT.cz + PT.uz * u + vz0 * v];
+  const B = { x: PT.cx, y: R, z: PT.cz, vx: 0, vy: 0, vz: 0 };
+  let owner = null, lastQ = 0, mineT = -9, sendT = 0, charge = -1, sc = [0, 0], holdUntil = 0, goalLock = 0, idleOut = 0;
+  // the ball: white with black pentagons, and its shadow comes from the sun
+  const tex = mkTex(256, 128, (g, w, h) => { g.fillStyle = '#f4f4f0'; g.fillRect(0, 0, w, h); g.fillStyle = '#16181b';
+    for (let i = 0; i < 12; i++) { const cx2 = (i % 6) * w / 6 + (i < 6 ? 0 : w / 12), cy = i < 6 ? h * 0.3 : h * 0.72; g.beginPath(); for (let k = 0; k < 5; k++) { const a = k / 5 * TAU - Math.PI / 2; g.lineTo(cx2 + Math.cos(a) * 13, cy + Math.sin(a) * 13); } g.fill(); } });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(R, 20, 14), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.45 })); mesh.castShadow = true; scene.add(mesh);
+  // HUD: score near the pitch, a power bar while you wind up a shot
+  const hud = document.createElement('div'); hud.id = 'fbHud'; document.body.appendChild(hud);
+  const bar = document.createElement('div'); bar.id = 'fbBar'; bar.innerHTML = '<i></i>'; document.body.appendChild(bar);
+  const send = d => { if (MP.ws && MP.ws.readyState === 1) { try { MP.ws.send(JSON.stringify(Object.assign({ t: 'fb' }, d))); } catch (_) {} } };
+  const pack = () => [B.x, B.y, B.z, B.vx, B.vy, B.vz].map(v => Math.round(v * 100) / 100);
+  const centre = () => [PT.cx, R, PT.cz, 0, 0, 0];
+  const put = s => { [B.x, B.y, B.z, B.vx, B.vy, B.vz] = s; B.net = 0; };
+  function touch() { const now = performance.now() / 1000; owner = MP.id || 'me'; if (now - mineT > 0.1) { send({ a: 'touch', s: pack() }); sendT = 0.1; } mineT = now; }
+  const kickSnd = p => { if (!actx) return; const t = actx.currentTime, g = actx.createGain(), os = actx.createOscillator(); os.type = 'sine'; os.frequency.setValueAtTime(140 + p * 60, t); os.frequency.exponentialRampToValueAtTime(50, t + 0.12); g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.15); os.connect(g); g.connect(actx.destination); os.start(t); os.stop(t + 0.16); };
+  const cheer = () => { if (!actx) return; const t = actx.currentTime, n = actx.sampleRate * 1.6, buf = actx.createBuffer(1, n, actx.sampleRate), d = buf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.min(1, i / (n * 0.1)) * (1 - i / n);
+    const src = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain(); f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.6; g.gain.value = 0.35; src.buffer = buf; src.connect(f); f.connect(g); g.connect(actx.destination); src.start(t); };
+  o.near = () => W.on && !W.busy && !INSIDE && Math.hypot(B.x - W.x, B.z - W.z) < 1.7 && B.y < 1.4;
+  o.press = () => { if (o.near() && charge < 0) charge = 0; };
+  o.release = () => { if (charge < 0) return; const c = Math.min(1, charge); charge = -1; if (Math.hypot(B.x - W.x, B.z - W.z) > 2.2) return;
+    const fx = -Math.sin(W.h), fz = -Math.cos(W.h), sp = 11 + c * 19, lift = 1.5 + c * 4 + Math.max(0, W.pitch) * 14;   // a tap is a pass along the ground; hold for a hard, rising shot
+    B.vx = fx * sp + W.vx * 0.3; B.vz = fz * sp + W.vz * 0.3; B.vy = lift; B.y = Math.max(B.y, R + 0.02); kickSnd(c); touch(); };
+  o.onNet = d => {
+    if (d.sc) sc = d.sc;
+    if (d.a === 'goal') { const nm = d.by === MP.id ? 'You' : d.n || 'Someone'; toast('⚽ GOAL! ' + nm + ' scored in the ' + (d.side ? 'east' : 'west') + ' goal.  West ' + sc[0] + ' – ' + sc[1] + ' East'); cheer();
+      holdUntil = performance.now() + 3000; owner = null; lastQ = d.q || lastQ; pend = d.s || centre(); return; }
+    if (!d.s || (d.q && d.q <= lastQ)) return; lastQ = d.q || lastQ;
+    if (d.hi) { put(d.s); owner = d.by || null; return; }
+    if (d.by && d.by === MP.id) return;                                     // my own touch, echoed with its number
+    if (performance.now() / 1000 - mineT < 0.3 && d.a !== 'touch') return;   // I've just touched it: my version wins until theirs is a touch too
+    const e = Math.hypot(d.s[0] - B.x, d.s[2] - B.z); if (e > 2.5) put(d.s); else { B.x += (d.s[0] - B.x) * 0.35; B.y += (d.s[1] - B.y) * 0.35; B.z += (d.s[2] - B.z) * 0.35; B.vx = d.s[3]; B.vy = d.s[4]; B.vz = d.s[5]; }
+    owner = d.by || null;
+  };
+  let pend = null;
+  function physics(dt) {
+    const steps = Math.max(1, Math.ceil(Math.hypot(B.vx, B.vz) * dt / 0.15)), h = dt / steps;
+    for (let s = 0; s < steps; s++) {
+      const pu = toU(B.x, B.z)[0]; B.vy -= 9.8 * h; B.x += B.vx * h; B.y += B.vy * h; B.z += B.vz * h;
+      if (B.y < R) { B.y = R; if (B.vy < -1.2) { B.vy = -B.vy * 0.55; B.vx *= 0.92; B.vz *= 0.92; } else B.vy = 0; }
+      if (B.y <= R + 0.01) { const k = Math.exp(-0.55 * h); B.vx *= k; B.vz *= k; if (Math.hypot(B.vx, B.vz) < 0.05) B.vx = B.vz = 0; }   // rolling
+      else { const k = Math.exp(-0.05 * h); B.vx *= k; B.vz *= k; }
+      // goal frames: posts, crossbar, and the net that stops it behind the line
+      const [u, v] = toU(B.x, B.z);
+      for (const sd of [-1, 1]) { const du = u - sd * PT.hl;
+        if (B.y < PT.gh + R) for (const pv of [-PT.gwid / 2, PT.gwid / 2]) { const dd = Math.hypot(du, v - pv); if (dd < R + 0.06 && dd > 1e-3) {   // post
+          const nu = du / dd, nv = (v - pv) / dd, [nx, nz] = [PT.ux * nu + vx0 * nv, PT.uz * nu + vz0 * nv], vn = B.vx * nx + B.vz * nz; if (vn < 0) { B.vx -= 1.6 * vn * nx; B.vz -= 1.6 * vn * nz; } const [px, pz] = fromU(sd * PT.hl + nu * (R + 0.06), pv + nv * (R + 0.06)); B.x = px; B.z = pz; kickSnd(0.5); } }
+        if (Math.abs(v) < PT.gwid / 2 && Math.abs(du) < R + 0.06 && Math.abs(B.y - PT.gh) < R + 0.06 && B.vy > -50) { B.vy = Math.abs(B.vy) * (B.y > PT.gh ? 0.6 : -0.6); }   // crossbar
+        const pdu = pu - sd * PT.hl;
+        if (sd * pdu <= 0 && sd * du > 0 && Math.abs(v) < PT.gwid / 2 && B.y < PT.gh) B.net = sd;          // went in through the mouth of the goal
+        if (B.net === sd && (sd * du < -0.3 || Math.abs(v) > PT.gwid / 2 + 0.3)) B.net = 0;
+        if (B.net !== sd && sd * pdu >= 1.4 && sd * du < 1.4 + R && Math.abs(v) < PT.gwid / 2 + R && B.y < PT.gh + 0.2) {   // the back of the net, from behind
+          const [px, pz] = fromU(sd * (PT.hl + 1.4 + R), v); B.x = px; B.z = pz; const vu = B.vx * PT.ux + B.vz * PT.uz; B.vx -= 1.5 * vu * PT.ux; B.vz -= 1.5 * vu * PT.uz; }
+        if (B.net === sd && sd * du > R * 0.5 && sd * du < 1.6 && Math.abs(v) < PT.gwid / 2 + 0.1 && B.y < PT.gh + 0.4) {   // in the net: back, sides and roof hold it
+          const k = Math.exp(-6 * h); B.vx *= k; B.vz *= k; let uu = du, vv = v;
+          if (sd * uu > 1.4 - R) uu = sd * (1.4 - R); if (Math.abs(vv) > PT.gwid / 2 - R) vv = Math.sign(vv) * (PT.gwid / 2 - R);
+          if (B.y > PT.gh - R) { B.y = PT.gh - R; B.vy = -Math.abs(B.vy) * 0.3; }
+          if (uu !== du || vv !== v) { const [px, pz] = fromU(sd * PT.hl + uu, vv); B.x = px; B.z = pz; } }
+      }
+      // walls, posts, fences and the like
+      const list = cgrid.at(B.x, B.z); if (list && B.y < 2.5) for (const c of list) { if (c.car || c.lv) continue; let nx, nz, d;
+        if (c.t === 0) { const dx = B.x - c.x, dz = B.z - c.z; d = Math.hypot(dx, dz) - c.r; if (d >= R) continue; nx = dx / (d + c.r || 1); nz = dz / (d + c.r || 1); }
+        else { const sx = c.x1 - c.x0, sz = c.z1 - c.z0, l2 = sx * sx + sz * sz || 1, t = clamp(((B.x - c.x0) * sx + (B.z - c.z0) * sz) / l2, 0, 1), qx = c.x0 + sx * t, qz = c.z0 + sz * t; d = Math.hypot(B.x - qx, B.z - qz); if (d >= R || d < 1e-4) continue; nx = (B.x - qx) / d; nz = (B.z - qz) / d; }
+        B.x += nx * (R - d); B.z += nz * (R - d); const vn = B.vx * nx + B.vz * nz; if (vn < 0) { B.vx -= 1.5 * vn * nx; B.vz -= 1.5 * vn * nz; } }
+    }
+  }
+  function myTouches(dt) {
+    if (state !== 'play' || INSIDE) return;
+    if (W.on && !W.busy) {                                                  // dribbling: running into it pushes it on ahead of you
+      const dx = B.x - W.x, dz = B.z - W.z, d = Math.hypot(dx, dz), ws = Math.hypot(W.vx, W.vz);
+      if (d < R + 0.42 && B.y < 0.8) { const nx = dx / (d || 1), nz = dz / (d || 1), rel = (B.vx - W.vx) * nx + (B.vz - W.vz) * nz;
+        B.x = W.x + nx * (R + 0.42); B.z = W.z + nz * (R + 0.42);
+        if (rel < 1.5) { const push = Math.max(1.2, ws * 1.25); B.vx = W.vx * 0.5 + nx * push; B.vz = W.vz * 0.5 + nz * push; touch(); } }
+    } else if (!W.on && !player.wrecked) {                                 // cars knock it about
+      const cf = -Math.sin(player.h), cz2 = -Math.cos(player.h);
+      for (const off of cir) { const px = player.x + cf * off, pz = player.z + cz2 * off, dx = B.x - px, dz = B.z - pz, d = Math.hypot(dx, dz);
+        if (d < 1.05 + R && B.y < 1.6) { const nx = dx / (d || 1), nz = dz / (d || 1), rel = (B.vx - player.vx) * nx + (B.vz - player.vz) * nz;
+          B.x = px + nx * (1.05 + R); B.z = pz + nz * (1.05 + R);
+          if (rel < 0) { const vc = Math.hypot(player.vx, player.vz); B.vx += nx * (-rel * 1.5 + 2); B.vz += nz * (-rel * 1.5 + 2); B.vy = Math.max(B.vy, Math.min(9, vc * 0.18)); kickSnd(Math.min(1, -rel / 15)); touch(); }
+          break; } }
+    }
+  }
+  o.step = dt => {
+    const now = performance.now();
+    if (pend && now > holdUntil) { put(pend); pend = null; }
+    if (!pend) { myTouches(dt); physics(Math.min(dt, 0.05)); }
+    if (charge >= 0) { charge += dt / 0.9; if (charge >= 1.25) o.release(); }
+    const mine = owner && owner === (MP.id || 'me');
+    if (mine && !pend) {
+      sendT -= dt; const moving = Math.hypot(B.vx, B.vy, B.vz) > 0.05; if (sendT <= 0 && (moving || sendT < -1)) { sendT = 0.1; send({ a: 'upd', s: pack() }); }
+      const [u, v] = toU(B.x, B.z);                                         // goal: the whole ball over the line, between the posts, under the bar
+      for (const sd of [0, 1]) { const end = sd ? 1 : -1; if (B.net === end && (end * u) > PT.hl + R && (end * u) < PT.hl + 1.6 && Math.abs(v) < PT.gwid / 2 && B.y < PT.gh && now > goalLock) {
+        goalLock = now + 4000; send({ a: 'goal', side: sd, n: MP.name(), c: centre() });
+        if (!(MP.ws && MP.ws.readyState === 1)) { sc[sd]++; o.onNet({ a: 'goal', side: sd, by: MP.id, sc, s: centre() }); } } }
+      const [u2, v2] = toU(B.x, B.z); if (Math.abs(u2) > PT.hl + 40 || Math.abs(v2) > PT.hw + 40) { if ((idleOut += dt) > 6) { put(centre()); send({ a: 'touch', s: pack() }); idleOut = 0; toast('⚽ Ball back on the centre spot'); } } else idleOut = 0;   // kicked miles away
+    }
+    // draw
+    mesh.position.set(B.x, B.y, B.z); const sp = Math.hypot(B.vx, B.vz); if (sp > 0.01) { mesh.rotateOnWorldAxis(new THREE.Vector3(B.vz / sp, 0, -B.vx / sp), sp * dt / R); }
+    mesh.visible = !INSIDE;
+    const pd = Math.hypot(follow().x - PT.cx, follow().z - PT.cz), show = state === 'play' && !INSIDE && pd < PT.hl + 60;
+    hud.style.display = show ? 'block' : 'none'; if (show) { const t = '⚽ West goal ' + sc[0] + ' – ' + sc[1] + ' East goal' + (o.near() && !isTouch ? '  ·  E kick, hold to blast' : ''); if (hud.textContent !== t) hud.textContent = t; }
+    bar.style.display = charge >= 0 ? 'block' : 'none'; if (charge >= 0) bar.firstChild.style.width = Math.round(Math.min(1, charge) * 100) + '%';
+  };
+  o.mini = g => { g.fillStyle = '#fff'; g.strokeStyle = '#111'; g.lineWidth = 1.5; g.beginPath(); g.arc(mpx(B.x), mpx(B.z), 4, 0, 7); g.fill(); g.stroke(); g.fillStyle = '#111'; g.beginPath(); g.arc(mpx(B.x), mpx(B.z), 1.5, 0, 7); g.fill(); };
+  o.dbg = () => ({ owner, me: MP.id, net: B.net, lastQ, pend: !!pend });
+  o.ball = B; o.pitch = PT; o.reset = () => { pend = null; holdUntil = 0; goalLock = 0; owner = null; charge = -1; put(centre()); };
+  return o;
+})();
 // ===== horn: H (or the 📯 button) honks, and players nearby hear it =====
 const HORN = (() => {
   const o = {}; let last = 0;
@@ -5207,7 +5331,7 @@ function drawMinimap() {
   mctx.clearRect(0, 0, 150, 150); mctx.drawImage(mmBg, 0, 0);
   { const c = RACE.next(); if (c) { mctx.fillStyle = '#ffd400'; mctx.strokeStyle = '#000'; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.arc(mpx(c.x), mpx(c.z), 5, 0, 7); mctx.fill(); mctx.stroke(); } }
   mctx.font = 'bold 10px system-ui'; mctx.textAlign = 'center'; mctx.textBaseline = 'middle'; mctx.fillStyle = '#1f5c3a'; mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.arc(mpx(-25), mpx(-20), 6, 0, 7); mctx.fill(); mctx.stroke(); mctx.fillStyle = '#fff'; mctx.fillText('£', mpx(-25), mpx(-20) + 0.5);
-  DRUGS.mini(mctx);
+  DRUGS.mini(mctx); FB.mini(mctx);
   for (const P of MP.peers.values()) { const d = P.s; if (!d) continue; const on = d.m && d.f, x = on ? d.f[0] : d.x, z = on ? d.f[2] : d.z; const isIt = TAG.itId() === P.id; mctx.fillStyle = isIt ? '#ff2a3a' : '#3cc8ff'; mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.2; mctx.beginPath(); mctx.arc(mpx(x), mpx(z), isIt ? 5 : 3.6, 0, 7); mctx.fill(); mctx.stroke(); }
   mctx.save(); mctx.translate(mpx(follow().x), mpx(follow().z)); mctx.rotate(-follow().h);
   mctx.fillStyle = '#ff5a3c'; mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.moveTo(0, -6); mctx.lineTo(4.5, 5); mctx.lineTo(-4.5, 5); mctx.closePath(); mctx.fill(); mctx.stroke(); mctx.restore();
@@ -5219,7 +5343,7 @@ let last = performance.now(), hudT = 0, skidAccInit = 0, frameN = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
-  if (RACE.frozen()) { player.vx = player.vz = 0; } stepPlayer(dt); if (W.on) stepWalker(dt); MP.step(dt); RACE.step(dt); NPC.step(dt); WC.step(dt); TUCKSHOP.step(dt); KITCHEN.step(dt); POOL.step(dt); PUB.step(dt); updateWork(dt); updateTills(dt); stepCars(dt); DRUGS.step(dt); TAG.step(dt); CM.step(dt); CM.PV.step(dt); stepFX(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
+  if (RACE.frozen()) { player.vx = player.vz = 0; } stepPlayer(dt); if (W.on) stepWalker(dt); MP.step(dt); RACE.step(dt); NPC.step(dt); FB.step(dt); WC.step(dt); TUCKSHOP.step(dt); KITCHEN.step(dt); POOL.step(dt); PUB.step(dt); updateWork(dt); updateTills(dt); stepCars(dt); DRUGS.step(dt); TAG.step(dt); CM.step(dt); CM.PV.step(dt); stepFX(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
   { const f = follow(); sun.position.set(f.x + SUN.x * 220, SUN.y * 220, f.z + SUN.z * 220); sun.target.position.set(f.x, 0, f.z); } sun.target.updateMatrixWorld();
   sky.position.copy(camera.position); clouds.position.set(camera.position.x, 0, camera.position.z);
   hudT -= dt;

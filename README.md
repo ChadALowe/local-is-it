@@ -62,6 +62,9 @@ saves and the leaderboard are never cleared.
   The room runs the game, so it can't get out of sync.
 - **Emotes** (G or 😀 Emote, then 1-9): wave, thumbs up, middle finger, cheer, dance, facepalm, point, shrug and
   head wobble. Other players see your character do it, with a bubble over your head or car.
+- **Football** on the five-a-side pitch south of Wobaston Road (⚽ on the minimap): on foot, run into the ball to
+  dribble, E (or KICK) to kick, hold for a harder shot, look up to chip it. Whoever touched it last controls it, so
+  running into it is a tackle; cars can hit it too. Goals are checked by the room and the score is shared.
 - **Horn**: H (or 📯 on phones). Players nearby hear it, louder the closer they are.
 - **Name tags** show what each player is driving, and a 🔥 score floats over anyone who's mid-drift.
 
