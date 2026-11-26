@@ -1,13 +1,16 @@
 // Pendeford Drift: serves the game and runs one shared multiplayer room (a Durable Object) that everyone on the link joins.
 // The room also remembers the shared world (parked cars that were pushed or dented) until the last player leaves.
+// Kept forever in the room's storage: the leaderboard ('lb') and every player's saved progress ('p:<save code>').
 export class Room {
   constructor(state) { this.state = state; }
   async fetch(req) {
     if (req.headers.get('Upgrade') !== 'websocket') return new Response('Expected a WebSocket', { status: 426 });
     const socks = this.state.getWebSockets();
     if (socks.length >= 40) return new Response('Room full', { status: 503 });
-    if (!socks.length) {                                               // first one in: fresh world (the leaderboard is kept forever)
-      const keys = [...(await this.state.storage.list()).keys()].filter(k => k !== 'lb'); for (let i = 0; i < keys.length; i += 100) await this.state.storage.delete(keys.slice(i, i + 100));
+    if (!socks.length) {                                               // first one in: fresh world. Only the world's own keys are cleared:
+      const st = this.state.storage, keys = ['npc', 'kit', 'pool', 'darts'];   // the leaderboard and players' saves are never touched
+      for (const pre of ['w:', 'wc:']) keys.push(...(await st.list({ prefix: pre })).keys());
+      for (let i = 0; i < keys.length; i += 100) await st.delete(keys.slice(i, i + 100));
     }
     const { 0: client, 1: server } = new WebSocketPair();
     const id = crypto.randomUUID().slice(0, 8);
@@ -21,9 +24,23 @@ export class Room {
   }
   others(ws, out) { for (const w of this.state.getWebSockets()) if (w !== ws) { try { w.send(out); } catch (_) {} } }
   async webSocketMessage(ws, msg) {
-    if (typeof msg !== 'string' || msg.length > 6000) return;
+    if (typeof msg !== 'string' || msg.length > 24000) return;
     let d; try { d = JSON.parse(msg); } catch (_) { return; }
+    if (msg.length > 6000 && d.t !== 'save') return;
     const a = ws.deserializeAttachment() || {};
+    const CODE = /^[A-HJ-NP-Z2-9]{16}$/;                // save codes: 16 letters/digits, no 0/O/1/I
+    if (d.t === 'load' && CODE.test(d.k)) {             // a player's saved progress: money, cars, stash, best scores, name
+      a.k = d.k; ws.serializeAttachment(a);
+      ws.send(JSON.stringify({ t: 'prof', p: (await this.state.storage.get('p:' + d.k)) || null })); return;
+    }
+    if (d.t === 'peek' && CODE.test(d.k)) { ws.send(JSON.stringify({ t: 'peek', k: d.k, ok: !!(await this.state.storage.get('p:' + d.k)) })); return; }
+    if (d.t === 'save') {                               // only for the code this connection loaded, at most every 2 s, up to 20 kB
+      const now = Date.now(); if (d.k !== a.k || !d.p || typeof d.p !== 'object' || now - (a.sv || 0) < 2000) return;
+      const v = {}; for (const [k, x] of Object.entries(d.p)) if (/^[A-Za-z_]{2,24}$/.test(k) && typeof x === 'string') v[k] = x;
+      if (JSON.stringify(v).length > 20000) return;
+      a.sv = now; ws.serializeAttachment(a); await this.state.storage.put('p:' + d.k, { v, t: now });
+      ws.send(JSON.stringify({ t: 'saved', at: now })); return;
+    }
     if (d.t === 's') {                                  // player state: remember the latest and pass it on
       d.id = a.id; if (typeof d.n === 'string') d.n = d.n.slice(0, 20);
       const out = JSON.stringify(d);

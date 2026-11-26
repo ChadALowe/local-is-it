@@ -103,7 +103,7 @@
 <div id="xhair"></div><div id="aimLbl" style="position:fixed;left:50%;top:calc(50% + 14px);transform:translateX(-50%);font:700 13px system-ui,sans-serif;color:#fff;text-shadow:0 1px 3px #000;pointer-events:none;z-index:6"></div><div id="bpanel"></div><div id="toast" style="position:fixed;left:50%;top:38%;transform:translateX(-50%);max-width:80%;text-align:center;font:700 15px/1.3 'Segoe UI',system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.6);padding:8px 14px;border-radius:10px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:8"></div><div class="hud" id="money"></div><div class="hud" id="basket"></div>
 <div id="zoneBtn"></div><div id="cmPanel"></div>
 <div id="fade" style="position:fixed;inset:0;background:#000;opacity:0;transition:opacity .25s;pointer-events:none;z-index:50"></div>
-<div class="hud" id="online" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 174px);left:10px;font:600 12px/1.3 system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.45);padding:3px 8px;border-radius:6px;z-index:5;cursor:pointer;pointer-events:auto" title="Tap to change your name">⚪ offline</div><div id="mpBtns" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 200px);left:10px;display:flex;gap:6px;z-index:6"><button id="chatBtn" class="mpb">💬 Chat</button><button id="lbBtn" class="mpb">🏆 Top</button><button id="raceBtn" class="mpb">🏁 Race</button></div>
+<div class="hud" id="online" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 174px);left:10px;font:600 12px/1.3 system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.45);padding:3px 8px;border-radius:6px;z-index:5;cursor:pointer;pointer-events:auto" title="Tap to change your name">⚪ offline</div><div id="mpBtns" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 200px);left:10px;display:flex;gap:6px;z-index:6"><button id="chatBtn" class="mpb">💬 Chat</button><button id="lbBtn" class="mpb">🏆 Top</button><button id="raceBtn" class="mpb">🏁 Race</button><button id="saveBtn" class="mpb">💾 Save</button></div>
 <div id="chatBox" style="display:none;position:fixed;left:50%;transform:translateX(-50%);top:28%;z-index:30;background:rgba(0,0,0,.7);padding:8px;border-radius:12px;gap:6px"><input id="chatIn" maxlength="140" placeholder="Say something… (Enter to send)" style="width:min(70vw,420px);font:16px system-ui;padding:8px 10px;border-radius:8px;border:0"><button id="chatSend" class="mpb" style="font-size:15px">Send</button></div>
 <div id="lbPanel" style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;background:rgba(14,18,24,.92);color:#fff;padding:16px 18px;border-radius:14px;font:14px/1.45 system-ui;min-width:min(86vw,520px);box-shadow:0 10px 40px rgba(0,0,0,.5)"></div>
 <div class="hud" id="coords" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 150px);left:10px;font:600 12px/1.3 monospace;color:#fff;background:rgba(0,0,0,.45);padding:3px 7px;border-radius:6px;pointer-events:none;z-index:5">x 0 z 0</div>
@@ -3320,7 +3320,7 @@ const joy = { x: 0, y: 0, id: null }, look = { id: null, lx: 0, ly: 0 }; W.pitch
 }
 const keyMap = { KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', Space: 'hand', ShiftLeft: 'run', ShiftRight: 'run' };
 addEventListener('keydown', e => {
-  if (CM.open) { if (e.code === 'Escape' || e.code === 'KeyE') CM.close(); return; }
+  if (CM.open) { if (e.code === 'Escape' || (e.code === 'KeyE' && !(e.target && e.target.tagName === 'INPUT'))) CM.close(); return; }
   if (keyMap[e.code]) { keys[keyMap[e.code]] = 1; e.preventDefault(); }
   if (e.code === 'Enter' && state === 'menu') start();
   if (state === 'play') { if (e.code === 'KeyR') resetCar(); if (e.code === 'KeyB') switchCar(); if (e.code === 'KeyF') toggleFoot(); if (e.code === 'KeyE') doAction(); if (e.code === 'KeyQ') doAction2(); if (e.code === 'Space' && W.on && !e.repeat) jump(); if (e.code === 'KeyV') camMode = (camMode + 1) % 2; if (e.code === 'KeyT') { e.preventDefault(); openChat(); return; } if (e.code === 'KeyN') { document.exitPointerLock && document.exitPointerLock(); keys.up = keys.down = keys.left = keys.right = 0; MP.rename(); } }
@@ -4523,14 +4523,15 @@ const MP = (() => {
     if (!/^https?:$/.test(location.protocol) || window.__noMP) return;
     let ws; try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'); } catch (_) { return retry(); }
     o.ws = ws;
-    ws.onopen = () => { o.tries = 0; lbSent = ''; hud(); setTimeout(sendScore, 1500); };
+    ws.onopen = () => { o.tries = 0; lbSent = ''; hud(); setTimeout(sendScore, 1500); SAVE.onOpen(); };
     ws.onmessage = e => { let d; try { d = JSON.parse(e.data); } catch (_) { return; }
       if (d.t === 'hi') { o.id = d.id; for (const id of [...o.peers.keys()]) dropPeer(id, true); for (const s of d.players) if (s.id !== o.id) onState(s); if (d.world) onWorld(d.world); if (d.npc) NPC.onNet(Object.assign({ a: 'state' }, d.npc), null); if (d.wc) WC.load(d.wc); KITCHEN.load(d.kit); POOL.load(d.pool); PUB.load(d.darts); hud(); }
       else if (d.t === 'ev') onEv(d);
       else if (d.t === 's' && d.id !== o.id) onState(d);
       else if (d.t === 'bye') dropPeer(d.id);
       else if (d.t === 'chat') onChat(d);
-      else if (d.t === 'lb') o.onLB(d); };
+      else if (d.t === 'lb') o.onLB(d);
+      else if (d.t === 'prof' || d.t === 'saved' || d.t === 'peek') SAVE.onNet(d); };
     ws.onclose = () => { o.ws = null; for (const id of [...o.peers.keys()]) dropPeer(id, true); o.online = 1; hud(); retry(); };
     ws.onerror = () => { try { ws.close(); } catch (_) {} };
   }
@@ -4676,6 +4677,62 @@ $('chatIn').addEventListener('keydown', e => { e.stopPropagation(); if (e.key ==
 $('chatIn').addEventListener('keyup', e => e.stopPropagation());
 $('raceBtn').addEventListener('click', e => { e.stopPropagation(); RACE.openPanel(); });
 $('lbBtn').addEventListener('click', e => { e.stopPropagation(); document.exitPointerLock && document.exitPointerLock(); MP.showLB(); });
+// ===== cloud saves: progress is kept in the Cloudflare room under a secret save code, so it survives a cleared browser and moves between devices =====
+const SAVE = (() => {
+  const KEYS = ['pd_money', 'pd_cars', 'pd_stash', 'pendefordDriftBest', 'pd_raceBest', 'pd_name'], AB = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', OK = /^[A-HJ-NP-Z2-9]{16}$/;
+  const get = k => { try { return localStorage.getItem(k); } catch (_) { return null; } }, set = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, String(v)); } catch (_) {} };
+  let code = get('pd_key');
+  if (!OK.test(code || '')) { const r = new Uint32Array(16); crypto.getRandomValues(r); code = Array.from(r, v => AB[v % 32]).join(''); set('pd_key', code); }
+  const snap = () => { const v = {}; for (const k of KEYS) { const x = get(k); if (x != null) v[k] = x; } return v; };
+  const o = {}; let loaded = false, sent = null, lastAt = +(get('pd_saveT') || 0), peekWant = null;
+  const send = d => { const ws = MP.ws; if (ws && ws.readyState === 1) { try { ws.send(JSON.stringify(d)); return true; } catch (_) {} } return false; };
+  const push = () => {                                                   // send the progress if it changed since the last save
+    if (!loaded) return; const v = snap(), s = JSON.stringify(v);
+    if (s === sent && get('pd_dirty') !== '1') return;
+    set('pd_dirty', '1'); if (send({ t: 'save', k: code, p: v })) sent = s;
+  };
+  o.onOpen = () => { loaded = false; send({ t: 'load', k: code }); };
+  o.onNet = d => {
+    if (d.t === 'prof') {
+      const st = d.p ? +d.p.t : 0, lt = +(get('pd_saveT') || 0);
+      if (d.p && d.p.v && st > lt) {                                     // the server has newer progress (another device, or a save code just entered)
+        const here = JSON.stringify(snap()); set('pd_saveT', st); set('pd_dirty', '0'); lastAt = st;
+        if (here !== JSON.stringify(d.p.v)) { for (const k of KEYS) set(k, d.p.v[k] == null ? null : d.p.v[k]); location.reload(); return; }
+        sent = here; loaded = true; return;
+      }
+      loaded = true; sent = null; push();                               // nothing newer on the server: this device's progress is the latest, upload it
+    } else if (d.t === 'saved') { set('pd_saveT', d.at); lastAt = d.at; if (JSON.stringify(snap()) === sent) set('pd_dirty', '0'); if (CM.open === 'save') draw(); }
+    else if (d.t === 'peek' && d.k === peekWant) { peekWant = null;
+      if (!d.ok) { beep(220, 0.25); toast('No saved progress found for that code. Check it and try again.'); return; }
+      set('pd_key', d.k); set('pd_saveT', null); set('pd_dirty', '0'); toast('Loading your saved progress…'); setTimeout(() => location.reload(), 600); }
+  };
+  setInterval(push, 8000);
+  addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') push(); });
+  addEventListener('pagehide', push);
+  // ---- the 💾 Save panel
+  const nice = c => c.replace(/(.{4})(?=.)/g, '$1-');
+  function draw() {
+    const on = !!(MP.ws && MP.ws.readyState === 1), when = lastAt ? new Date(lastAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    CM.openExt('save', `<div class="cmHead"><h3>💾 Your save</h3><button class="cmX" data-a="close">✕</button></div>
+      <div class="cmSmall" style="margin:4px 0 8px">Your money, cars, upgrades, stash, best drift, best lap and name are saved online automatically. ${on ? (lastAt ? 'Last saved at ' + when + '.' : 'Saving…') : 'Offline right now: it will save when you reconnect.'}</div>
+      <div>Your save code</div><div style="font:800 22px/1.3 ui-monospace,monospace;letter-spacing:.06em;margin:4px 0 6px;user-select:all">${nice(code)}</div>
+      <button class="cmBtn alt" data-a="copy">Copy code</button>
+      <div class="cmSmall" style="margin:8px 0 10px">Keep it somewhere safe and don’t share it: anyone with the code gets your progress. Enter it on another phone or computer to carry on there.</div>
+      <div>Load progress from another device</div>
+      <div style="display:flex;gap:6px;margin-top:6px"><input id="saveIn" maxlength="24" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false" style="flex:1;min-width:0;font:600 16px ui-monospace,monospace;padding:8px;border-radius:8px;border:0;text-transform:uppercase"><button class="cmBtn" data-a="load">Load</button></div>
+      <div class="cmSmall" style="margin-top:6px">This replaces the progress on this device.</div>`, act);
+  }
+  function act(a) {
+    if (a === 'copy') { try { navigator.clipboard.writeText(nice(code)).then(() => toast('Save code copied'), () => toast('Couldn’t copy: write it down instead')); } catch (_) { toast('Couldn’t copy: write it down instead'); } return; }
+    if (a === 'load') { const c = (($('saveIn') || {}).value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!OK.test(c)) { beep(220, 0.25); toast('A save code is 16 letters and numbers.'); return; }
+      if (c === code) { toast('That’s already this device’s code.'); return; }
+      if (!send({ t: 'peek', k: c })) { toast('You need to be online to load a save.'); return; } peekWant = c; }
+  }
+  o.open = () => { document.exitPointerLock && document.exitPointerLock(); draw(); };
+  return o;
+})();
+$('saveBtn').addEventListener('click', e => { e.stopPropagation(); SAVE.open(); });
 $('lbPanel').addEventListener('click', e => { e.stopPropagation(); $('lbPanel').style.display = 'none'; });
 $('online').addEventListener('click', e => { e.stopPropagation(); MP.rename(); }); $('online').addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
 /* ================= camera / HUD ================= */

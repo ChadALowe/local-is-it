@@ -39,6 +39,13 @@ Roads, buildings and green areas come from OpenStreetMap, projected to metres ar
 
 Map data (c) OpenStreetMap contributors, available under the Open Database Licence (ODbL): https://www.openstreetmap.org/copyright
 
+## Saved progress
+Each browser gets a secret 16-character save code. Money, owned cars and upgrades, the stash, best drift, best lap
+and name are saved to the multiplayer room's storage on Cloudflare (`p:<code>`) about every 8 seconds and when the
+tab is hidden, and loaded again on connect. **💾 Save** shows the code and lets you enter it on another device to
+carry on there. The room only clears its world keys (parked cars, toilets, fridge, pool, darts) when it empties;
+saves and the leaderboard are never cleared.
+
 ## Multiplayer
 Everyone who opens the link joins one shared session. `worker.js` serves the game and runs a Cloudflare
 Durable Object room (`/ws` WebSocket) that relays each player's car / on-foot / ragdoll state about 10 times a second.
