@@ -46,6 +46,7 @@
   :root{--b:84px}
   .tb{position:fixed;width:var(--b);height:var(--b);border-radius:50%;border:2px solid rgba(255,255,255,.75);background:rgba(20,28,36,.38);color:#fff;font:700 12px "Segoe UI",system-ui,Arial,sans-serif;letter-spacing:.08em;display:flex;align-items:center;justify-content:center;text-align:center;touch-action:none;z-index:4;line-height:1.1;backdrop-filter:blur(2px)}
   .tb.on{background:rgba(255,255,255,.4)}
+  #tagHud{display:none;position:fixed;left:50%;transform:translateX(-50%);top:calc(56px + env(safe-area-inset-top));z-index:7;font:800 15px/1.3 system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.6);padding:6px 14px;border-radius:10px;text-align:center;pointer-events:none;white-space:nowrap} #tagHud small{display:block;font-weight:600;font-size:11px;opacity:.8} #tagHud.it{background:rgba(200,16,30,.88);animation:bl 1s infinite}
   #zoneBtn{display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:calc(130px + env(safe-area-inset-bottom));z-index:9;font:800 15px system-ui,sans-serif;color:#fff;background:rgba(31,92,58,.92);border:2px solid #7dffa0;border-radius:12px;padding:10px 16px;cursor:pointer;pointer-events:auto;white-space:nowrap} #zoneBtn.show{display:block}
   #cmPanel{display:none;position:fixed;left:calc(10px + env(safe-area-inset-left));top:calc(10px + env(safe-area-inset-top));max-height:calc(100% - 20px);width:min(420px,calc(100vw - 20px));box-sizing:border-box;z-index:30;background:rgba(12,16,22,.95);color:#fff;border-radius:14px;font:13px/1.4 system-ui,sans-serif;overflow:auto;padding:12px 14px;box-shadow:0 6px 24px rgba(0,0,0,.45);touch-action:pan-y;-webkit-overflow-scrolling:touch}
   #cmPanel h3{margin:0;font-size:17px} .cmHead{display:flex;justify-content:space-between;align-items:center} .cmX{background:none;border:0;color:#fff;font-size:20px;cursor:pointer;padding:2px 6px}
@@ -76,7 +77,7 @@
   #tBrake{right:calc(22px + var(--b)*1.25 + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom))}
   #tHand{right:calc(14px + env(safe-area-inset-right));bottom:calc(30px + var(--b)*1.25 + env(safe-area-inset-bottom))}
   .tsm{width:44px;height:44px;font-size:20px;top:calc(10px + env(safe-area-inset-top))}
-  #tReset{left:calc(50% - 100px)} #tCam{left:calc(50% - 48px)} #tCar{left:calc(50% + 4px)} #tOut{left:calc(50% + 56px)}
+  #tReset{left:calc(50% - 126px)} #tCam{left:calc(50% - 74px)} #tCar{left:calc(50% - 22px)} #tHorn{left:calc(50% + 30px)} #tOut{left:calc(50% + 82px)} body.foot #tHorn{display:none}
   body.touch #tl{left:calc(12px + env(safe-area-inset-left));top:calc(8px + env(safe-area-inset-top))}
   body.touch #tl .val{font-size:26px} body.touch #tl .sub{font-size:12px}
   body.touch #mm{width:96px;height:96px;right:calc(12px + env(safe-area-inset-right));top:calc(8px + env(safe-area-inset-top))}
@@ -103,7 +104,7 @@
 <div id="xhair"></div><div id="aimLbl" style="position:fixed;left:50%;top:calc(50% + 14px);transform:translateX(-50%);font:700 13px system-ui,sans-serif;color:#fff;text-shadow:0 1px 3px #000;pointer-events:none;z-index:6"></div><div id="bpanel"></div><div id="toast" style="position:fixed;left:50%;top:38%;transform:translateX(-50%);max-width:80%;text-align:center;font:700 15px/1.3 'Segoe UI',system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.6);padding:8px 14px;border-radius:10px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:8"></div><div class="hud" id="money"></div><div class="hud" id="basket"></div>
 <div id="zoneBtn"></div><div id="cmPanel"></div>
 <div id="fade" style="position:fixed;inset:0;background:#000;opacity:0;transition:opacity .25s;pointer-events:none;z-index:50"></div>
-<div class="hud" id="online" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 174px);left:10px;font:600 12px/1.3 system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.45);padding:3px 8px;border-radius:6px;z-index:5;cursor:pointer;pointer-events:auto" title="Tap to change your name">⚪ offline</div><div id="mpBtns" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 200px);left:10px;display:flex;gap:6px;z-index:6"><button id="chatBtn" class="mpb">💬 Chat</button><button id="lbBtn" class="mpb">🏆 Top</button><button id="raceBtn" class="mpb">🏁 Race</button><button id="saveBtn" class="mpb">💾 Save</button></div>
+<div class="hud" id="online" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 174px);left:10px;font:600 12px/1.3 system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.45);padding:3px 8px;border-radius:6px;z-index:5;cursor:pointer;pointer-events:auto" title="Tap to change your name">⚪ offline</div><div id="mpBtns" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 200px);left:10px;display:flex;gap:6px;z-index:6"><button id="chatBtn" class="mpb">💬 Chat</button><button id="lbBtn" class="mpb">🏆 Top</button><button id="raceBtn" class="mpb">🏁 Race</button><button id="saveBtn" class="mpb">💾 Save</button><button id="tagBtn" class="mpb">🏷️ Tag</button></div>
 <div id="chatBox" style="display:none;position:fixed;left:50%;transform:translateX(-50%);top:28%;z-index:30;background:rgba(0,0,0,.7);padding:8px;border-radius:12px;gap:6px"><input id="chatIn" maxlength="140" placeholder="Say something… (Enter to send)" style="width:min(70vw,420px);font:16px system-ui;padding:8px 10px;border-radius:8px;border:0"><button id="chatSend" class="mpb" style="font-size:15px">Send</button></div>
 <div id="lbPanel" style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;background:rgba(14,18,24,.92);color:#fff;padding:16px 18px;border-radius:14px;font:14px/1.45 system-ui;min-width:min(86vw,520px);box-shadow:0 10px 40px rgba(0,0,0,.5)"></div>
 <div class="hud" id="coords" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 150px);left:10px;font:600 12px/1.3 monospace;color:#fff;background:rgba(0,0,0,.45);padding:3px 7px;border-radius:6px;pointer-events:none;z-index:5">x 0 z 0</div>
@@ -115,7 +116,7 @@
 </div>
 <div class="hud" id="hint">
   <kbd>W</kbd><kbd>S</kbd> gas / brake &nbsp; <kbd>A</kbd><kbd>D</kbd> steer<br>
-  <kbd>SPACE</kbd> handbrake to start a drift &nbsp; <kbd>B</kbd> switch your cars &nbsp; <kbd>E</kbd> use / buy / sell &nbsp; <kbd>F</kbd> get out / in &nbsp; on foot: <kbd>SPACE</kbd> jump <kbd>SHIFT</kbd> run &nbsp; <kbd>V</kbd> camera &nbsp; <kbd>R</kbd> reset
+  <kbd>SPACE</kbd> handbrake to start a drift &nbsp; <kbd>B</kbd> switch your cars &nbsp; <kbd>H</kbd> horn &nbsp; <kbd>E</kbd> use / buy / sell &nbsp; <kbd>F</kbd> get out / in &nbsp; on foot: <kbd>SPACE</kbd> jump <kbd>SHIFT</kbd> run &nbsp; <kbd>V</kbd> camera &nbsp; <kbd>R</kbd> reset
 </div>
 
 <div id="overlay">
@@ -147,6 +148,7 @@
   <div class="tb tsm" id="tReset" data-key="reset">&#8635;</div>
   <div class="tb tsm" id="tCam" data-key="cam">CAM</div>
   <div class="tb tsm" id="tCar" data-key="car" style="font-size:11px">CAR</div>
+  <div class="tb tsm" id="tHorn" data-key="horn" style="font-size:20px">📯</div>
   <div class="tb tsm" id="tOut" data-key="out" style="font-size:11px">OUT</div>
 </div>
 
@@ -2903,7 +2905,31 @@ const DRUGS = (() => {
   // customers: ordinary houses within reach of the underpass
   const houses = builds.filter(b => b.c === 0 && b.h >= 4 && b.h <= 10 && Math.abs(b.area) > 30 && Math.abs(b.area) < 300 && Math.hypot(b.cx - dx, b.cz - dz) < 650 && Math.abs(b.cx) < LIM - 20 && Math.abs(b.cz) < LIM - 20);
   const mkGeo = new THREE.OctahedronGeometry(0.55), mkMat = new THREE.MeshStandardMaterial({ color: 0x35e06b, emissive: 0x1fa84a, roughness: 0.4 });
-  const buyers = [];
+  const buyers = []; let net = false, skew = 0, pending = null;            // net: the room runs the customers and prices (everyone shares them)
+  const srvNow = () => Date.now() + skew;
+  const houseOf = r => houses[Math.min(houses.length - 1, Math.floor(r * houses.length))];
+  o.onNet = d => {
+    if (d.now) skew = d.now - Date.now();
+    if (d.a === 'res') { if (!pending || pending.b !== d.b) return; const q = pending; pending = null; CM.close();
+      if (!d.k) { toast('Too slow: someone else got there first.'); return; }
+      const it = ITEMS[d.it], k = d.k; stash[it[0]] = Math.max(0, (stash[it[0]] || 0) - k); save();
+      if (d.bust) { const fine = Math.min(money, 150); money -= fine; showMoney(); for (const x of ITEMS) stash[x[0]] = 0; save(); beep(330, 0.4); setTimeout(() => beep(260, 0.5), 300);
+        toast('🚔 A neighbour called the police! They took your whole stash' + (fine ? ' and fined you £' + fine.toFixed(0) : '') + '.'); }
+      else { const got = d.pay * k; money += got; showMoney(); beep(1400, 0.08); setTimeout(() => beep(2100, 0.1), 110); toast('💷 Sold ' + k + ' × ' + it[1] + ' for £' + got); }
+      return; }
+    if (!d.s) return;
+    if (!net) { for (const q of buyers) scene.remove(q.m); buyers.length = 0; respawn = []; net = true; }
+    const T = d.s; ITEMS.forEach(([id], i) => { if (T.mkt && T.mkt[i]) mkt[id] = T.mkt[i]; });
+    const keep = new Set();
+    for (const sb of T.buyers) { const b = houseOf(sb.r); if (!b) continue; keep.add(sb.id); let q = buyers.find(x => x.id === sb.id);
+      if (!q) { const m = new THREE.Mesh(mkGeo, mkMat); m.position.set(b.cx, b.h + 3.2, b.cz); scene.add(m); q = { id: sb.id, b, m, r: Math.max(b.x1 - b.x0, b.z1 - b.z0) / 2 + 5 }; buyers.push(q); }
+      Object.assign(q, { it: ITEMS[sb.it], n: sb.n, pay: sb.pay, at: sb.at }); }
+    for (let i = buyers.length - 1; i >= 0; i--) if (!keep.has(buyers[i].id)) { scene.remove(buyers[i].m); buyers.splice(i, 1); }
+    if (d.msg) toast(d.msg);
+    if (CM.open === 'dealer2') openDealer();
+  };
+  const live = q => !net || q.at <= srvNow();
+  o.mode = () => net;
   const newBuyer = () => {
     for (let k = 0; k < 40; k++) {
       const b = houses[(Math.random() * houses.length) | 0]; if (!b || buyers.some(q => q.b === b || Math.hypot(q.b.cx - b.cx, q.b.cz - b.cz) < 60)) continue;
@@ -2913,17 +2939,18 @@ const DRUGS = (() => {
     }
   };
   for (let k = 0; k < BUYERS; k++) newBuyer();
-  let respawn = [];
+  let respawn = [], lastSync = 0;
   // ---- zones for the shared menu / button
   o.zone = () => {
     const f = follow();
     if (W.on && Math.hypot(f.x - dx, f.z - dz) < 2.6 && Math.abs(f.y - dy) < 1.5) return { label: '🧥 DEALER', open: openDealer };
-    for (const q of buyers) if (Math.hypot(f.x - q.b.cx, f.z - q.b.cz) < q.r) return { label: '🏠 ' + q.n + ' × ' + q.it[1] + ' wanted', open: () => openBuyer(q) };
+    for (const q of buyers) if (live(q) && Math.hypot(f.x - q.b.cx, f.z - q.b.cz) < q.r) return { label: '🏠 ' + q.n + ' × ' + q.it[1] + ' wanted', open: () => openBuyer(q) };
     return null;
   };
   const fmt = v => '£' + v.toFixed(0);
   const stashLine = () => { const h = ITEMS.filter(it => stash[it[0]]).map(it => it[2] + ' ' + stash[it[0]]).join('  '); return `<div class="cmSmall">You have <b class="cmMoney">£${money.toFixed(2)}</b> · carrying ${held()}/${CAP}${h ? ': ' + h : ''}</div>`; };
   function openDealer() {
+    if (net && MP.ws && MP.ws.readyState === 1 && srvNow() - lastSync > 15000) { lastSync = srvNow(); MP.ws.send(JSON.stringify({ t: 'trade', a: 'sync' })); }
     const rows = ITEMS.map(([id, n, ic]) => `<div class="cmRow" style="cursor:default"><span style="font-size:18px">${ic}</span><span class="cmName"><b>${n}</b><br><span class="cmSmall">${fmt(mkt[id])} a bag · you have ${stash[id] || 0}</span></span>
       <button class="cmBtn alt" data-a="buy" data-v="${id}|1" ${money < mkt[id] || held() >= CAP ? 'disabled' : ''}>Buy 1</button><button class="cmBtn alt" data-a="buy" data-v="${id}|5" ${money < mkt[id] * 5 || held() + 5 > CAP ? 'disabled' : ''}>Buy 5</button></div>`).join('');
     CM.openExt('dealer2', `<div class="cmHead"><h3>🧥 The underpass</h3><button class="cmX" data-a="close">✕</button></div><div class="cmSmall" style="margin:2px 0 6px">“What you after?” Prices change every couple of minutes. Green diamonds over houses are your customers.</div>${stashLine()}${rows}<div style="margin-top:8px"><button class="cmBtn alt" data-a="close">Leave</button></div>`, act);
@@ -2935,6 +2962,9 @@ const DRUGS = (() => {
   }
   function act(a, v) {
     if (a === 'buy') { const [id, nS] = v.split('|'), n = +nS, c = mkt[id] * n; if (money < c || held() + n > CAP) return; money -= c; showMoney(); stash[id] = (stash[id] || 0) + n; save(); beep(900, 0.05); openDealer(); return; }
+    if (a === 'sell' && net) { const q = buyers[+v]; if (!q || pending) return; const k = Math.min(stash[q.it[0]] || 0, q.n); if (!k) return;
+      if (!(MP.ws && MP.ws.readyState === 1)) { toast('You’re offline: try again in a moment.'); return; }
+      pending = { b: q.id }; MP.ws.send(JSON.stringify({ t: 'trade', a: 'sell', b: q.id, k, n: MP.name() })); setTimeout(() => { if (pending && pending.b === q.id) pending = null; }, 6000); return; }
     if (a === 'sell') { const q = buyers[+v]; if (!q) return; const id = q.it[0], k = Math.min(stash[id] || 0, q.n); if (!k) return;
       stash[id] -= k; q.n -= k; save(); CM.close();
       if (Math.random() < 0.06) {                                            // a neighbour saw it all
@@ -2945,11 +2975,11 @@ const DRUGS = (() => {
   }
   o.step = dt => {
     if ((mktT += dt) > 120) { mktT = 0; roll(); }
-    for (let i = respawn.length - 1; i >= 0; i--) if ((respawn[i] -= dt) <= 0) { respawn.splice(i, 1); newBuyer(); }
-    const t = performance.now() / 1000; for (const q of buyers) { q.m.rotation.y = t * 1.5; q.m.position.y = q.b.h + 3.2 + Math.sin(t * 2 + q.b.cx) * 0.25; q.m.visible = !INSIDE; }
+    if (!net) for (let i = respawn.length - 1; i >= 0; i--) if ((respawn[i] -= dt) <= 0) { respawn.splice(i, 1); newBuyer(); }
+    const t = performance.now() / 1000; for (const q of buyers) { q.m.rotation.y = t * 1.5; q.m.position.y = q.b.h + 3.2 + Math.sin(t * 2 + q.b.cx) * 0.25; q.m.visible = !INSIDE && live(q); }
     fig.visible = !INSIDE; fig.rotation.z = Math.sin(t * 0.8) * 0.015;
   };
-  o.mini = g => { g.fillStyle = '#35e06b'; g.strokeStyle = '#0b3a1a'; g.lineWidth = 1.2; for (const q of buyers) { g.beginPath(); g.arc(mpx(q.b.cx), mpx(q.b.cz), 3.2, 0, 7); g.fill(); g.stroke(); }
+  o.mini = g => { g.fillStyle = '#35e06b'; g.strokeStyle = '#0b3a1a'; g.lineWidth = 1.2; for (const q of buyers) { if (!live(q)) continue; g.beginPath(); g.arc(mpx(q.b.cx), mpx(q.b.cz), 3.2, 0, 7); g.fill(); g.stroke(); }
     g.fillStyle = '#1b1d22'; g.strokeStyle = '#fff'; g.beginPath(); g.arc(mpx(dx), mpx(dz), 4, 0, 7); g.fill(); g.stroke(); };
   return o;
 })();
@@ -3323,13 +3353,13 @@ addEventListener('keydown', e => {
   if (CM.open) { if (e.code === 'Escape' || (e.code === 'KeyE' && !(e.target && e.target.tagName === 'INPUT'))) CM.close(); return; }
   if (keyMap[e.code]) { keys[keyMap[e.code]] = 1; e.preventDefault(); }
   if (e.code === 'Enter' && state === 'menu') start();
-  if (state === 'play') { if (e.code === 'KeyR') resetCar(); if (e.code === 'KeyB') switchCar(); if (e.code === 'KeyF') toggleFoot(); if (e.code === 'KeyE') doAction(); if (e.code === 'KeyQ') doAction2(); if (e.code === 'Space' && W.on && !e.repeat) jump(); if (e.code === 'KeyV') camMode = (camMode + 1) % 2; if (e.code === 'KeyT') { e.preventDefault(); openChat(); return; } if (e.code === 'KeyN') { document.exitPointerLock && document.exitPointerLock(); keys.up = keys.down = keys.left = keys.right = 0; MP.rename(); } }
+  if (state === 'play') { if (e.code === 'KeyR') resetCar(); if (e.code === 'KeyB') switchCar(); if (e.code === 'KeyH') HORN.honk(); if (e.code === 'KeyF') toggleFoot(); if (e.code === 'KeyE') doAction(); if (e.code === 'KeyQ') doAction2(); if (e.code === 'Space' && W.on && !e.repeat) jump(); if (e.code === 'KeyV') camMode = (camMode + 1) % 2; if (e.code === 'KeyT') { e.preventDefault(); openChat(); return; } if (e.code === 'KeyN') { document.exitPointerLock && document.exitPointerLock(); keys.up = keys.down = keys.left = keys.right = 0; MP.rename(); } }
 });
 addEventListener('keyup', e => { if (keyMap[e.code]) keys[keyMap[e.code]] = 0; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = 0; });
 document.querySelectorAll('.tb').forEach(b => {
   const k = b.dataset.key;
-  const down = e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (_) {} b.classList.add('on'); if (k === 'reset') resetCar(); else if (k === 'car') switchCar(); else if (k === 'out') toggleFoot(); else if (k === 'act') doAction(); else if (k === 'act2') doAction2(); else if (k === 'jump') jump(); else if (k === 'cam') camMode = (camMode + 1) % 2; else keys[k] = 1; };
+  const down = e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (_) {} b.classList.add('on'); if (k === 'reset') resetCar(); else if (k === 'car') switchCar(); else if (k === 'horn') HORN.honk(); else if (k === 'out') toggleFoot(); else if (k === 'act') doAction(); else if (k === 'act2') doAction2(); else if (k === 'jump') jump(); else if (k === 'cam') camMode = (camMode + 1) % 2; else keys[k] = 1; };
   const up = e => { e.preventDefault(); b.classList.remove('on'); if (keys[k] !== undefined) keys[k] = 0; };
   b.addEventListener('pointerdown', down); b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
   b.addEventListener('contextmenu', e => e.preventDefault());
@@ -4492,11 +4522,16 @@ const MP = (() => {
   let name = ''; try { name = localStorage.getItem('pd_name') || ''; } catch (_) {}
   if (!name) { name = 'Driver ' + (1000 + Math.floor(Math.random() * 9000)); try { localStorage.setItem('pd_name', name); } catch (_) {} }
   o.name = () => name;
-  o.rename = () => { const n = (prompt('Your name (shown above you to other players)', name) || '').trim().slice(0, 20); if (n) { name = n; try { localStorage.setItem('pd_name', n); } catch (_) {} hud(); } };
+  o.rename = () => { const n = (prompt('Your name (shown above you to other players)', name) || '').trim().slice(0, 20); if (n) { name = n; try { localStorage.setItem('pd_name', n); } catch (_) {} hud(); send({ t: 'me', n }); } };
   const TOPS = [0x2c4f7c, 0xa3161a, 0x2f7d32, 0xe36f1c, 0x6c2a8a, 0x1f7f8a, 0x8a6d1f, 0x444a52];
-  const label = txt => { const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d'); g.font = 'bold 30px system-ui,sans-serif'; const w = Math.min(248, g.measureText(txt).width + 24);
-    g.fillStyle = 'rgba(0,0,0,.55)'; g.beginPath(); g.roundRect ? g.roundRect(128 - w / 2, 8, w, 46, 14) : g.rect(128 - w / 2, 8, w, 46); g.fill(); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, 128, 32);
-    const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false, transparent: true })); s.scale.set(2.4, 0.6, 1); s.renderOrder = 5; return s; };
+  const label = (txt, sub, it) => { const c = document.createElement('canvas'); c.width = 256; c.height = 96; const g = c.getContext('2d'); if (it) txt = '🏷️ IT · ' + txt;
+    g.font = 'bold 30px system-ui,sans-serif'; let w = g.measureText(txt).width; g.font = '600 19px system-ui,sans-serif'; if (sub) w = Math.max(w, g.measureText(sub).width); w = Math.min(248, w + 24); const h = sub ? 72 : 46;
+    g.fillStyle = it ? 'rgba(200,16,30,.85)' : 'rgba(0,0,0,.55)'; g.beginPath(); g.roundRect ? g.roundRect(128 - w / 2, 96 - h - 6, w, h, 14) : g.rect(128 - w / 2, 96 - h - 6, w, h); g.fill(); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = 'bold 30px system-ui,sans-serif'; g.fillText(txt, 128, 96 - h - 6 + 24, 240); if (sub) { g.font = '600 19px system-ui,sans-serif'; g.fillStyle = 'rgba(255,255,255,.8)'; g.fillText(sub, 128, 96 - 6 - 15, 240); }
+    const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false, transparent: true })); s.scale.set(2.4, 0.9, 1); s.center.set(0.5, 0.17); s.renderOrder = 5; return s; };
+  const setLabel = P => { const ce = cvEntry(P.cv), car = ce ? CAT_BY[ce.id].name : '', it = TAG.itId() === P.id, key = P.n + '|' + car + '|' + it; if (P.labKey === key) return; P.labKey = key;
+    const vis = P.lab ? P.lab.visible : false, pos = P.lab ? P.lab.position.clone() : null; if (P.lab) { o.g.remove(P.lab); P.lab.material.map.dispose(); P.lab.material.dispose(); } P.lab = label(P.n, car, it); if (pos) P.lab.position.copy(pos); P.lab.visible = vis; o.g.add(P.lab); };
+  o.relabel = () => { for (const P of o.peers.values()) setLabel(P); };
   const hash = s => { let h = 0; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) | 0; return Math.abs(h); };
   function hud() { const e = $('online'); if (!e) return; e.textContent = (o.ws && o.ws.readyState === 1 ? '🟢 ' : '⚪ ') + o.online + ' online · ' + name; }
   o.hud = hud;
@@ -4510,9 +4545,9 @@ const MP = (() => {
   function onState(d) {
     let P = o.peers.get(d.id); const isNew = !P; if (!P) P = makePeer(d.id);
     P.s = d; P.seen = performance.now();
-    if (d.n !== P.n) { P.n = d.n || 'Player'; if (P.lab) o.g.remove(P.lab); P.lab = label(P.n); o.g.add(P.lab); if (isNew) toast('🚗 ' + P.n + ' joined'); }
+    if (d.n !== P.n) { P.n = d.n || 'Player'; if (isNew) toast('🚗 ' + P.n + ' joined'); }
     if (d.k !== P.k || d.c !== P.c || d.cv !== P.cv || (P.wr && !d.w) || (d.g !== P.g && P.g != null)) { P.dnC = 0; if (P.car) o.g.remove(P.car.grp); P.k = d.k; P.c = d.c; P.cv = d.cv; P.wr = 0; { const ce = cvEntry(d.cv); P.car = ce ? makeCar(ce) : (d.k ? createCar2 : createCar)(paintChoices[d.c] || paintChoices[0]); } o.g.add(P.car.grp); P.fresh = true; }
-    P.g = d.g;
+    P.g = d.g; setLabel(P);
     if (d.dn && d.dc > (P.dnC || 0)) { P.car.grp.position.set(d.x, d.y, d.z); P.car.grp.rotation.set(0, d.h, 0);
       for (let i = Math.max(0, d.dn.length - (d.dc - (P.dnC || 0))); i < d.dn.length; i++) { const q = d.dn[i], [ox, oz] = toW(d.h, q[0], q[2]), [ix, iz] = toW(d.h, q[3], q[4]); damageModel(P.car.grp, d.x + ox, d.y + q[1], d.z + oz, ix, iz, q[5]); } P.dnC = d.dc; }
     if (d.w && !P.wr) { P.wr = 1; if (P.fresh) P.car.grp.traverse(m => { if (m.isMesh) { if (m.userData.glass) m.visible = false; else m.material = charMat; } }); else explodeCar({ car: P.car, x: d.x, y: d.y, z: d.z }); }
@@ -4523,15 +4558,17 @@ const MP = (() => {
     if (!/^https?:$/.test(location.protocol) || window.__noMP) return;
     let ws; try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'); } catch (_) { return retry(); }
     o.ws = ws;
-    ws.onopen = () => { o.tries = 0; lbSent = ''; hud(); setTimeout(sendScore, 1500); SAVE.onOpen(); };
+    ws.onopen = () => { o.tries = 0; lbSent = ''; hud(); setTimeout(sendScore, 1500); send({ t: 'me', n: name }); SAVE.onOpen(); };
     ws.onmessage = e => { let d; try { d = JSON.parse(e.data); } catch (_) { return; }
-      if (d.t === 'hi') { o.id = d.id; for (const id of [...o.peers.keys()]) dropPeer(id, true); for (const s of d.players) if (s.id !== o.id) onState(s); if (d.world) onWorld(d.world); if (d.npc) NPC.onNet(Object.assign({ a: 'state' }, d.npc), null); if (d.wc) WC.load(d.wc); KITCHEN.load(d.kit); POOL.load(d.pool); PUB.load(d.darts); hud(); }
+      if (d.t === 'hi') { o.id = d.id; if (d.trade) DRUGS.onNet({ s: d.trade, now: d.now }); TAG.onNet({ s: d.tag || null, now: d.now, hi: 1 }); for (const id of [...o.peers.keys()]) dropPeer(id, true); for (const s of d.players) if (s.id !== o.id) onState(s); if (d.world) onWorld(d.world); if (d.npc) NPC.onNet(Object.assign({ a: 'state' }, d.npc), null); if (d.wc) WC.load(d.wc); KITCHEN.load(d.kit); POOL.load(d.pool); PUB.load(d.darts); hud(); }
       else if (d.t === 'ev') onEv(d);
       else if (d.t === 's' && d.id !== o.id) onState(d);
       else if (d.t === 'bye') dropPeer(d.id);
       else if (d.t === 'chat') onChat(d);
       else if (d.t === 'lb') o.onLB(d);
-      else if (d.t === 'prof' || d.t === 'saved' || d.t === 'peek') SAVE.onNet(d); };
+      else if (d.t === 'prof' || d.t === 'saved' || d.t === 'peek') SAVE.onNet(d);
+      else if (d.t === 'trade') DRUGS.onNet(d);
+      else if (d.t === 'tag') TAG.onNet(d); };
     ws.onclose = () => { o.ws = null; for (const id of [...o.peers.keys()]) dropPeer(id, true); o.online = 1; hud(); retry(); };
     ws.onerror = () => { try { ws.close(); } catch (_) {} };
   }
@@ -4555,6 +4592,7 @@ const MP = (() => {
     g.beginPath(); g.moveTo(244, H2 + 3); g.lineTo(256, H2 + 18); g.lineTo(268, H2 + 3); g.fill(); g.fillStyle = '#111'; g.textAlign = 'center'; lines.forEach((l, i) => g.fillText(l, 256, 38 + i * 34));
     const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false, transparent: true })); s.scale.set(2.6, 0.65, 1); s.renderOrder = 6; return s; };
   o.say = m => { m = (m || '').trim().slice(0, 140); if (!m) return; if (o.ws && o.ws.readyState === 1) send({ t: 'chat', n: name, m }); else toast('💬 ' + name + ': ' + m + ' (offline)'); };
+  o.bubble = bubble;
   function onChat(d) { toast('💬 ' + d.n + ': ' + d.m); const P = o.peers.get(d.id); if (P) { if (P.bub) o.g.remove(P.bub); P.bub = bubble(d.m); P.bubT = 7; o.g.add(P.bub); } }
   // ---- leaderboard: best money and best drift, kept on the server
   o.lb = null; let lbSent = '';
@@ -4568,7 +4606,7 @@ const MP = (() => {
        <div style="flex:1;min-width:200px"><b>🏁 Fastest lap</b><table>${(L.race || []).map((r, i) => row(r, i, Math.floor(r.race / 60) + ':' + (r.race % 60 < 10 ? '0' : '') + (r.race % 60).toFixed(2))).join('') || '<tr><td style="opacity:.6">No one yet</td></tr>'}</table></div></div>`); }
   o.showLB = () => { const p = $('lbPanel'); if (p.style.display === 'block') { p.style.display = 'none'; return; } sendScore(); renderLB(); p.style.display = 'block'; };
   o.onLB = d => { o.lb = d; if ($('lbPanel').style.display === 'block') renderLB(); };
-  o.stepBubbles = dt => { for (const P of o.peers.values()) if (P.bub) { P.bubT -= dt; const hd = P.lab ? P.lab.position : null; if (hd) P.bub.position.set(hd.x, hd.y + 0.55, hd.z); P.bub.visible = !!(P.lab && P.lab.visible); if (P.bubT <= 0) { o.g.remove(P.bub); P.bub = null; } } };
+  o.stepBubbles = dt => { for (const P of o.peers.values()) if (P.bub) { P.bubT -= dt; const hd = P.lab ? P.lab.position : null; if (hd) P.bub.position.set(hd.x, hd.y + 1.15, hd.z); P.bub.visible = !!(P.lab && P.lab.visible); if (P.bubT <= 0) { o.g.remove(P.bub); P.bub = null; } } };
   o.wcEv = e => send(Object.assign({ t: 'ev', e: 'wc' }, e));
   o.tuckEv = e => send(Object.assign({ t: 'ev', e: 'tuck' }, e));
   o.kitEv = e => send(Object.assign({ t: 'ev', e: 'kit' }, e));
@@ -4582,6 +4620,7 @@ const MP = (() => {
   const posePark = (c, x, z, yaw, final) => { if (!c.dyn) wakeCar(c); c.touched = false; c.sentFinal = true; c.tx = x; c.tz = z; c.tyaw = yaw; c.rT = performance.now(); if (final) { c.x = x; c.z = z; c.yaw = yaw; c.rT = performance.now() - 1400; } };
   function onWorld(list) { for (const w of list) { const c = carByKey(w.k, w.x, w.z, w.y, w.col); if (!c) continue; if (w.p) posePark(c, w.p[0], w.p[1], w.p[2], true); if (w.d) for (const d of w.d) applyParkedDent(c, d); } }
   function onEv(d) {
+    if (d.e === 'horn') { HORN.onNet(d); return; }
     if (d.e === 'wc') { WC.onNet(d); return; }
     if (d.e === 'tuck') { TUCKSHOP.onNet(d); return; }
     if (d.e === 'kit') { KITCHEN.onNet(d); return; }
@@ -4656,6 +4695,7 @@ const MP = (() => {
         if (!W.on || W.fly) for (const [ax, az] of carCircles({ x: player.x, z: player.z, yaw: player.h })) for (const [bx, bz] of rc) {
           const dx = ax - bx, dz = az - bz, dd = Math.hypot(dx, dz), R = 2 * CR; if (dd >= R || dd < 1e-4 || Math.abs(player.y - P.y) > 1.5) continue;
           const nx = dx / dd, nz = dz / dd, ov = R - dd; player.x += nx * ov; player.z += nz * ov;
+          if (!W.on && (d.m || 0) === 0 && TAG.isIt()) TAG.pass(P.id);
           const vn = player.vx * nx + player.vz * nz; if (vn < 0) { player.vx -= vn * nx * 1.5; player.vz -= vn * nz * 1.5;
             if (-vn > 2 && (P.hitT || 0) < now - 250) { P.hitT = now; const cx = bx + nx * CR, cz = bz + nz * CR; send({ t: 'ev', e: 'hitp', to: P.id, cx: r2(cx), cz: r2(cz), nx: r2(nx), nz: r2(nz), j: r2(-vn * 0.7), s: r2(-vn) }); if (-vn > 4) damageModel(player.car.grp, cx, 0.62 + player.y, cz, nx, nz, -vn * 0.8); }
             if (-vn > 3) { thud(60, Math.min(0.4, -vn * 0.03)); shake = Math.max(shake, Math.min(0.8, -vn * 0.05)); spray((ax + bx) / 2, 0.6, (az + bz) / 2, nx * 0.3, nz * 0.3, -vn, c.paint || shardMat, -vn > 7); } } }
@@ -4733,6 +4773,67 @@ const SAVE = (() => {
   return o;
 })();
 $('saveBtn').addEventListener('click', e => { e.stopPropagation(); SAVE.open(); });
+// ===== tag: one player is IT and passes it on by bumping another car; the room keeps score, least time as IT wins =====
+const TAG = (() => {
+  const o = {}; let T = null, skew = 0, endSent = 0, passT = 0, hudKey = '';
+  const hud = document.createElement('div'); hud.id = 'tagHud'; document.body.appendChild(hud);
+  const send = d => { if (MP.ws && MP.ws.readyState === 1) { try { MP.ws.send(JSON.stringify(d)); return true; } catch (_) {} } return false; };
+  const now = () => Date.now() + skew, nameOf = id => id === MP.id ? 'You' : (MP.peers.get(id) || {}).n || (T && T.p && T.p[id] && T.p[id].n) || 'Someone';
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const clock = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  o.itId = () => (T && T.on ? T.it : null);
+  o.isIt = () => !!(T && T.on && T.it === MP.id);
+  o.onNet = d => {
+    if (d.err) { toast('🏷️ ' + d.err); return; }
+    if (d.now) skew = d.now - Date.now();
+    const prev = T; T = d.s || null;
+    if (!d.hi && T && T.on && !(prev && prev.on)) { toast('🏷️ ' + T.by + ' started a game of TAG! ' + (T.it === MP.id ? 'YOU are IT: bump another car!' : nameOf(T.it) + ' is IT. Keep away!')); beep(990, 0.12); }
+    else if (T && T.on && prev && prev.on && prev.it !== T.it) {
+      if (T.it === MP.id) { toast('🏷️ ' + (T.from || 'Someone') + ' tagged you: YOU are IT!'); beep(520, 0.15); setTimeout(() => beep(390, 0.2), 150); }
+      else if (prev.it === MP.id) { toast('🏷️ You tagged ' + nameOf(T.it) + '! Now get away!'); beep(1200, 0.08); }
+      else toast('🏷️ ' + nameOf(T.it) + ' is IT now');
+    }
+    if (T && !T.on && T.res && prev && prev.on) { const w = T.res[0]; toast('🏆 Tag over! ' + (w ? (w.id === MP.id ? 'You win' : esc(w.n) + ' wins') + ' with ' + w.s + ' s as IT' : '')); if (!CM.open) o.open(); }
+    MP.relabel(); if (CM.open === 'tag') o.open();
+  };
+  o.pass = id => { const t = performance.now(); if (!o.isIt() || t - passT < 800 || now() - T.last < 2500) return; passT = t; send({ t: 'tag', a: 'pass', to: id }); };
+  o.step = () => {
+    let txt = '', cls = '';
+    if (T && T.on && state === 'play') {
+      const left = T.ends - now(), mine = T.p && T.p[MP.id] ? T.p[MP.id].s + (T.it === MP.id ? now() - T.since : 0) : 0;
+      if (left <= 0) { if (Date.now() - endSent > 3000) { endSent = Date.now(); send({ t: 'tag', a: 'end' }); } }
+      if (T.it === MP.id) { txt = '🏷️ YOU’RE IT! Bump another car · ' + clock(left); cls = 'it'; }
+      else { const P = MP.peers.get(T.it), f = follow(), dist = P ? Math.round(Math.hypot(P.x - f.x, P.z - f.z)) : null; txt = '🏷️ ' + esc(nameOf(T.it)) + ' is IT' + (dist != null ? ' · ' + dist + ' m away' : '') + ' · ' + clock(left); }
+      txt += '<small>your time as IT: ' + Math.round(mine / 1000) + ' s</small>';
+    }
+    const k = txt + cls; if (k !== hudKey) { hudKey = k; hud.innerHTML = txt; hud.className = cls; hud.style.display = txt ? 'block' : 'none'; }
+  };
+  function act(a) { if (a === 'start') { if (!send({ t: 'tag', a: 'start' })) toast('You need to be online to play tag.'); CM.close(); } }
+  o.open = () => {
+    document.exitPointerLock && document.exitPointerLock();
+    const rows = list => list.map((r, i) => `<div class="cmRow" style="cursor:default"><b style="width:22px">${i + 1}.</b><span class="cmName">${esc(r.id === MP.id ? 'You' : r.n)}</span><span>${r.s.toFixed(1)} s as IT</span></div>`).join('');
+    let body;
+    if (T && T.on) { const t = now(), live = Object.entries(T.p).map(([id, q]) => ({ id, n: q.n, s: (q.s + (id === T.it ? t - T.since : 0)) / 1000 })).sort((a, b) => a.s - b.s);
+      body = `<div style="margin:6px 0">${esc(nameOf(T.it))} ${T.it === MP.id ? 'are' : 'is'} IT · ${clock(T.ends - t)} left</div>${rows(live)}`; }
+    else body = `<div class="cmSmall" style="margin:6px 0 10px">Everyone online plays. One car is IT: bump another car to pass it on (no tag-backs for 2.5 s). The IT car shows red on the minimap. After 3 minutes, whoever spent the least time as IT wins.</div>
+      <button class="cmBtn" data-a="start">Start a game of tag</button>${T && T.res && T.res.length ? '<div style="margin-top:12px"><b>Last game</b></div>' + rows(T.res) : ''}`;
+    CM.openExt('tag', `<div class="cmHead"><h3>🏷️ Tag</h3><button class="cmX" data-a="close">✕</button></div>${body}`, act);
+  };
+  return o;
+})();
+$('tagBtn').addEventListener('click', e => { e.stopPropagation(); TAG.open(); });
+// ===== horn: H (or the 📯 button) honks, and players nearby hear it =====
+const HORN = (() => {
+  const o = {}; let last = 0;
+  const play = (pitch, vol) => { if (!actx || vol < 0.005) return; const t0 = actx.currentTime, g = actx.createGain(), f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1800;
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol, t0 + 0.02); g.gain.setValueAtTime(vol, t0 + 0.36); g.gain.linearRampToValueAtTime(0, t0 + 0.42); f.connect(g); g.connect(actx.destination);
+    for (const hz of [370, 465]) { const os = actx.createOscillator(); os.type = 'square'; os.frequency.value = hz * pitch; os.connect(f); os.start(t0); os.stop(t0 + 0.45); } };
+  o.honk = () => { if (state !== 'play' || W.on || CM.open) return; const t = performance.now(); if (t - last < 600) return; last = t;
+    const p = clamp((player.spec && player.spec.snd) || 1, 0.75, 1.5); play(p, 0.09); if (MP.ws && MP.ws.readyState === 1) { try { MP.ws.send(JSON.stringify({ t: 'ev', e: 'horn', p })); } catch (_) {} } };
+  o.onNet = d => { const P = MP.peers.get(d.id); if (!P) return; const dist = Math.hypot(P.x - camera.position.x, P.z - camera.position.z); play(clamp(+d.p || 1, 0.75, 1.5), 0.1 * Math.max(0, 1 - dist / 150));
+    if (dist < 150) { if (P.bub) MP.g.remove(P.bub); P.bub = MP.bubble('📯 HONK!'); P.bubT = 1.5; MP.g.add(P.bub); } };
+  return o;
+})();
 $('lbPanel').addEventListener('click', e => { e.stopPropagation(); $('lbPanel').style.display = 'none'; });
 $('online').addEventListener('click', e => { e.stopPropagation(); MP.rename(); }); $('online').addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
 /* ================= camera / HUD ================= */
@@ -4788,7 +4889,7 @@ function drawMinimap() {
   { const c = RACE.next(); if (c) { mctx.fillStyle = '#ffd400'; mctx.strokeStyle = '#000'; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.arc(mpx(c.x), mpx(c.z), 5, 0, 7); mctx.fill(); mctx.stroke(); } }
   mctx.font = 'bold 10px system-ui'; mctx.textAlign = 'center'; mctx.textBaseline = 'middle'; mctx.fillStyle = '#1f5c3a'; mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.arc(mpx(-25), mpx(-20), 6, 0, 7); mctx.fill(); mctx.stroke(); mctx.fillStyle = '#fff'; mctx.fillText('£', mpx(-25), mpx(-20) + 0.5);
   DRUGS.mini(mctx);
-  for (const P of MP.peers.values()) { const d = P.s; if (!d) continue; const on = d.m && d.f, x = on ? d.f[0] : d.x, z = on ? d.f[2] : d.z; mctx.fillStyle = '#3cc8ff'; mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.2; mctx.beginPath(); mctx.arc(mpx(x), mpx(z), 3.6, 0, 7); mctx.fill(); mctx.stroke(); }
+  for (const P of MP.peers.values()) { const d = P.s; if (!d) continue; const on = d.m && d.f, x = on ? d.f[0] : d.x, z = on ? d.f[2] : d.z; const isIt = TAG.itId() === P.id; mctx.fillStyle = isIt ? '#ff2a3a' : '#3cc8ff'; mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.2; mctx.beginPath(); mctx.arc(mpx(x), mpx(z), isIt ? 5 : 3.6, 0, 7); mctx.fill(); mctx.stroke(); }
   mctx.save(); mctx.translate(mpx(follow().x), mpx(follow().z)); mctx.rotate(-follow().h);
   mctx.fillStyle = '#ff5a3c'; mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.moveTo(0, -6); mctx.lineTo(4.5, 5); mctx.lineTo(-4.5, 5); mctx.closePath(); mctx.fill(); mctx.stroke(); mctx.restore();
 }
@@ -4799,7 +4900,7 @@ let last = performance.now(), hudT = 0, skidAccInit = 0, frameN = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
-  if (RACE.frozen()) { player.vx = player.vz = 0; } stepPlayer(dt); if (W.on) stepWalker(dt); MP.step(dt); RACE.step(dt); NPC.step(dt); WC.step(dt); TUCKSHOP.step(dt); KITCHEN.step(dt); POOL.step(dt); PUB.step(dt); updateWork(dt); updateTills(dt); stepCars(dt); DRUGS.step(dt); CM.step(dt); CM.PV.step(dt); stepFX(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
+  if (RACE.frozen()) { player.vx = player.vz = 0; } stepPlayer(dt); if (W.on) stepWalker(dt); MP.step(dt); RACE.step(dt); NPC.step(dt); WC.step(dt); TUCKSHOP.step(dt); KITCHEN.step(dt); POOL.step(dt); PUB.step(dt); updateWork(dt); updateTills(dt); stepCars(dt); DRUGS.step(dt); TAG.step(dt); CM.step(dt); CM.PV.step(dt); stepFX(dt); updateParts(dt); stepCamera(dt); if (W.on) updateAim(); else if (aimT !== null || $('tAct').classList.contains('show')) updateAim();
   { const f = follow(); sun.position.set(f.x + SUN.x * 220, SUN.y * 220, f.z + SUN.z * 220); sun.target.position.set(f.x, 0, f.z); } sun.target.updateMatrixWorld();
   sky.position.copy(camera.position); clouds.position.set(camera.position.x, 0, camera.position.z);
   hudT -= dt;

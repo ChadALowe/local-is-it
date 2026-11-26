@@ -20,6 +20,8 @@ with wheels), so they are cheap to draw. Parked cars switch to the full model on
 ~80-triangle low-poly car beyond that.
 
 ## Street trade
+The trade is shared by everyone online: the room on Cloudflare runs the dealer's prices and the customers, so all
+players see the same green houses and race each other to them, and a police raid is announced to everyone.
 A dealer in a grey hoodie hangs about in the footpath underpass under the Droveway (black dot on the minimap).
 Walk up to him and press **E** to buy weed, speed, ecstasy, ketamine or cocaine (prices change every couple of minutes,
 you can carry 30 bags). Houses with a spinning green diamond over the roof (green dots on the minimap) want a set
@@ -31,7 +33,7 @@ Open `index.html` in a browser (it loads three.js from a CDN, so it needs an int
 ## Controls
 - W / S: gas and brake, A / D: steer
 - Space: handbrake, to start a drift
-- B: switch between your cars, E: dealer / garage, V: camera, R: reset
+- B: switch between your cars, H: horn, E: dealer / garage, V: camera, R: reset
 - Touch: on-screen buttons
 
 ## Map data
@@ -45,6 +47,13 @@ and name are saved to the multiplayer room's storage on Cloudflare (`p:<code>`) 
 tab is hidden, and loaded again on connect. **💾 Save** shows the code and lets you enter it on another device to
 carry on there. The room only clears its world keys (parked cars, toilets, fridge, pool, darts) when it empties;
 saves and the leaderboard are never cleared.
+
+## Multiplayer fun
+- **Tag** (🏷️ Tag button): everyone online plays. One car is IT and passes it on by bumping another car (no tag-backs
+  for 2.5 s). The IT car has a red name tag and a red dot on the minimap. After 3 minutes, least time as IT wins.
+  The room runs the game, so it can't get out of sync.
+- **Horn**: H (or 📯 on phones). Players nearby hear it, louder the closer they are.
+- **Name tags** show what each player is driving.
 
 ## Multiplayer
 Everyone who opens the link joins one shared session. `worker.js` serves the game and runs a Cloudflare
