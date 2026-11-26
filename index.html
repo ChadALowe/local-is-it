@@ -3061,7 +3061,24 @@ player.spec = carSpec(GAR.cur());
 // ===== the street trade: a dealer in the underpass under the Droveway sells stock; houses marked green want to buy it =====
 const DRUGS = (() => {
   const ITEMS = [['weed', 'Weed', '🌿', 10], ['speed', 'Speed', '⚡', 14], ['ecstasy', 'Ecstasy', '💊', 18], ['ket', 'Ketamine', '🐴', 30], ['coke', 'Cocaine', '❄️', 45]];   // [id, name, icon, base £]
-  const CAP = 30, BUYERS = 6, o = {};
+  const BUYERS = 6, o = {};
+  // reputation: bags sold over time. Each rank pays more per bag and lets you carry more. Heat: rises with every sale and
+  // cools by about 1 point every 12 s; the hotter you are, the likelier a neighbour calls the police.
+  const RANKS = [[0, 'Nobody', 0, 30], [20, 'Runner', 0.06, 40], [60, 'Dealer', 0.12, 50], [150, 'Plug', 0.2, 65], [400, 'Kingpin', 0.3, 80]];   // [bags, name, pay bonus, carry]
+  let rep = 0, heat = 0; try { rep = +localStorage.getItem('pd_rep') || 0; const h = JSON.parse(localStorage.getItem('pd_heat') || 'null'); if (h) heat = Math.max(0, h.v - (Date.now() - h.t) / 12000); } catch (_) {}
+  const rank = () => { let r = RANKS[0]; for (const q of RANKS) if (rep >= q[0]) r = q; return r; }, CAPf = () => rank()[3];
+  const saveRH = () => { try { localStorage.setItem('pd_rep', String(Math.round(rep))); localStorage.setItem('pd_heat', JSON.stringify({ v: heat, t: Date.now() })); } catch (_) {} };
+  const bustChance = () => clamp(0.02 + heat / 220, 0.02, 0.45);
+  const heatTxt = () => heat < 15 ? ['🟢', 'low'] : heat < 40 ? ['🟡', 'warm'] : heat < 70 ? ['🟠', 'hot'] : ['🔴', 'very hot'];
+  const bonus = () => rank()[2];
+  function afterSale(it, k, pay, bust) {                                // shared by the online and offline sale paths
+    if (bust) { const fine = Math.min(money, 150 + Math.round(heat * 3)); money -= fine; showMoney(); for (const x of ITEMS) stash[x[0]] = 0; save();
+      const r0 = rank()[1]; rep = Math.floor(rep * 0.85); heat = 0; saveRH(); beep(330, 0.4); setTimeout(() => beep(260, 0.5), 300);
+      toast('🚔 A neighbour called the police! They took your whole stash' + (fine ? ' and fined you £' + fine.toFixed(0) : '') + '. Word gets round: reputation down.' + (rank()[1] !== r0 ? ' You’re back to ' + rank()[1] + '.' : '')); return; }
+    const b0 = bonus(), got = Math.round(pay * k * (1 + b0) * 100) / 100, r0 = rank()[1]; money += got; showMoney(); rep += k; heat = Math.min(100, heat + 3 + k * 1.5 + pay * k / 40); saveRH();
+    beep(1400, 0.08); setTimeout(() => beep(2100, 0.1), 110);
+    toast('💷 Sold ' + k + ' × ' + it[1] + ' for £' + got + (b0 ? ' (+' + Math.round(b0 * 100) + '% ' + r0 + ' rate)' : '') + (rank()[1] !== r0 ? '  ⭐ You’re a ' + rank()[1] + ' now: better prices, carry ' + rank()[3] + '.' : ''));
+  }
   let stash = {}; try { stash = JSON.parse(localStorage.getItem('pd_stash')) || {}; } catch (_) {}
   const save = () => { try { localStorage.setItem('pd_stash', JSON.stringify(stash)); } catch (_) {} };
   const held = () => ITEMS.reduce((a, it) => a + (stash[it[0]] || 0), 0);
@@ -3076,7 +3093,7 @@ const DRUGS = (() => {
   for (const sx of [-0.2, 0.2]) add(new THREE.CylinderGeometry(0.06, 0.055, 0.55, 8), hood, sx, 1.13, -0.06).rotation.x = -0.5;   // hands in the hoodie pocket
   fig.position.set(dx, dy, dz); fig.rotation.y = Math.atan2(-(cx0 - dx), -(cz0 - dz)); scene.add(fig); addCircle(dx, dz, 0.3);
   // prices move every couple of minutes
-  let mkt = {}, mktT = 0;
+  let mkt = {}, mktT = 0, rhT = 0;
   const roll = () => { for (const [id, , , b] of ITEMS) mkt[id] = Math.max(1, Math.round(b * (0.7 + Math.random() * 0.6))); };
   roll();
   // customers: ordinary houses within reach of the underpass
@@ -3090,10 +3107,7 @@ const DRUGS = (() => {
     if (d.a === 'res') { if (!pending || pending.b !== d.b) return; const q = pending; pending = null; CM.close();
       if (!d.k) { toast('Too slow: someone else got there first.'); return; }
       const it = ITEMS[d.it], k = d.k; stash[it[0]] = Math.max(0, (stash[it[0]] || 0) - k); save();
-      if (d.bust) { const fine = Math.min(money, 150); money -= fine; showMoney(); for (const x of ITEMS) stash[x[0]] = 0; save(); beep(330, 0.4); setTimeout(() => beep(260, 0.5), 300);
-        toast('🚔 A neighbour called the police! They took your whole stash' + (fine ? ' and fined you £' + fine.toFixed(0) : '') + '.'); }
-      else { const got = d.pay * k; money += got; showMoney(); beep(1400, 0.08); setTimeout(() => beep(2100, 0.1), 110); toast('💷 Sold ' + k + ' × ' + it[1] + ' for £' + got); }
-      return; }
+      afterSale(it, k, d.pay, d.bust); return; }
     if (!d.s) return;
     if (!net) { for (const q of buyers) scene.remove(q.m); buyers.length = 0; respawn = []; net = true; }
     const T = d.s; ITEMS.forEach(([id], i) => { if (T.mkt && T.mkt[i]) mkt[id] = T.mkt[i]; });
@@ -3125,32 +3139,30 @@ const DRUGS = (() => {
     return null;
   };
   const fmt = v => '£' + v.toFixed(0);
-  const stashLine = () => { const h = ITEMS.filter(it => stash[it[0]]).map(it => it[2] + ' ' + stash[it[0]]).join('  '); return `<div class="cmSmall">You have <b class="cmMoney">£${money.toFixed(2)}</b> · carrying ${held()}/${CAP}${h ? ': ' + h : ''}</div>`; };
+  const stashLine = () => { const h = ITEMS.filter(it => stash[it[0]]).map(it => it[2] + ' ' + stash[it[0]]).join('  '); return `<div class="cmSmall">You have <b class="cmMoney">£${money.toFixed(2)}</b> · carrying ${held()}/${CAPf()}${h ? ': ' + h : ''}</div><div class="cmSmall">⭐ ${rank()[1]}${bonus() ? ' (+' + Math.round(bonus() * 100) + '% pay)' : ''} · ${Math.round(rep)} sold${(() => { const nx = RANKS.find(q => q[0] > rep); return nx ? ', ' + (nx[0] - Math.round(rep)) + ' to ' + nx[1] : ''; })()} · ${heatTxt()[0]} police heat: ${heatTxt()[1]} (${Math.round(bustChance() * 100)}% raid risk)</div>`; };
   function openDealer() {
     if (net && MP.ws && MP.ws.readyState === 1 && srvNow() - lastSync > 15000) { lastSync = srvNow(); MP.ws.send(JSON.stringify({ t: 'trade', a: 'sync' })); }
     const rows = ITEMS.map(([id, n, ic]) => `<div class="cmRow" style="cursor:default"><span style="font-size:18px">${ic}</span><span class="cmName"><b>${n}</b><br><span class="cmSmall">${fmt(mkt[id])} a bag · you have ${stash[id] || 0}</span></span>
-      <button class="cmBtn alt" data-a="buy" data-v="${id}|1" ${money < mkt[id] || held() >= CAP ? 'disabled' : ''}>Buy 1</button><button class="cmBtn alt" data-a="buy" data-v="${id}|5" ${money < mkt[id] * 5 || held() + 5 > CAP ? 'disabled' : ''}>Buy 5</button></div>`).join('');
+      <button class="cmBtn alt" data-a="buy" data-v="${id}|1" ${money < mkt[id] || held() >= CAPf() ? 'disabled' : ''}>Buy 1</button><button class="cmBtn alt" data-a="buy" data-v="${id}|5" ${money < mkt[id] * 5 || held() + 5 > CAPf() ? 'disabled' : ''}>Buy 5</button></div>`).join('');
     CM.openExt('dealer2', `<div class="cmHead"><h3>🧥 The underpass</h3><button class="cmX" data-a="close">✕</button></div><div class="cmSmall" style="margin:2px 0 6px">“What you after?” Prices change every couple of minutes. Green diamonds over houses are your customers.</div>${stashLine()}${rows}<div style="margin-top:8px"><button class="cmBtn alt" data-a="close">Leave</button></div>`, act);
   }
   function openBuyer(q) {
     const have = stash[q.it[0]] || 0, k = Math.min(have, q.n);
-    CM.openExt('buyer', `<div class="cmHead"><h3>🏠 Knock knock</h3><button class="cmX" data-a="close">✕</button></div><div style="margin:6px 0">They want <b>${q.n} × ${q.it[2]} ${q.it[1]}</b> and pay <b>${fmt(q.pay)}</b> a bag (${fmt(q.pay * q.n)} for the lot).</div>${stashLine()}
-      <div style="margin-top:8px">${k ? `<button class="cmBtn" data-a="sell" data-v="${buyers.indexOf(q)}">Sell ${k} for ${fmt(q.pay * k)}</button>` : `<span class="cmSmall">You haven’t got any ${q.it[1]}. The dealer’s in the underpass under the Droveway.</span>`} <button class="cmBtn alt" data-a="close">Leave</button></div>`, act);
+    CM.openExt('buyer', `<div class="cmHead"><h3>🏠 Knock knock</h3><button class="cmX" data-a="close">✕</button></div><div style="margin:6px 0">They want <b>${q.n} × ${q.it[2]} ${q.it[1]}</b> and pay <b>${fmt(q.pay * (1 + bonus()))}</b> a bag (${fmt(q.pay * q.n * (1 + bonus()))} for the lot).</div>${stashLine()}
+      <div style="margin-top:8px">${k ? `<button class="cmBtn" data-a="sell" data-v="${buyers.indexOf(q)}">Sell ${k} for ${fmt(q.pay * k * (1 + bonus()))}</button>` : `<span class="cmSmall">You haven’t got any ${q.it[1]}. The dealer’s in the underpass under the Droveway.</span>`} <button class="cmBtn alt" data-a="close">Leave</button></div>`, act);
   }
   function act(a, v) {
-    if (a === 'buy') { const [id, nS] = v.split('|'), n = +nS, c = mkt[id] * n; if (money < c || held() + n > CAP) return; money -= c; showMoney(); stash[id] = (stash[id] || 0) + n; save(); beep(900, 0.05); openDealer(); return; }
+    if (a === 'buy') { const [id, nS] = v.split('|'), n = +nS, c = mkt[id] * n; if (money < c || held() + n > CAPf()) return; money -= c; showMoney(); stash[id] = (stash[id] || 0) + n; save(); beep(900, 0.05); openDealer(); return; }
     if (a === 'sell' && net) { const q = buyers[+v]; if (!q || pending) return; const k = Math.min(stash[q.it[0]] || 0, q.n); if (!k) return;
       if (!(MP.ws && MP.ws.readyState === 1)) { toast('You’re offline: try again in a moment.'); return; }
-      pending = { b: q.id }; MP.ws.send(JSON.stringify({ t: 'trade', a: 'sell', b: q.id, k, n: MP.name() })); setTimeout(() => { if (pending && pending.b === q.id) pending = null; }, 6000); return; }
+      pending = { b: q.id }; MP.ws.send(JSON.stringify({ t: 'trade', a: 'sell', b: q.id, k, n: MP.name(), r: Math.round(bustChance() * 1000) / 1000 })); setTimeout(() => { if (pending && pending.b === q.id) pending = null; }, 6000); return; }
     if (a === 'sell') { const q = buyers[+v]; if (!q) return; const id = q.it[0], k = Math.min(stash[id] || 0, q.n); if (!k) return;
       stash[id] -= k; q.n -= k; save(); CM.close();
-      if (Math.random() < 0.06) {                                            // a neighbour saw it all
-        const fine = Math.min(money, 150); money -= fine; showMoney(); for (const it of ITEMS) stash[it[0]] = 0; save(); beep(330, 0.4); setTimeout(() => beep(260, 0.5), 300);
-        toast('🚔 A neighbour called the police! They took your whole stash' + (fine ? ' and fined you £' + fine.toFixed(0) : '') + '.'); }
-      else { const got = q.pay * k; money += got; showMoney(); beep(1400, 0.08); setTimeout(() => beep(2100, 0.1), 110); toast('💷 Sold ' + k + ' × ' + q.it[1] + ' for £' + got + (q.n ? ' (' + q.n + ' more wanted)' : '')); }
+      afterSale(q.it, k, q.pay, Math.random() < bustChance());
       if (!q.n) { scene.remove(q.m); buyers.splice(buyers.indexOf(q), 1); respawn.push(20 + Math.random() * 25); } return; }
   }
   o.step = dt => {
+    if (heat > 0) { heat = Math.max(0, heat - dt / 12); if ((rhT += dt) > 10) { rhT = 0; saveRH(); } }
     if ((mktT += dt) > 120) { mktT = 0; roll(); }
     if (!net) for (let i = respawn.length - 1; i >= 0; i--) if ((respawn[i] -= dt) <= 0) { respawn.splice(i, 1); newBuyer(); }
     const t = performance.now() / 1000; for (const q of buyers) { q.m.rotation.y = t * 1.5; q.m.position.y = q.b.h + 3.2 + Math.sin(t * 2 + q.b.cx) * 0.25; q.m.visible = !INSIDE && live(q); }
@@ -4924,7 +4936,7 @@ $('raceBtn').addEventListener('click', e => { e.stopPropagation(); RACE.openPane
 $('lbBtn').addEventListener('click', e => { e.stopPropagation(); document.exitPointerLock && document.exitPointerLock(); MP.showLB(); });
 // ===== cloud saves: progress is kept in the Cloudflare room under a secret save code, so it survives a cleared browser and moves between devices =====
 const SAVE = (() => {
-  const KEYS = ['pd_money', 'pd_cars', 'pd_stash', 'pendefordDriftBest', 'pd_raceBest', 'pd_name'], AB = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', OK = /^[A-HJ-NP-Z2-9]{16}$/;
+  const KEYS = ['pd_money', 'pd_cars', 'pd_stash', 'pendefordDriftBest', 'pd_raceBest', 'pd_name', 'pd_rep', 'pd_heat'], AB = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', OK = /^[A-HJ-NP-Z2-9]{16}$/;
   const get = k => { try { return localStorage.getItem(k); } catch (_) { return null; } }, set = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, String(v)); } catch (_) {} };
   let code = get('pd_key');
   if (!OK.test(code || '')) { const r = new Uint32Array(16); crypto.getRandomValues(r); code = Array.from(r, v => AB[v % 32]).join(''); set('pd_key', code); }

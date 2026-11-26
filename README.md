@@ -26,7 +26,10 @@ A dealer in a grey hoodie hangs about in the footpath underpass under the Drovew
 Walk up to him and press **E** to buy weed, speed, ecstasy, ketamine or cocaine (prices change every couple of minutes,
 you can carry 30 bags). Houses with a spinning green diamond over the roof (green dots on the minimap) want a set
 amount of one thing and pay well over the odds: stop outside and press **E** to sell. Each sale has a small chance a
-neighbour calls the police, who take your whole stash and fine you up to £150. Your stash is kept in this browser.
+neighbour calls the police, who take your whole stash and fine you. Selling builds your reputation (Nobody, Runner,
+Dealer, Plug, Kingpin): each rank pays up to 30% more a bag and lets you carry more. Every sale raises police heat,
+which cools over a few minutes; the hotter you are, the likelier a raid (2-45%), and a raid costs reputation.
+Your stash, rank and heat are saved with your progress.
 
 Open `index.html` in a browser (it loads three.js from a CDN, so it needs an internet connection).
 
