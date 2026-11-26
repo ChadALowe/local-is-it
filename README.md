@@ -13,7 +13,7 @@ On the park edge just up the street from the start (the £ on the minimap) there
 - **Garage**: drive into the TUNING BAY and press **E**. Six upgrades (engine, turbo, brakes, tyres, suspension,
   weight reduction), free resprays in 28 colours and 5 finishes, 8 wheel styles with colours and big-rim option,
   and ride height.
-- **B** switches between the cars you own.
+- **B** switches between the cars you own. Paint can only be changed at the garage.
 
 The dealer cars are built in code from a few side-profile numbers as one low-poly moulded shell (about 1.5k triangles
 with wheels), so they are cheap to draw. Parked cars switch to the full model only within 55 m, and to an
@@ -24,7 +24,7 @@ Open `index.html` in a browser (it loads three.js from a CDN, so it needs an int
 ## Controls
 - W / S: gas and brake, A / D: steer
 - Space: handbrake, to start a drift
-- C: car colour, B: switch between your cars, E: dealer / garage, V: camera, R: reset
+- B: switch between your cars, E: dealer / garage, V: camera, R: reset
 - Touch: on-screen buttons
 
 ## Map data
