@@ -188,6 +188,8 @@ const inLot = (x, z, m = 0) => (x > LOT.x0 - m && x < LOT.x1 + m && z > LOT.z0 -
 // Wobaston Road between the Droveway roundabout and Pendeford Business Park: hedged both sides, wide verges, set-back cycle path, no kerbside pavement
 const HEDGE_RD = new Set([145, 17, 22, 153]), inHedgeRun = (x, z) => x > -520 && x < 300 && z > -430 && z < -380;
 const RBT = { x: 289, z: -400 };                                     // Droveway / Wobaston Road roundabout centre
+const AVENUE_RD = 163, POND = { x: -288, z: -248, rx: 9.5, rz: 13.5 }, SOLAR = { x0: -334, x1: -306, z0: -620, z1: -566 };   // X-shaped office: red block-paved entrance avenue and the pond beside it; solar field west of the factory yard
+const inPond = (x, z, m = 0) => ((x - POND.x) / (POND.rx + m)) ** 2 + ((z - POND.z) / (POND.rz + m)) ** 2 < 1, inSolar = (x, z, m = 0) => x > SOLAR.x0 - m && x < SOLAR.x1 + m && z > SOLAR.z0 - m && z < SOLAR.z1 + m;
 const ENTRY_RD = 440;                                                // block-paved entrance road into the business park
 for (const id of [440, 42]) if (roads[id]) roads[id].w = 6.5;
 // The Droveway carried over the footpath on a bridge (the path drops through an underpass beneath it)
@@ -649,6 +651,19 @@ const UP = [0, 1, 0];
     for (const [i, j, k] of triangulate(a.p)) { const A = a.p[i], B = a.p[j], C = a.p[k]; m.tri([A[0], y, A[1]], [B[0], y, B[1]], [C[0], y, C[1]], [A[0] / 8, A[1] / 8], [B[0] / 8, B[1] / 8], [C[0] / 8, C[1] / 8], UP); }
   }
 }
+// the pond by the X-shaped office (dark water with a stone edge) and the solar field west of the factory yard
+{
+  const wm = mg('pond', stdMat({ color: 0x1b2a27, roughness: 0.25, metalness: 0.1, envMapIntensity: 0.45, side: DS }), false, true), em = mg('pondEdge', stdMat({ color: 0x8d8a80, roughness: 0.9 }), false, true), n = 36;
+  const P = (k, g) => [POND.x + Math.cos(k / n * TAU) * (POND.rx + g), POND.z + Math.sin(k / n * TAU) * (POND.rz + g)];
+  for (let k = 0; k < n; k++) { const a = P(k, 0), b = P(k + 1, 0), a2 = P(k, 0.8), b2 = P(k + 1, 0.8);
+    wm.tri([POND.x, 0.03, POND.z], [b[0], 0.03, b[1]], [a[0], 0.03, a[1]], [0, 0], [1, 0], [0, 1], UP);
+    em.quad([a[0], 0.09, a[1]], [a2[0], 0.09, a2[1]], [b2[0], 0.09, b2[1]], [b[0], 0.09, b[1]], [0, 0], [1, 0], [1, 1], [0, 1], UP); addSeg(a[0], a[1], b[0], b[1]); }
+  const sm = mg('solar', solarMat), fm = mg('solarFrame', stdMat({ color: 0x9aa0a6, roughness: 0.5, metalness: 0.6 })), rows = 7, gap = (SOLAR.x1 - SOLAR.x0) / (rows - 1);
+  for (let i = 0; i < rows; i++) { const x = SOLAR.x0 + i * gap, w = 3.2, lo = 0.8, hi = 2.1;   // panels face south-west: tilted east-west strips on steel legs
+    sm.quad([x - w / 2, lo, SOLAR.z0], [x + w / 2, hi, SOLAR.z0], [x + w / 2, hi, SOLAR.z1], [x - w / 2, lo, SOLAR.z1], [0, 0], [1, 0], [1, 20], [0, 20], [-0.38, 0.92, 0]);
+    for (let z = SOLAR.z0 + 2; z < SOLAR.z1; z += 6) for (const [dx, h] of [[-1.2, lo + 0.15], [1.2, hi - 0.1]]) fm.add(new THREE.BoxGeometry(0.12, h, 0.12), mat4(x + dx, h / 2, z));
+    addSeg(x, SOLAR.z0, x, SOLAR.z1); }
+}
 // road surfaces
 const ROAD_Y = [0.09, 0.09, 0.08, 0.07, 0.065, 0.06, 0.055, 0.055, 0.045, 0.045];
 function roadMiters(p, w) {
@@ -693,7 +708,7 @@ for (const r of roads) {
   const redRd = !r.c && r.p.some(q => Math.hypot(q[0] + 420, q[1] + 165) < 32);        // red-surfaced estate road
   const cycRun = r.c && r.p.some(q => inHedgeRun(q[0], q[1]));
   const bri = BR.ids.has(r.id) || r.id === 172, rp = (r.id === 21 || r.id === 171) ? [] : r.id === 170 ? densify(BR.ch, 2) : bri ? densify(r.p, 1) : r.p;   // the Droveway chain is drawn as one strip (no gaps at the joins)
-  const m = cycRun ? mg('asphalt', asphaltMat, false, true) : r.id === ENTRY_RD ? mg('blockRoad', blockRoadMat, false, true) : redRd ? mg('asphaltRed', redAsphaltMat, false, true) : mg(r.c ? 'path' : 'asphalt', r.c ? pathMat : asphaltMat, false, true), y = r.c ? 0.04 : ROAD_Y[r.k] || 0.05, h = r.w / 2, mt = roadMiters(rp, r.w);
+  const m = cycRun ? mg('asphalt', asphaltMat, false, true) : r.id === AVENUE_RD ? mg('paving', pavingMat, false, true) : r.id === ENTRY_RD ? mg('blockRoad', blockRoadMat, false, true) : redRd ? mg('asphaltRed', redAsphaltMat, false, true) : mg(r.c ? 'path' : 'asphalt', r.c ? pathMat : asphaltMat, false, true), y = r.c ? 0.04 : ROAD_Y[r.k] || 0.05, h = r.w / 2, mt = roadMiters(rp, r.w);
   let s = 0;
   for (let i = 0; i < rp.length - 1; i++) {
     const a = rp[i], b = rp[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]), ya = y + (r.id === 172 && TR.foot(a[0], a[1], 0.5) ? -TR.depth(TR.loc(a[0], a[1]).t) : 0), yb = y + (r.id === 172 && TR.foot(b[0], b[1], 0.5) ? -TR.depth(TR.loc(b[0], b[1]).t) : 0);
@@ -719,6 +734,23 @@ jointGaps(r => !!r.sm, (q, A, B, t0, sw) => {                             // fil
     const P = [q[0] + Math.cos(a0) * r0, y, q[1] + Math.sin(a0) * r0], Q = [q[0] + Math.cos(a1) * r1, y, q[1] + Math.sin(a1) * r1];
     m.tri([q[0], y, q[1]], P, Q, [q[0] / 6, q[1] / 6], [P[0] / 6, P[2] / 6], [Q[0] / 6, Q[2] / 6], UP); }
 });
+// Parking courts at the end of residential service roads: a tarmac rectangle 16 m wide and 13 m deep with marked bays
+// along the back and sides, as in the aerial photos of Pendeford. Only where nothing is in the way.
+const COURTS = [];
+function parkingCourt(r, q, dx, dz) {
+  const W2 = 8, D = 13, nx = -dz, nz = dx, at = (u, v) => [q[0] + dx * u + nx * v, q[1] + dz * u + nz * v];
+  if ((q[0] > -500 && q[0] < -240 && q[1] > -410 && q[1] < -135) || (q[0] > -128 && q[0] < -22 && q[1] > 378 && q[1] < 482) || inLot(q[0], q[1], 20)) return false;
+  for (let u = 1; u <= D + 1; u += 1.5) for (let v = -W2 - 1; v <= W2 + 1; v += 1.5) { const [x, z] = at(u, v);
+    if (inBuilding(x, z) || roadDist(x, z, r.id, false) < 1 || TR.foot(x, z, 2) || Math.abs(x) > LIM - 2 || Math.abs(z) > LIM - 2 || COURTS.some(c => Math.hypot(c.x - x, c.z - z) < 14)) return false; }
+  const y = r.sy, m = r.sm, c4 = [at(0, -W2), at(0, W2), at(D, W2), at(D, -W2)], Y = a => [a[0], y, a[1]], U = a => [a[0] / 6, a[1] / 6];
+  m.quad(Y(c4[0]), Y(c4[1]), Y(c4[2]), Y(c4[3]), U(c4[0]), U(c4[1]), U(c4[2]), U(c4[3]), UP);
+  const lm = mg('dash', dashMat, false, true), line = (a, b2) => { const ex = b2[0] - a[0], ez = b2[1] - a[1], l = Math.hypot(ex, ez), ox = -ez / l * 0.06, oz = ex / l * 0.06;
+    lm.quad([a[0] + ox, y + 0.012, a[1] + oz], [a[0] - ox, y + 0.012, a[1] - oz], [b2[0] - ox, y + 0.012, b2[1] - oz], [b2[0] + ox, y + 0.012, b2[1] + oz], [0, 0], [1, 0], [1, 1], [0, 1], UP); };
+  for (let v = -W2 + 0.4; v <= W2 - 0.3; v += 2.5) line(at(D, v), at(D - 4.8, v));                   // bays along the back
+  for (const sd of [-1, 1]) for (let u = 3.2; u <= D - 5; u += 2.5) line(at(u, sd * W2), at(u, sd * (W2 - 4.8)));   // and down the sides
+  const mid = at(D / 2, 0), far = at(D, 0); rgrid.ins({ id: -10 - r.id, c: 0, w: W2 * 2, x0: q[0], z0: q[1], x1: far[0], z1: far[1] }, mid[0] - 16, mid[0] + 16, mid[1] - 16, mid[1] + 16);
+  COURTS.push({ x: mid[0], z: mid[1], q, dx, dz, W2, D, r }); return true;
+}
 // Cul-de-sac turning heads: dead-end residential roads end in a round tarmac bulb, service roads in a smaller one
 // (as in the aerial photos). Added to the road index so footways, trees and parked cars keep off them and cars grip on them.
 const HEADS = [];
@@ -729,6 +761,7 @@ const HEADS = [];
       const j = ROAD_ENDS.get(roadEndKey(r.c, q)); if (!j || j.arms.length !== 1) continue;
       const L = Math.hypot(q[0] - to[0], q[1] - to[1]); if (L < 8) continue;
       const R = r.k === 6 ? 6.5 : 5, dx = (q[0] - to[0]) / L, dz = (q[1] - to[1]) / L, cx = q[0] + dx * R * 0.35, cz = q[1] + dz * R * 0.35;
+      if (r.k === 8 && parkingCourt(r, q, dx, dz)) continue;               // service roads behind houses open into a parking court where there's room
       if (Math.abs(cx) > LIM - R || Math.abs(cz) > LIM - R || inBiz(cx, cz) || inLot(cx, cz, R) || TR.foot(cx, cz, R) || roadDist(cx, cz, r.id, false) < R + 1 || HEADS.some(h => Math.hypot(h.x - cx, h.z - cz) < h.R + R + 2)) continue;
       let clear = !inBuilding(cx, cz); for (let k = 0; k < 16 && clear; k++) { const a = k / 16 * TAU; if (inBuilding(cx + Math.cos(a) * (R + 1), cz + Math.sin(a) * (R + 1))) clear = false; } if (!clear) continue;
       const n = 22, y = r.sy; for (let k = 0; k < n; k++) { const a0 = k / n * TAU, a1 = (k + 1) / n * TAU, P = [cx + Math.cos(a0) * R, y, cz + Math.sin(a0) * R], Q = [cx + Math.cos(a1) * R, y, cz + Math.sin(a1) * R];
@@ -1646,7 +1679,7 @@ const blobA = new THREE.IcosahedronGeometry(1.7, 0), blobB = new THREE.Icosahedr
 let treeCount = 0;
 const pitchAreas = areas.filter(a => a.t === 3 && a.p.length === 4);
 function addTree(x, z, s = 1, collide = true) {
-  if (TR.foot(x, z, 1.5) || inLot(x, z, 2) || pitchAreas.some(a => inPoly(x, z, a.p))) return;
+  if (TR.foot(x, z, 1.5) || inLot(x, z, 2) || inPond(x, z, 2) || inSolar(x, z, 3) || pitchAreas.some(a => inPoly(x, z, a.p))) return;
   mg('trunk', trunkMat).add(trunkGeo, mat4(x, 0, z, 0, s, s, s));
   const ci = srand() < 0.08 ? 4 : (srand() * 4) | 0, key = 'fol' + ci, yaw = srand() * TAU;
   mg(key, foliageMats[ci]).add(blobA, mat4(x, 3.3 * s, z, yaw, s, s * 0.95, s));
