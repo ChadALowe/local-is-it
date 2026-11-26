@@ -57,6 +57,8 @@ saves and the leaderboard are never cleared.
 - **Tag** (🏷️ Tag button): everyone online plays. One car is IT and passes it on by bumping another car (no tag-backs
   for 2.5 s). The IT car has a red name tag and a red dot on the minimap. After 3 minutes, least time as IT wins.
   The room runs the game, so it can't get out of sync.
+- **Emotes** (G or 😀 Emote, then 1-9): wave, thumbs up, middle finger, cheer, dance, facepalm, point, shrug and
+  head wobble. Other players see your character do it, with a bubble over your head or car.
 - **Horn**: H (or 📯 on phones). Players nearby hear it, louder the closer they are.
 - **Name tags** show what each player is driving, and a 🔥 score floats over anyone who's mid-drift.
 
